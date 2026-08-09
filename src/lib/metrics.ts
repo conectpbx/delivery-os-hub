@@ -88,9 +88,9 @@ export function byApp(deliveries: Delivery[], cpk: number) {
 }
 
 export function byMonth(deliveries: Delivery[], expenses: Expense[], cpk: number) {
-  const map = new Map<string, { month: string; revenue: number; km: number; cost: number }>();
+  const map = new Map<string, { month: string; revenue: number; km: number; cost: number; count: number }>();
   const ensure = (key: string) => {
-    const cur = map.get(key) ?? { month: key, revenue: 0, km: 0, cost: 0 };
+    const cur = map.get(key) ?? { month: key, revenue: 0, km: 0, cost: 0, count: 0 };
     map.set(key, cur);
     return cur;
   };
@@ -98,7 +98,9 @@ export function byMonth(deliveries: Delivery[], expenses: Expense[], cpk: number
     const cur = ensure(monthKey(new Date(d.occurred_at)));
     cur.revenue += Number(d.earnings) + Number(d.tip);
     cur.km += Number(d.distance_km);
+    cur.count += 1;
   }
+
   for (const e of expenses) {
     ensure(monthKey(new Date(e.occurred_at))).cost += Number(e.amount);
   }
