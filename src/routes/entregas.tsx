@@ -26,7 +26,7 @@ export const Route = createFileRoute("/entregas")({
       },
     ],
   }),
-  component: Entregas;
+  component: Entregas,
 });
 
 const APPS = ["iFood", "Rappi", "99Food", "Uber Eats", "Loggi", "Particular"];
