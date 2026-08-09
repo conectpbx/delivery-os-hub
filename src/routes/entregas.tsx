@@ -105,16 +105,77 @@ function Entregas() {
           <form onSubmit={submit} className="space-y-3">
             <div className="space-y-2">
               <Label htmlFor="app">Aplicativo</Label>
-              <select
-                id="app"
-                value={form.app_name}
-                onChange={(e) => set("app_name", e.target.value)}
-                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-              >
-                {APPS.map((a) => (
-                  <option key={a}>{a}</option>
-                ))}
-              </select>
+              {addingApp ? (
+                <div className="flex gap-2">
+                  <Input
+                    value={newAppName}
+                    onChange={(e) => setNewAppName(e.target.value)}
+                    placeholder="Nome do aplicativo"
+                    className="flex-1"
+                    autoFocus
+                  />
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    aria-label="Cancelar"
+                    onClick={() => {
+                      setAddingApp(false);
+                      setNewAppName("");
+                    }}
+                  >
+                    <X className="size-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="icon"
+                    aria-label="Salvar aplicativo"
+                    disabled={!newAppName.trim() || insertApp.isPending}
+                    onClick={async () => {
+                      const name = newAppName.trim();
+                      if (!name) return;
+                      try {
+                        await insertApp.mutateAsync({ name });
+                        setForm((f) => ({ ...f, app_name: name }));
+                        setAddingApp(false);
+                        setNewAppName("");
+                        toast.success("Aplicativo cadastrado");
+                      } catch {
+                        toast.error("Erro ao cadastrar aplicativo");
+                      }
+                    }}
+                  >
+                    <Plus className="size-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <select
+                    id="app"
+                    value={form.app_name}
+                    onChange={(e) => set("app_name", e.target.value)}
+                    className="h-9 flex-1 rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    <option value="" disabled>
+                      Selecione...
+                    </option>
+                    {(apps.data ?? []).map((a) => (
+                      <option key={a.id} value={a.name}>
+                        {a.name}
+                      </option>
+                    ))}
+                  </select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    aria-label="Cadastrar novo aplicativo"
+                    onClick={() => setAddingApp(true)}
+                  >
+                    <Plus className="size-4" />
+                  </Button>
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Ganho (R$)" value={form.earnings} onChange={(v) => set("earnings", v)} />
