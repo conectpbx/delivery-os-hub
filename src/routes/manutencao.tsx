@@ -68,7 +68,7 @@ function Manutencao() {
                 service_type: form.service_type,
                 cost: Number(form.cost || 0),
                 odometer: form.odometer ? Number(form.odometer) : null,
-                notes: form.notes || null,
+                description: form.notes || null,
                 next_due_date: form.next_due_date || null,
                 next_due_km: form.next_due_km ? Number(form.next_due_km) : null,
               });
@@ -134,7 +134,7 @@ function Manutencao() {
                       <p className="text-xs text-muted-foreground">
                         {dateLabel(m.performed_at)}
                         {m.odometer ? ` · ${num(Number(m.odometer), 0)} km` : ""}
-                        {m.notes ? ` · ${m.notes}` : ""}
+                        {m.description ? ` · ${m.description}` : ""}
                       </p>
                       {m.next_due_date || m.next_due_km ? (
                         <p
