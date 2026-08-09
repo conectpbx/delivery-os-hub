@@ -28,7 +28,7 @@ export const Route = createFileRoute("/scanner")({
       },
     ],
   }),
-  component: Scanner;
+  component: Scanner,
 });
 
 function Scanner() {
