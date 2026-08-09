@@ -159,8 +159,18 @@ function AuthPage() {
                 required
               />
             </div>
+            {error ? (
+              <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {error}
+              </p>
+            ) : null}
+            {info ? (
+              <p className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">
+                {info}
+              </p>
+            ) : null}
             <Button type="submit" className="w-full" disabled={busy}>
-              {mode === "login" ? "Entrar" : "Criar conta"}
+              {busy ? "Aguarde…" : mode === "login" ? "Entrar" : "Criar conta"}
             </Button>
           </form>
 
@@ -171,7 +181,11 @@ function AuthPage() {
           <button
             type="button"
             className="mt-6 w-full text-center text-sm text-muted-foreground underline-offset-4 hover:underline"
-            onClick={() => setMode(mode === "login" ? "signup" : "login")}
+            onClick={() => {
+              setError(null);
+              setInfo(null);
+              setMode(mode === "login" ? "signup" : "login");
+            }}
           >
             {mode === "login" ? "Não tem conta? Cadastre-se" : "Já tenho conta"}
           </button>
