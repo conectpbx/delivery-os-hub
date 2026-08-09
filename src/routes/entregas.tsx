@@ -1,0 +1,229 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
+import { MapPin, Navigation, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { AppShell } from "@/components/AppShell";
+import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useDeliveries, useInsert, useRemove } from "@/lib/data";
+import { brl, dateTimeLabel, minutesLabel, num } from "@/lib/format";
+
+export const Route = createFileRoute("/entregas")({
+  head: () => ({
+    meta: [
+      { title: "Entregas e rotas — Delivery OS" },
+      {
+        name: "description",
+        content:
+          "Registre entregas com GPS automático, distância, tempo parado e abra a navegação até o destino.",
+      },
+      { property: "og:title", content: "Entregas e rotas — Delivery OS" },
+      {
+        property: "og:description",
+        content: "Histórico completo de corridas com captura de localização e navegação.",
+      },
+    ],
+  }),
+  component: Entregas;
+});
+
+const APPS = ["iFood", "Rappi", "99Food", "Uber Eats", "Loggi", "Particular"];
+
+function Entregas() {
+  const list = useDeliveries();
+  const insert = useInsert("deliveries", "deliveries");
+  const remove = useRemove("deliveries", "deliveries");
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [form, setForm] = useState({
+    app_name: "iFood",
+    earnings: "",
+    tip: "",
+    distance_km: "",
+    duration_min: "",
+    idle_min: "",
+    pickup_address: "",
+    dropoff_address: "",
+  });
+
+  const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  function captureGps() {
+    if (!("geolocation" in navigator)) {
+      toast.error("GPS indisponível neste dispositivo");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        toast.success("Localização capturada");
+      },
+      () => toast.error("Não foi possível obter a localização"),
+    );
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      await insert.mutateAsync({
+        app_name: form.app_name,
+        earnings: Number(form.earnings || 0),
+        tip: Number(form.tip || 0),
+        distance_km: Number(form.distance_km || 0),
+        duration_min: Number(form.duration_min || 0),
+        idle_min: Number(form.idle_min || 0),
+        pickup_address: form.pickup_address || null,
+        dropoff_address: form.dropoff_address || null,
+        lat: coords?.lat ?? null,
+        lng: coords?.lng ?? null,
+      });
+      toast.success("Entrega registrada");
+      setForm({ ...form, earnings: "", tip: "", distance_km: "", duration_min: "", idle_min: "" });
+    } catch {
+      toast.error("Erro ao salvar a entrega");
+    }
+  }
+
+  const data = list.data ?? [];
+  const total = data.reduce((s, d) => s + Number(d.earnings) + Number(d.tip), 0);
+  const km = data.reduce((s, d) => s + Number(d.distance_km), 0);
+  const idle = data.reduce((s, d) => s + Number(d.idle_min), 0);
+
+  return (
+    <AppShell title="Entregas" subtitle="Registro de corridas, GPS e navegação">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <StatCard label="Total recebido" value={brl(total)} tone="primary" />
+        <StatCard label="Distância total" value={`${num(km)} km`} />
+        <StatCard label="Tempo parado" value={minutesLabel(idle)} tone="warning" />
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-[380px_1fr]">
+        <SectionCard title="Nova entrega" description="Preencha após finalizar a corrida">
+          <form onSubmit={submit} className="space-y-3">
+            <div className="space-y-2">
+              <Label htmlFor="app">Aplicativo</Label>
+              <select
+                id="app"
+                value={form.app_name}
+                onChange={(e) => set("app_name", e.target.value)}
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                {APPS.map((a) => (
+                  <option key={a}>{a}</option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Ganho (R$)" value={form.earnings} onChange={(v) => set("earnings", v)} />
+              <Field label="Gorjeta (R$)" value={form.tip} onChange={(v) => set("tip", v)} />
+              <Field label="Distância (km)" value={form.distance_km} onChange={(v) => set("distance_km", v)} />
+              <Field label="Duração (min)" value={form.duration_min} onChange={(v) => set("duration_min", v)} />
+              <Field label="Tempo parado (min)" value={form.idle_min} onChange={(v) => set("idle_min", v)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="pickup">Coleta</Label>
+              <Input
+                id="pickup"
+                value={form.pickup_address}
+                onChange={(e) => set("pickup_address", e.target.value)}
+                placeholder="Restaurante / loja"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="drop">Entrega</Label>
+              <Input
+                id="drop"
+                value={form.dropoff_address}
+                onChange={(e) => set("dropoff_address", e.target.value)}
+                placeholder="Endereço do cliente"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" className="gap-2" onClick={captureGps}>
+                <MapPin className="size-4" /> GPS automático
+              </Button>
+              {coords ? (
+                <span className="text-xs text-muted-foreground">
+                  {coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}
+                </span>
+              ) : null}
+            </div>
+            <Button type="submit" className="w-full" disabled={insert.isPending}>
+              Salvar entrega
+            </Button>
+          </form>
+        </SectionCard>
+
+        <SectionCard title="Histórico completo" description={`${data.length} corridas registradas`}>
+          {data.length ? (
+            <ul className="divide-y divide-border">
+              {data.map((d) => (
+                <li key={d.id} className="flex items-start gap-3 py-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">
+                      {d.app_name} · {brl(Number(d.earnings) + Number(d.tip))}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {dateTimeLabel(d.occurred_at)} · {num(Number(d.distance_km))} km ·{" "}
+                      {minutesLabel(Number(d.duration_min))} rodando ·{" "}
+                      {minutesLabel(Number(d.idle_min))} parado
+                    </p>
+                    {d.dropoff_address ? (
+                      <p className="truncate text-xs text-muted-foreground">→ {d.dropoff_address}</p>
+                    ) : null}
+                  </div>
+                  {d.dropoff_address || d.lat ? (
+                    <Button asChild variant="ghost" size="icon" aria-label="Navegar">
+                      <a
+                        target="_blank"
+                        rel="noreferrer"
+                        href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+                          d.dropoff_address ?? `${d.lat},${d.lng}`,
+                        )}`}
+                      >
+                        <Navigation className="size-4" />
+                      </a>
+                    </Button>
+                  ) : null}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Excluir"
+                    onClick={() => remove.mutate(d.id)}
+                  >
+                    <Trash2 className="size-4 text-destructive" />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <EmptyState>Nenhuma entrega registrada ainda.</EmptyState>
+          )}
+        </SectionCard>
+      </div>
+    </AppShell>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs">{label}</Label>
+      <Input
+        inputMode="decimal"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="0"
+      />
+    </div>
+  );
+}
