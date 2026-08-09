@@ -58,6 +58,13 @@ export type Goal = {
   deliveries_target: number;
 };
 
+export type App = {
+  id: string;
+  name: string;
+  color: string | null;
+  created_at: string;
+};
+
 export type Profile = {
   id: string;
   full_name: string | null;
