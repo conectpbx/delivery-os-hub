@@ -16,6 +16,7 @@ import { Route as EntregasRouteImport } from './routes/entregas'
 import { Route as FinanceiroRouteImport } from './routes/financeiro'
 import { Route as ManutencaoRouteImport } from './routes/manutencao'
 import { Route as MetasRouteImport } from './routes/metas'
+import { Route as RelatoriosRouteImport } from './routes/relatorios'
 import { Route as ScannerRouteImport } from './routes/scanner'
 
 const IndexRoute = IndexRouteImport.update({
@@ -53,6 +54,11 @@ const MetasRoute = MetasRouteImport.update({
   path: '/metas',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RelatoriosRoute = RelatoriosRouteImport.update({
+  id: '/relatorios',
+  path: '/relatorios',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ScannerRoute = ScannerRouteImport.update({
   id: '/scanner',
   path: '/scanner',
@@ -67,6 +73,7 @@ export interface FileRoutesByFullPath {
   '/financeiro': typeof FinanceiroRoute
   '/manutencao': typeof ManutencaoRoute
   '/metas': typeof MetasRoute
+  '/relatorios': typeof RelatoriosRoute
   '/scanner': typeof ScannerRoute
 }
 export interface FileRoutesByTo {
@@ -77,6 +84,7 @@ export interface FileRoutesByTo {
   '/financeiro': typeof FinanceiroRoute
   '/manutencao': typeof ManutencaoRoute
   '/metas': typeof MetasRoute
+  '/relatorios': typeof RelatoriosRoute
   '/scanner': typeof ScannerRoute
 }
 export interface FileRoutesById {
@@ -88,6 +96,7 @@ export interface FileRoutesById {
   '/financeiro': typeof FinanceiroRoute
   '/manutencao': typeof ManutencaoRoute
   '/metas': typeof MetasRoute
+  '/relatorios': typeof RelatoriosRoute
   '/scanner': typeof ScannerRoute
 }
 export interface FileRouteTypes {
@@ -100,6 +109,7 @@ export interface FileRouteTypes {
     | '/financeiro'
     | '/manutencao'
     | '/metas'
+    | '/relatorios'
     | '/scanner'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -110,6 +120,7 @@ export interface FileRouteTypes {
     | '/financeiro'
     | '/manutencao'
     | '/metas'
+    | '/relatorios'
     | '/scanner'
   id:
     | '__root__'
@@ -120,6 +131,7 @@ export interface FileRouteTypes {
     | '/financeiro'
     | '/manutencao'
     | '/metas'
+    | '/relatorios'
     | '/scanner'
   fileRoutesById: FileRoutesById
 }
@@ -131,6 +143,7 @@ export interface RootRouteChildren {
   FinanceiroRoute: typeof FinanceiroRoute
   ManutencaoRoute: typeof ManutencaoRoute
   MetasRoute: typeof MetasRoute
+  RelatoriosRoute: typeof RelatoriosRoute
   ScannerRoute: typeof ScannerRoute
 }
 
@@ -185,6 +198,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MetasRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/relatorios': {
+      id: '/relatorios'
+      path: '/relatorios'
+      fullPath: '/relatorios'
+      preLoaderRoute: typeof RelatoriosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/scanner': {
       id: '/scanner'
       path: '/scanner'
@@ -203,6 +223,7 @@ const rootRouteChildren: RootRouteChildren = {
   FinanceiroRoute: FinanceiroRoute,
   ManutencaoRoute: ManutencaoRoute,
   MetasRoute: MetasRoute,
+  RelatoriosRoute: RelatoriosRoute,
   ScannerRoute: ScannerRoute,
 }
 export const routeTree = rootRouteImport
