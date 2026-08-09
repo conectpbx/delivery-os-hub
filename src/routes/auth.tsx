@@ -34,6 +34,8 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const { session, loading } = useAuth();
   const navigate = useNavigate();
 
@@ -41,12 +43,26 @@ function AuthPage() {
     if (!loading && session) void navigate({ to: "/dashboard" });
   }, [loading, session, navigate]);
 
+  function translate(message: string) {
+    const m = message.toLowerCase();
+    if (m.includes("invalid login credentials")) return "E-mail ou senha incorretos.";
+    if (m.includes("email not confirmed")) return "Confirme seu e-mail antes de entrar.";
+    if (m.includes("already registered")) return "Este e-mail já possui conta. Faça login.";
+    if (m.includes("weak") || m.includes("pwned"))
+      return "Senha muito fraca ou vazada. Escolha outra mais forte.";
+    if (m.includes("password")) return "Senha inválida: use ao menos 6 caracteres.";
+    if (m.includes("rate limit")) return "Muitas tentativas. Aguarde um instante.";
+    return message;
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
+    setError(null);
+    setInfo(null);
     try {
       if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
+        const { data, error: err } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -54,18 +70,26 @@ function AuthPage() {
             data: { full_name: name },
           },
         });
-        if (error) throw error;
-        toast.success("Conta criada! Verifique seu e-mail se a confirmação estiver ativa.");
+        if (err) throw err;
+        if (data.session) {
+          void navigate({ to: "/dashboard" });
+        } else {
+          setInfo("Conta criada! Confirme o e-mail enviado para acessar.");
+          toast.success("Conta criada! Verifique seu e-mail para confirmar.");
+        }
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
+        const { error: err } = await supabase.auth.signInWithPassword({ email, password });
+        if (err) throw err;
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Não foi possível autenticar");
+      const msg = translate(err instanceof Error ? err.message : "Não foi possível autenticar");
+      setError(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
   }
+
 
   async function google() {
     const result = await lovable.auth.signInWithOAuth("google", {
@@ -135,8 +159,18 @@ function AuthPage() {
                 required
               />
             </div>
+            {error ? (
+              <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {error}
+              </p>
+            ) : null}
+            {info ? (
+              <p className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">
+                {info}
+              </p>
+            ) : null}
             <Button type="submit" className="w-full" disabled={busy}>
-              {mode === "login" ? "Entrar" : "Criar conta"}
+              {busy ? "Aguarde…" : mode === "login" ? "Entrar" : "Criar conta"}
             </Button>
           </form>
 
@@ -147,7 +181,11 @@ function AuthPage() {
           <button
             type="button"
             className="mt-6 w-full text-center text-sm text-muted-foreground underline-offset-4 hover:underline"
-            onClick={() => setMode(mode === "login" ? "signup" : "login")}
+            onClick={() => {
+              setError(null);
+              setInfo(null);
+              setMode(mode === "login" ? "signup" : "login");
+            }}
           >
             {mode === "login" ? "Não tem conta? Cadastre-se" : "Já tenho conta"}
           </button>
