@@ -94,6 +94,9 @@ export const useMaintenances = () =>
   useList<Maintenance>("maintenances", "maintenances", "performed_at");
 export const useExpenses = () => useList<Expense>("expenses", "expenses", "occurred_at");
 export const useGoals = () => useList<Goal>("goals", "goals", "month");
+export const useApps = () => useList<App>("apps", "apps", "name");
+
+export const useInsertApp = () => useInsert<{ name: string }>("apps", "apps");
 
 export function useProfile() {
   return useQuery({
