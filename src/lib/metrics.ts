@@ -111,7 +111,9 @@ export function heatmap(deliveries: Delivery[]) {
   const grid: number[][] = Array.from({ length: 7 }, () => Array<number>(24).fill(0));
   for (const d of deliveries) {
     const date = new Date(d.occurred_at);
-    grid[date.getDay()]![date.getHours()] += Number(d.earnings) + Number(d.tip);
+    grid[date.getDay()]![date.getHours()] =
+      (grid[date.getDay()]![date.getHours()] ?? 0) + Number(d.earnings) + Number(d.tip);
+
   }
   const max = Math.max(...grid.flat(), 1);
   return { grid, max };
