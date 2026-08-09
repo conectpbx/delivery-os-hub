@@ -1,0 +1,118 @@
+import type { Delivery, Expense, Fueling, Maintenance, Profile } from "./data";
+import { monthKey } from "./format";
+
+export function avgFuelPrice(fuelings: Fueling[]) {
+  const valid = fuelings.filter((f) => Number(f.price_per_liter) > 0);
+  if (!valid.length) return 6.1;
+  return valid.reduce((s, f) => s + Number(f.price_per_liter), 0) / valid.length;
+}
+
+export function costPerKm(fuelings: Fueling[], profile: Profile | null | undefined) {
+  const eff = Number(profile?.fuel_efficiency) > 0 ? Number(profile?.fuel_efficiency) : 12;
+  return avgFuelPrice(fuelings) / eff;
+}
+
+export function inRange(iso: string, from: Date, to: Date) {
+  const d = new Date(iso).getTime();
+  return d >= from.getTime() && d <= to.getTime();
+}
+
+export function startOfDay(d = new Date()) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+export function endOfDay(d = new Date()) {
+  const x = new Date(d);
+  x.setHours(23, 59, 59, 999);
+  return x;
+}
+
+export type Summary = {
+  revenue: number;
+  fuelCost: number;
+  otherCost: number;
+  maintenanceCost: number;
+  profit: number;
+  distance: number;
+  idleMin: number;
+  workedMin: number;
+  count: number;
+  perKm: number;
+  perHour: number;
+};
+
+export function summarize(
+  deliveries: Delivery[],
+  expenses: Expense[],
+  maintenances: Maintenance[],
+  cpk: number,
+): Summary {
+  const revenue = deliveries.reduce((s, d) => s + Number(d.earnings) + Number(d.tip), 0);
+  const distance = deliveries.reduce((s, d) => s + Number(d.distance_km), 0);
+  const workedMin = deliveries.reduce((s, d) => s + Number(d.duration_min), 0);
+  const idleMin = deliveries.reduce((s, d) => s + Number(d.idle_min), 0);
+  const fuelCost = distance * cpk;
+  const otherCost = expenses.reduce((s, e) => s + Number(e.amount), 0);
+  const maintenanceCost = maintenances.reduce((s, m) => s + Number(m.cost), 0);
+  const profit = revenue - fuelCost - otherCost - maintenanceCost;
+  const hours = (workedMin + idleMin) / 60;
+  return {
+    revenue,
+    fuelCost,
+    otherCost,
+    maintenanceCost,
+    profit,
+    distance,
+    idleMin,
+    workedMin,
+    count: deliveries.length,
+    perKm: distance > 0 ? revenue / distance : 0,
+    perHour: hours > 0 ? revenue / hours : 0,
+  };
+}
+
+export function byApp(deliveries: Delivery[], cpk: number) {
+  const map = new Map<string, { app: string; revenue: number; km: number; count: number }>();
+  for (const d of deliveries) {
+    const cur = map.get(d.app_name) ?? { app: d.app_name, revenue: 0, km: 0, count: 0 };
+    cur.revenue += Number(d.earnings) + Number(d.tip);
+    cur.km += Number(d.distance_km);
+    cur.count += 1;
+    map.set(d.app_name, cur);
+  }
+  return [...map.values()]
+    .map((r) => ({ ...r, profit: r.revenue - r.km * cpk, perKm: r.km ? r.revenue / r.km : 0 }))
+    .sort((a, b) => b.profit - a.profit);
+}
+
+export function byMonth(deliveries: Delivery[], expenses: Expense[], cpk: number) {
+  const map = new Map<string, { month: string; revenue: number; km: number; cost: number }>();
+  const ensure = (key: string) => {
+    const cur = map.get(key) ?? { month: key, revenue: 0, km: 0, cost: 0 };
+    map.set(key, cur);
+    return cur;
+  };
+  for (const d of deliveries) {
+    const cur = ensure(monthKey(new Date(d.occurred_at)));
+    cur.revenue += Number(d.earnings) + Number(d.tip);
+    cur.km += Number(d.distance_km);
+  }
+  for (const e of expenses) {
+    ensure(monthKey(new Date(e.occurred_at))).cost += Number(e.amount);
+  }
+  return [...map.values()]
+    .map((m) => ({ ...m, profit: m.revenue - m.km * cpk - m.cost }))
+    .sort((a, b) => a.month.localeCompare(b.month));
+}
+
+export function heatmap(deliveries: Delivery[]) {
+  const grid: number[][] = Array.from({ length: 7 }, () => Array<number>(24).fill(0));
+  for (const d of deliveries) {
+    const date = new Date(d.occurred_at);
+    grid[date.getDay()]![date.getHours()] += Number(d.earnings) + Number(d.tip);
+  }
+  const max = Math.max(...grid.flat(), 1);
+  return { grid, max };
+}
