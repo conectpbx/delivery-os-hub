@@ -15,6 +15,7 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as EntregasRouteImport } from './routes/entregas'
 import { Route as FinanceiroRouteImport } from './routes/financeiro'
 import { Route as ManutencaoRouteImport } from './routes/manutencao'
+import { Route as MetasRouteImport } from './routes/metas'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -46,6 +47,11 @@ const ManutencaoRoute = ManutencaoRouteImport.update({
   path: '/manutencao',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MetasRoute = MetasRouteImport.update({
+  id: '/metas',
+  path: '/metas',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -54,6 +60,7 @@ export interface FileRoutesByFullPath {
   '/entregas': typeof EntregasRoute
   '/financeiro': typeof FinanceiroRoute
   '/manutencao': typeof ManutencaoRoute
+  '/metas': typeof MetasRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -62,6 +69,7 @@ export interface FileRoutesByTo {
   '/entregas': typeof EntregasRoute
   '/financeiro': typeof FinanceiroRoute
   '/manutencao': typeof ManutencaoRoute
+  '/metas': typeof MetasRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -71,13 +79,27 @@ export interface FileRoutesById {
   '/entregas': typeof EntregasRoute
   '/financeiro': typeof FinanceiroRoute
   '/manutencao': typeof ManutencaoRoute
+  '/metas': typeof MetasRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/auth' | '/dashboard' | '/entregas' | '/financeiro' | '/manutencao'
+    | '/'
+    | '/auth'
+    | '/dashboard'
+    | '/entregas'
+    | '/financeiro'
+    | '/manutencao'
+    | '/metas'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/dashboard' | '/entregas' | '/financeiro' | '/manutencao'
+  to:
+    | '/'
+    | '/auth'
+    | '/dashboard'
+    | '/entregas'
+    | '/financeiro'
+    | '/manutencao'
+    | '/metas'
   id:
     | '__root__'
     | '/'
@@ -86,6 +108,7 @@ export interface FileRouteTypes {
     | '/entregas'
     | '/financeiro'
     | '/manutencao'
+    | '/metas'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -95,6 +118,7 @@ export interface RootRouteChildren {
   EntregasRoute: typeof EntregasRoute
   FinanceiroRoute: typeof FinanceiroRoute
   ManutencaoRoute: typeof ManutencaoRoute
+  MetasRoute: typeof MetasRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -141,6 +165,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ManutencaoRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/metas': {
+      id: '/metas'
+      path: '/metas'
+      fullPath: '/metas'
+      preLoaderRoute: typeof MetasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -151,6 +182,7 @@ const rootRouteChildren: RootRouteChildren = {
   EntregasRoute: EntregasRoute,
   FinanceiroRoute: FinanceiroRoute,
   ManutencaoRoute: ManutencaoRoute,
+  MetasRoute: MetasRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
