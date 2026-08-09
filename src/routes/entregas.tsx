@@ -1,13 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { MapPin, Navigation, Trash2 } from "lucide-react";
+import { MapPin, Navigation, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useDeliveries, useInsert, useRemove } from "@/lib/data";
+import { useApps, useDeliveries, useInsert, useInsertApp, useRemove } from "@/lib/data";
 import { brl, dateTimeLabel, minutesLabel, num } from "@/lib/format";
 
 export const Route = createFileRoute("/entregas")({
@@ -29,15 +29,17 @@ export const Route = createFileRoute("/entregas")({
   component: Entregas,
 });
 
-const APPS = ["iFood", "Rappi", "99Food", "Uber Eats", "Loggi", "Particular"];
-
 function Entregas() {
   const list = useDeliveries();
+  const apps = useApps();
   const insert = useInsert("deliveries", "deliveries");
+  const insertApp = useInsertApp();
   const remove = useRemove("deliveries", "deliveries");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [addingApp, setAddingApp] = useState(false);
+  const [newAppName, setNewAppName] = useState("");
   const [form, setForm] = useState({
-    app_name: "iFood",
+    app_name: "",
     earnings: "",
     tip: "",
     distance_km: "",
