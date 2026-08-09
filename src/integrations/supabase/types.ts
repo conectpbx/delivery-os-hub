@@ -14,7 +14,228 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      deliveries: {
+        Row: {
+          app_name: string
+          created_at: string
+          distance_km: number
+          dropoff_address: string | null
+          duration_min: number
+          earnings: number
+          id: string
+          idle_min: number
+          lat: number | null
+          lng: number | null
+          occurred_at: string
+          pickup_address: string | null
+          tip: number
+          user_id: string
+        }
+        Insert: {
+          app_name: string
+          created_at?: string
+          distance_km?: number
+          dropoff_address?: string | null
+          duration_min?: number
+          earnings?: number
+          id?: string
+          idle_min?: number
+          lat?: number | null
+          lng?: number | null
+          occurred_at?: string
+          pickup_address?: string | null
+          tip?: number
+          user_id: string
+        }
+        Update: {
+          app_name?: string
+          created_at?: string
+          distance_km?: number
+          dropoff_address?: string | null
+          duration_min?: number
+          earnings?: number
+          id?: string
+          idle_min?: number
+          lat?: number | null
+          lng?: number | null
+          occurred_at?: string
+          pickup_address?: string | null
+          tip?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      expenses: {
+        Row: {
+          amount: number
+          category: string
+          created_at: string
+          description: string | null
+          id: string
+          occurred_at: string
+          user_id: string
+        }
+        Insert: {
+          amount?: number
+          category: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          occurred_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          category?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          occurred_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      fuelings: {
+        Row: {
+          created_at: string
+          id: string
+          liters: number
+          occurred_at: string
+          odometer: number | null
+          price_per_liter: number
+          station: string | null
+          total: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          liters?: number
+          occurred_at?: string
+          odometer?: number | null
+          price_per_liter?: number
+          station?: string | null
+          total?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          liters?: number
+          occurred_at?: string
+          odometer?: number | null
+          price_per_liter?: number
+          station?: string | null
+          total?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      goals: {
+        Row: {
+          created_at: string
+          deliveries_target: number
+          id: string
+          month: string
+          profit_target: number
+          revenue_target: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          deliveries_target?: number
+          id?: string
+          month: string
+          profit_target?: number
+          revenue_target?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          deliveries_target?: number
+          id?: string
+          month?: string
+          profit_target?: number
+          revenue_target?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      maintenances: {
+        Row: {
+          cost: number
+          created_at: string
+          description: string | null
+          id: string
+          next_due_date: string | null
+          next_due_km: number | null
+          odometer: number | null
+          performed_at: string
+          service_type: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          cost?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          next_due_date?: string | null
+          next_due_km?: number | null
+          odometer?: number | null
+          performed_at?: string
+          service_type: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          cost?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          next_due_date?: string | null
+          next_due_km?: number | null
+          odometer?: number | null
+          performed_at?: string
+          service_type?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          daily_goal: number | null
+          fuel_efficiency: number | null
+          full_name: string | null
+          id: string
+          monthly_goal: number | null
+          updated_at: string
+          vehicle: string | null
+        }
+        Insert: {
+          created_at?: string
+          daily_goal?: number | null
+          fuel_efficiency?: number | null
+          full_name?: string | null
+          id: string
+          monthly_goal?: number | null
+          updated_at?: string
+          vehicle?: string | null
+        }
+        Update: {
+          created_at?: string
+          daily_goal?: number | null
+          fuel_efficiency?: number | null
+          full_name?: string | null
+          id?: string
+          monthly_goal?: number | null
+          updated_at?: string
+          vehicle?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
