@@ -1,5 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+
+// Cliente sem tipagem de schema para tabelas acessadas de forma dinâmica.
+const db = supabase as unknown as SupabaseClient;
 
 export type Delivery = {
   id: string;
@@ -67,7 +71,7 @@ function useList<T>(key: string, table: string, orderCol: string) {
   return useQuery({
     queryKey: [key],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from(table)
         .select("*")
         .order(orderCol, { ascending: false });
@@ -88,7 +92,7 @@ export function useProfile() {
   return useQuery({
     queryKey: ["profile"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("profiles").select("*").maybeSingle();
+      const { data, error } = await db.from("profiles").select("*").maybeSingle();
       if (error) throw error;
       return data as Profile | null;
     },
@@ -100,7 +104,7 @@ export function useInsert<T extends Record<string, unknown>>(table: string, key:
   return useMutation({
     mutationFn: async (values: T) => {
       const { data: auth } = await supabase.auth.getUser();
-      const { error } = await supabase.from(table).insert({ ...values, user_id: auth.user?.id });
+      const { error } = await db.from(table).insert({ ...values, user_id: auth.user?.id });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -113,7 +117,7 @@ export function useRemove(table: string, key: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from(table).delete().eq("id", id);
+      const { error } = await db.from(table).delete().eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -128,7 +132,7 @@ export function useUpsertProfile() {
     mutationFn: async (values: Partial<Profile>) => {
       const { data: auth } = await supabase.auth.getUser();
       if (!auth.user) throw new Error("Sessão expirada");
-      const { error } = await supabase
+      const { error } = await db
         .from("profiles")
         .upsert({ ...values, id: auth.user.id })
         .eq("id", auth.user.id);
