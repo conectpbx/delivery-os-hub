@@ -23,12 +23,12 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Sync dist para a VM
+      - name: Sync .output para a VM
         uses: burnett01/rsync-deployments@7.0.1
         with:
           switches: -avzr --delete
-          path: dist/
-          remote_path: /home/opc/delivery-os-hub/dist/
+          path: .output/
+          remote_path: /home/opc/delivery-os-hub/output/
           remote_host: ${{ secrets.VM_HOST }}
           remote_user: ${{ secrets.VM_USER }}
           remote_key: ${{ secrets.VM_SSH_KEY }}
@@ -41,4 +41,4 @@ jobs:
           key: ${{ secrets.VM_SSH_KEY }}
           script: |
             cd /home/opc/delivery-os-hub
-            docker compose up -d
+            docker compose up -d --force-recreate

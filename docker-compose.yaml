@@ -1,22 +1,22 @@
 version: "3.9"
 services:
-  delivery-pwa:
-    image: nginx:alpine
-    container_name: delivery-pwa
+  app:
+    image: node:22-alpine
+    container_name: delivery-os-hub
     restart: always
-    security_opt:
-      - label:disable
-      - seccomp:unconfined
-    tmpfs:
-      - /run
-      - /var/cache/nginx
+    working_dir: /app
+    command: node server/index.mjs
     ports:
-      - "8081:8081"
-    networks:
-      - delivery-network
+      - "3000:3000"
     volumes:
-      - ./dist:/usr/share/nginx/html:ro
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./output:/app:ro
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOST=0.0.0.0
+    networks:
+      - app-network
+
 networks:
-  delivery-network:
+  app-network:
     driver: bridge
