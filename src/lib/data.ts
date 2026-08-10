@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { enqueueInsert, isOffline } from "@/lib/offline-queue";
+
 
 // Cliente sem tipagem de schema para tabelas acessadas de forma dinâmica.
 const db = supabase as unknown as SupabaseClient;
@@ -113,8 +115,19 @@ export function useInsert<T extends Record<string, unknown>>(table: string, key:
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (values: T) => {
-      const { data: auth } = await supabase.auth.getUser();
-      const { error } = await db.from(table).insert({ ...values, user_id: auth.user?.id });
+      const { data: auth } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
+      const payload = { ...values, user_id: auth.user?.id };
+
+      if (isOffline()) {
+        const queued = enqueueInsert(table, key, payload);
+        qc.setQueryData([key], (old: unknown) => [
+          { id: queued.id, occurred_at: queued.createdAt, ...payload },
+          ...((old as unknown[]) ?? []),
+        ]);
+        return;
+      }
+
+      const { error } = await db.from(table).insert(payload);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -122,6 +135,7 @@ export function useInsert<T extends Record<string, unknown>>(table: string, key:
     },
   });
 }
+
 
 export function useRemove(table: string, key: string) {
   const qc = useQueryClient();
