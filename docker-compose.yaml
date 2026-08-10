@@ -1,0 +1,22 @@
+version: "3.9"
+services:
+  delivery-pwa:
+    image: nginx:alpine
+    container_name: delivery-pwa
+    restart: always
+    security_opt:
+      - label:disable
+      - seccomp:unconfined
+    tmpfs:
+      - /run
+      - /var/cache/nginx
+    ports:
+      - "8081:8081"
+    networks:
+      - delivery-network
+    volumes:
+      - ./dist:/usr/share/nginx/html:ro
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+networks:
+  delivery-network:
+    driver: bridge
