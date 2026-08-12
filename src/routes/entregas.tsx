@@ -122,54 +122,65 @@ function Entregas() {
             <div className="space-y-2">
               <Label htmlFor="app">Aplicativo</Label>
               {addingApp ? (
-                <div className="flex gap-2">
-                  <Input
-                    value={newAppName}
-                    onChange={(e) => setNewAppName(e.target.value)}
-                    placeholder="Nome do aplicativo"
-                    className="flex-1"
-                    autoFocus
-                  />
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="outline"
-                    aria-label="Cancelar"
-                    onClick={() => {
-                      setAddingApp(false);
-                      setNewAppName("");
-                    }}
-                  >
-                    <X className="size-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    size="icon"
-                    aria-label="Salvar aplicativo"
-                    disabled={!newAppName.trim() || insertApp.isPending}
-                    onClick={async () => {
-                      const name = newAppName.trim();
-                      if (!name) return;
-                      try {
-                        await insertApp.mutateAsync({ name });
-                        setForm((f) => ({ ...f, app_name: name }));
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <Input
+                      value={newAppName}
+                      onChange={(e) => setNewAppName(e.target.value)}
+                      placeholder="Nome do aplicativo"
+                      className="flex-1"
+                      autoFocus
+                    />
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      aria-label="Cancelar"
+                      onClick={() => {
                         setAddingApp(false);
                         setNewAppName("");
-                        toast.success("Aplicativo cadastrado");
-                      } catch {
-                        toast.error("Erro ao cadastrar aplicativo");
-                      }
-                    }}
-                  >
-                    <Plus className="size-4" />
-                  </Button>
+                        setNewAppFee("");
+                      }}
+                    >
+                      <X className="size-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      aria-label="Salvar aplicativo"
+                      disabled={!newAppName.trim() || insertApp.isPending}
+                      onClick={async () => {
+                        const name = newAppName.trim();
+                        if (!name) return;
+                        try {
+                          const fee = Math.min(Math.max(Number(newAppFee || 0), 0), 100);
+                          await insertApp.mutateAsync({ name, fee_percent: fee });
+                          setForm((f) => ({ ...f, app_name: name, fee_percent: String(fee) }));
+                          setAddingApp(false);
+                          setNewAppName("");
+                          setNewAppFee("");
+                          toast.success("Aplicativo cadastrado");
+                        } catch {
+                          toast.error("Erro ao cadastrar aplicativo");
+                        }
+                      }}
+                    >
+                      <Plus className="size-4" />
+                    </Button>
+                  </div>
+                  <Input
+                    inputMode="decimal"
+                    value={newAppFee}
+                    onChange={(e) => setNewAppFee(e.target.value)}
+                    placeholder="Taxa do app (%) — ex: 15"
+                  />
                 </div>
               ) : (
                 <div className="flex gap-2">
                   <select
                     id="app"
                     value={form.app_name}
-                    onChange={(e) => set("app_name", e.target.value)}
+                    onChange={(e) => selectApp(e.target.value)}
                     className="h-9 flex-1 rounded-md border border-input bg-background px-3 text-sm"
                   >
                     <option value="" disabled>
@@ -178,6 +189,7 @@ function Entregas() {
                     {(apps.data ?? []).map((a) => (
                       <option key={a.id} value={a.name}>
                         {a.name}
+                        {Number(a.fee_percent) > 0 ? ` · taxa ${num(Number(a.fee_percent))}%` : ""}
                       </option>
                     ))}
                   </select>
@@ -194,11 +206,51 @@ function Entregas() {
               )}
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Ganho (R$)" value={form.earnings} onChange={(v) => set("earnings", v)} />
+              <Field
+                label="Valor bruto (R$)"
+                value={form.earnings}
+                onChange={(v) => set("earnings", v)}
+              />
+              <Field
+                label="Taxa do app (%)"
+                value={form.fee_percent}
+                onChange={(v) => set("fee_percent", v)}
+              />
               <Field label="Gorjeta (R$)" value={form.tip} onChange={(v) => set("tip", v)} />
               <Field label="Distância (km)" value={form.distance_km} onChange={(v) => set("distance_km", v)} />
               <Field label="Duração (min)" value={form.duration_min} onChange={(v) => set("duration_min", v)} />
               <Field label="Tempo parado (min)" value={form.idle_min} onChange={(v) => set("idle_min", v)} />
+            </div>
+            <div className="rounded-md border border-border bg-muted/40 p-3 text-xs">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Taxa descontada</span>
+                <span>-{brl(feeValue)}</span>
+              </div>
+              <div className="mt-1 flex justify-between font-medium">
+                <span>Ganho líquido</span>
+                <span>{brl(net + Number(form.tip || 0))}</span>
+              </div>
+              {selectedApp && Number(selectedApp.fee_percent) !== feePct ? (
+                <Button
+                  type="button"
+                  variant="link"
+                  size="sm"
+                  className="mt-1 h-auto p-0 text-xs"
+                  onClick={async () => {
+                    try {
+                      await updateApp.mutateAsync({
+                        id: selectedApp.id,
+                        values: { fee_percent: feePct },
+                      });
+                      toast.success(`Taxa padrão de ${selectedApp.name} atualizada`);
+                    } catch {
+                      toast.error("Erro ao salvar a taxa");
+                    }
+                  }}
+                >
+                  Salvar {num(feePct)}% como taxa padrão de {selectedApp.name}
+                </Button>
+              ) : null}
             </div>
             <div className="space-y-2">
               <Label htmlFor="pickup">Coleta</Label>
