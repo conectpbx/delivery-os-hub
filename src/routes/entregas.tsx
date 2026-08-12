@@ -128,38 +128,52 @@ function Entregas() {
     return short || json.display_name || "";
   }
 
-  function captureGps() {
+  function captureGps(target: "pickup" | "dropoff") {
     if (!("geolocation" in navigator)) {
       toast.error("GPS indisponível neste dispositivo");
       return;
     }
-    setGeoLoading(true);
+    setGeoTarget(target);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
-        setCoords({ lat, lng });
+        setAccuracy(Math.round(pos.coords.accuracy));
+        if (target === "pickup") setCoords({ lat, lng });
         try {
           const address = await reverseGeocode(lat, lng);
           if (address) {
-            setAddressLabel(address);
-            setForm((f) => ({ ...f, pickup_address: f.pickup_address || address }));
-            toast.success("Endereço identificado");
+            if (target === "pickup") setAddressLabel(address);
+            setForm((f) => ({
+              ...f,
+              [target === "pickup" ? "pickup_address" : "dropoff_address"]: address,
+            }));
+            toast.success(
+              target === "pickup" ? "Endereço de coleta preenchido" : "Endereço de entrega preenchido",
+            );
           } else {
             toast.success("Localização capturada");
           }
         } catch {
           toast.message("Localização capturada (endereço indisponível)");
         } finally {
-          setGeoLoading(false);
+          setGeoTarget(null);
         }
       },
-      () => {
-        setGeoLoading(false);
-        toast.error("Não foi possível obter a localização");
+      (err) => {
+        setGeoTarget(null);
+        toast.error(
+          err.code === err.PERMISSION_DENIED
+            ? "Permissão de localização negada — libere o GPS nas configurações do navegador"
+            : err.code === err.TIMEOUT
+              ? "O GPS demorou demais para responder. Tente novamente a céu aberto."
+              : "Não foi possível obter a localização",
+        );
       },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
     );
   }
+
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
