@@ -16,14 +16,7 @@ services:
       - HOST=0.0.0.0
     networks:
       - app-network
-      - nginx-proxy_default
-      
 
 networks:
   app-network:
     driver: bridge
-  nginx-proxy_default:
-    external: true
-
-  
-
