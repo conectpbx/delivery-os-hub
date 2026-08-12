@@ -105,7 +105,7 @@ export function useUpdate<T extends Record<string, unknown>>(table: string, key:
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, values }: { id: string; values: T }) => {
-      const { error } = await db.from(table).update(values).eq("id", id);
+      const { error } = await db.from(table).update(values as never).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
