@@ -9,7 +9,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - /output:/app:ro
+      - ./output:/app:ro
     environment:
       - NODE_ENV=production
       - PORT=3000
