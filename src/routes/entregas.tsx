@@ -38,7 +38,8 @@ function Entregas() {
   const remove = useRemove("deliveries", "deliveries");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [addressLabel, setAddressLabel] = useState<string | null>(null);
-  const [geoLoading, setGeoLoading] = useState(false);
+  const [geoTarget, setGeoTarget] = useState<"pickup" | "dropoff" | null>(null);
+  const [accuracy, setAccuracy] = useState<number | null>(null);
   const [addingApp, setAddingApp] = useState(false);
   const [newAppName, setNewAppName] = useState("");
   const [newAppFee, setNewAppFee] = useState("");
@@ -46,6 +47,7 @@ function Entregas() {
     app_name: "",
     earnings: "",
     fee_percent: "",
+    fee_amount: "",
     tip: "",
     distance_km: "",
     duration_min: "",
@@ -62,10 +64,42 @@ function Entregas() {
   const feeValue = (gross * feePct) / 100;
   const net = gross - feeValue;
 
+  const round2 = (v: number) => Math.round(v * 100) / 100;
+
+  // Taxa em R$ -> recalcula a % automaticamente
+  function setFeeAmount(v: string) {
+    const amount = Math.min(Math.max(Number(v || 0), 0), gross || Number.POSITIVE_INFINITY);
+    const pct = gross > 0 ? round2((amount / gross) * 100) : 0;
+    setForm((f) => ({ ...f, fee_amount: v, fee_percent: gross > 0 ? String(pct) : f.fee_percent }));
+  }
+
+  // Taxa em % -> recalcula o valor em R$
+  function setFeePercent(v: string) {
+    const pct = Math.min(Math.max(Number(v || 0), 0), 100);
+    setForm((f) => ({ ...f, fee_percent: v, fee_amount: String(round2((gross * pct) / 100)) }));
+  }
+
+  // Valor bruto muda -> mantém a % e atualiza o valor da taxa
+  function setGross(v: string) {
+    const g = Number(v || 0);
+    setForm((f) => ({
+      ...f,
+      earnings: v,
+      fee_amount: String(round2((g * Math.min(Math.max(Number(f.fee_percent || 0), 0), 100)) / 100)),
+    }));
+  }
+
   function selectApp(name: string) {
     const app = (apps.data ?? []).find((a) => a.name === name);
-    setForm((f) => ({ ...f, app_name: name, fee_percent: String(Number(app?.fee_percent ?? 0)) }));
+    const pct = Number(app?.fee_percent ?? 0);
+    setForm((f) => ({
+      ...f,
+      app_name: name,
+      fee_percent: String(pct),
+      fee_amount: String(round2((Number(f.earnings || 0) * pct) / 100)),
+    }));
   }
+
 
   async function reverseGeocode(lat: number, lng: number) {
     const res = await fetch(
