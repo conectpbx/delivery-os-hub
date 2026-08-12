@@ -64,6 +64,7 @@ export type App = {
   id: string;
   name: string;
   color: string | null;
+  fee_percent: number;
   created_at: string;
 };
 
@@ -98,7 +99,22 @@ export const useExpenses = () => useList<Expense>("expenses", "expenses", "occur
 export const useGoals = () => useList<Goal>("goals", "goals", "month");
 export const useApps = () => useList<App>("apps", "apps", "name");
 
-export const useInsertApp = () => useInsert<{ name: string }>("apps", "apps");
+export const useInsertApp = () => useInsert<{ name: string; fee_percent: number }>("apps", "apps");
+
+export function useUpdate<T extends Record<string, unknown>>(table: string, key: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, values }: { id: string; values: T }) => {
+      const { error } = await db.from(table).update(values as never).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [key] });
+    },
+  });
+}
+
+export const useUpdateApp = () => useUpdate<{ fee_percent: number }>("apps", "apps");
 
 export function useProfile() {
   return useQuery({
