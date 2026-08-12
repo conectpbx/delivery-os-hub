@@ -57,6 +57,8 @@ export type Database = {
           lng: number | null
           occurred_at: string
           pickup_address: string | null
+          status: string
+          stops: Json
           tip: number
           user_id: string
         }
@@ -75,6 +77,8 @@ export type Database = {
           lng?: number | null
           occurred_at?: string
           pickup_address?: string | null
+          status?: string
+          stops?: Json
           tip?: number
           user_id: string
         }
@@ -93,6 +97,8 @@ export type Database = {
           lng?: number | null
           occurred_at?: string
           pickup_address?: string | null
+          status?: string
+          stops?: Json
           tip?: number
           user_id?: string
         }
