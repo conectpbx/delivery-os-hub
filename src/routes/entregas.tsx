@@ -38,7 +38,8 @@ function Entregas() {
   const remove = useRemove("deliveries", "deliveries");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [addressLabel, setAddressLabel] = useState<string | null>(null);
-  const [geoLoading, setGeoLoading] = useState(false);
+  const [geoTarget, setGeoTarget] = useState<"pickup" | "dropoff" | null>(null);
+  const [accuracy, setAccuracy] = useState<number | null>(null);
   const [addingApp, setAddingApp] = useState(false);
   const [newAppName, setNewAppName] = useState("");
   const [newAppFee, setNewAppFee] = useState("");
@@ -46,6 +47,7 @@ function Entregas() {
     app_name: "",
     earnings: "",
     fee_percent: "",
+    fee_amount: "",
     tip: "",
     distance_km: "",
     duration_min: "",
@@ -62,10 +64,42 @@ function Entregas() {
   const feeValue = (gross * feePct) / 100;
   const net = gross - feeValue;
 
+  const round2 = (v: number) => Math.round(v * 100) / 100;
+
+  // Taxa em R$ -> recalcula a % automaticamente
+  function setFeeAmount(v: string) {
+    const amount = Math.min(Math.max(Number(v || 0), 0), gross || Number.POSITIVE_INFINITY);
+    const pct = gross > 0 ? round2((amount / gross) * 100) : 0;
+    setForm((f) => ({ ...f, fee_amount: v, fee_percent: gross > 0 ? String(pct) : f.fee_percent }));
+  }
+
+  // Taxa em % -> recalcula o valor em R$
+  function setFeePercent(v: string) {
+    const pct = Math.min(Math.max(Number(v || 0), 0), 100);
+    setForm((f) => ({ ...f, fee_percent: v, fee_amount: String(round2((gross * pct) / 100)) }));
+  }
+
+  // Valor bruto muda -> mantém a % e atualiza o valor da taxa
+  function setGross(v: string) {
+    const g = Number(v || 0);
+    setForm((f) => ({
+      ...f,
+      earnings: v,
+      fee_amount: String(round2((g * Math.min(Math.max(Number(f.fee_percent || 0), 0), 100)) / 100)),
+    }));
+  }
+
   function selectApp(name: string) {
     const app = (apps.data ?? []).find((a) => a.name === name);
-    setForm((f) => ({ ...f, app_name: name, fee_percent: String(Number(app?.fee_percent ?? 0)) }));
+    const pct = Number(app?.fee_percent ?? 0);
+    setForm((f) => ({
+      ...f,
+      app_name: name,
+      fee_percent: String(pct),
+      fee_amount: String(round2((Number(f.earnings || 0) * pct) / 100)),
+    }));
   }
+
 
   async function reverseGeocode(lat: number, lng: number) {
     const res = await fetch(
@@ -94,38 +128,52 @@ function Entregas() {
     return short || json.display_name || "";
   }
 
-  function captureGps() {
+  function captureGps(target: "pickup" | "dropoff") {
     if (!("geolocation" in navigator)) {
       toast.error("GPS indisponível neste dispositivo");
       return;
     }
-    setGeoLoading(true);
+    setGeoTarget(target);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
-        setCoords({ lat, lng });
+        setAccuracy(Math.round(pos.coords.accuracy));
+        if (target === "pickup") setCoords({ lat, lng });
         try {
           const address = await reverseGeocode(lat, lng);
           if (address) {
-            setAddressLabel(address);
-            setForm((f) => ({ ...f, pickup_address: f.pickup_address || address }));
-            toast.success("Endereço identificado");
+            if (target === "pickup") setAddressLabel(address);
+            setForm((f) => ({
+              ...f,
+              [target === "pickup" ? "pickup_address" : "dropoff_address"]: address,
+            }));
+            toast.success(
+              target === "pickup" ? "Endereço de coleta preenchido" : "Endereço de entrega preenchido",
+            );
           } else {
             toast.success("Localização capturada");
           }
         } catch {
           toast.message("Localização capturada (endereço indisponível)");
         } finally {
-          setGeoLoading(false);
+          setGeoTarget(null);
         }
       },
-      () => {
-        setGeoLoading(false);
-        toast.error("Não foi possível obter a localização");
+      (err) => {
+        setGeoTarget(null);
+        toast.error(
+          err.code === err.PERMISSION_DENIED
+            ? "Permissão de localização negada — libere o GPS nas configurações do navegador"
+            : err.code === err.TIMEOUT
+              ? "O GPS demorou demais para responder. Tente novamente a céu aberto."
+              : "Não foi possível obter a localização",
+        );
       },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
     );
   }
+
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -145,7 +193,16 @@ function Entregas() {
         lng: coords?.lng ?? null,
       });
       toast.success("Entrega registrada");
-      setForm({ ...form, earnings: "", tip: "", distance_km: "", duration_min: "", idle_min: "" });
+      setForm({
+        ...form,
+        earnings: "",
+        fee_amount: "",
+        tip: "",
+        distance_km: "",
+        duration_min: "",
+        idle_min: "",
+        dropoff_address: "",
+      });
     } catch {
       toast.error("Erro ao salvar a entrega");
     }
@@ -254,15 +311,16 @@ function Entregas() {
               )}
             </div>
             <div className="grid grid-cols-2 gap-3">
+              <Field label="Valor bruto (R$)" value={form.earnings} onChange={setGross} />
               <Field
-                label="Valor bruto (R$)"
-                value={form.earnings}
-                onChange={(v) => set("earnings", v)}
+                label="Taxa do app (R$)"
+                value={form.fee_amount}
+                onChange={setFeeAmount}
               />
               <Field
                 label="Taxa do app (%)"
                 value={form.fee_percent}
-                onChange={(v) => set("fee_percent", v)}
+                onChange={setFeePercent}
               />
               <Field label="Gorjeta (R$)" value={form.tip} onChange={(v) => set("tip", v)} />
               <Field label="Distância (km)" value={form.distance_km} onChange={(v) => set("distance_km", v)} />
@@ -271,7 +329,7 @@ function Entregas() {
             </div>
             <div className="rounded-md border border-border bg-muted/40 p-3 text-xs">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Taxa descontada</span>
+                <span className="text-muted-foreground">Taxa descontada ({num(feePct)}%)</span>
                 <span>-{brl(feeValue)}</span>
               </div>
               <div className="mt-1 flex justify-between font-medium">
@@ -302,38 +360,71 @@ function Entregas() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="pickup">Coleta</Label>
-              <Input
-                id="pickup"
-                value={form.pickup_address}
-                onChange={(e) => set("pickup_address", e.target.value)}
-                placeholder="Restaurante / loja"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="drop">Entrega</Label>
-              <Input
-                id="drop"
-                value={form.dropoff_address}
-                onChange={(e) => set("dropoff_address", e.target.value)}
-                placeholder="Endereço do cliente"
-              />
-            </div>
-            <div className="flex items-start gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="gap-2"
-                onClick={captureGps}
-                disabled={geoLoading}
-              >
-                <MapPin className="size-4" /> {geoLoading ? "Buscando..." : "GPS automático"}
-              </Button>
-              {addressLabel || coords ? (
-                <span className="text-xs text-muted-foreground">
+              <div className="flex gap-2">
+                <Input
+                  id="pickup"
+                  value={form.pickup_address}
+                  onChange={(e) => set("pickup_address", e.target.value)}
+                  placeholder="Restaurante / loja"
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label="Usar GPS na coleta"
+                  onClick={() => captureGps("pickup")}
+                  disabled={geoTarget !== null}
+                >
+                  <MapPin className="size-4" />
+                </Button>
+              </div>
+              {geoTarget === "pickup" ? (
+                <p className="text-xs text-muted-foreground">Buscando localização…</p>
+              ) : addressLabel || coords ? (
+                <p className="text-xs text-muted-foreground">
                   {addressLabel ?? `${coords!.lat.toFixed(4)}, ${coords!.lng.toFixed(4)}`}
-                </span>
+                  {accuracy ? ` · precisão ~${accuracy} m` : ""}
+                </p>
               ) : null}
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="drop">Entrega (ponto final)</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="drop"
+                  value={form.dropoff_address}
+                  onChange={(e) => set("dropoff_address", e.target.value)}
+                  placeholder="Endereço do cliente"
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label="Usar GPS na entrega"
+                  onClick={() => captureGps("dropoff")}
+                  disabled={geoTarget !== null}
+                >
+                  <MapPin className="size-4" />
+                </Button>
+                {form.dropoff_address ? (
+                  <Button asChild variant="outline" size="icon" aria-label="Abrir navegação">
+                    <a
+                      target="_blank"
+                      rel="noreferrer"
+                      href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(form.dropoff_address)}`}
+                    >
+                      <Navigation className="size-4" />
+                    </a>
+                  </Button>
+                ) : null}
+              </div>
+              {geoTarget === "dropoff" ? (
+                <p className="text-xs text-muted-foreground">Buscando localização…</p>
+              ) : null}
+            </div>
+
             <Button type="submit" className="w-full" disabled={insert.isPending}>
               Salvar entrega
             </Button>
