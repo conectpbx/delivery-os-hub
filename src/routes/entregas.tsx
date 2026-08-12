@@ -302,15 +302,16 @@ function Entregas() {
               )}
             </div>
             <div className="grid grid-cols-2 gap-3">
+              <Field label="Valor bruto (R$)" value={form.earnings} onChange={setGross} />
               <Field
-                label="Valor bruto (R$)"
-                value={form.earnings}
-                onChange={(v) => set("earnings", v)}
+                label="Taxa do app (R$)"
+                value={form.fee_amount}
+                onChange={setFeeAmount}
               />
               <Field
                 label="Taxa do app (%)"
                 value={form.fee_percent}
-                onChange={(v) => set("fee_percent", v)}
+                onChange={setFeePercent}
               />
               <Field label="Gorjeta (R$)" value={form.tip} onChange={(v) => set("tip", v)} />
               <Field label="Distância (km)" value={form.distance_km} onChange={(v) => set("distance_km", v)} />
@@ -319,7 +320,7 @@ function Entregas() {
             </div>
             <div className="rounded-md border border-border bg-muted/40 p-3 text-xs">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Taxa descontada</span>
+                <span className="text-muted-foreground">Taxa descontada ({num(feePct)}%)</span>
                 <span>-{brl(feeValue)}</span>
               </div>
               <div className="mt-1 flex justify-between font-medium">
@@ -350,38 +351,71 @@ function Entregas() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="pickup">Coleta</Label>
-              <Input
-                id="pickup"
-                value={form.pickup_address}
-                onChange={(e) => set("pickup_address", e.target.value)}
-                placeholder="Restaurante / loja"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="drop">Entrega</Label>
-              <Input
-                id="drop"
-                value={form.dropoff_address}
-                onChange={(e) => set("dropoff_address", e.target.value)}
-                placeholder="Endereço do cliente"
-              />
-            </div>
-            <div className="flex items-start gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="gap-2"
-                onClick={captureGps}
-                disabled={geoLoading}
-              >
-                <MapPin className="size-4" /> {geoLoading ? "Buscando..." : "GPS automático"}
-              </Button>
-              {addressLabel || coords ? (
-                <span className="text-xs text-muted-foreground">
+              <div className="flex gap-2">
+                <Input
+                  id="pickup"
+                  value={form.pickup_address}
+                  onChange={(e) => set("pickup_address", e.target.value)}
+                  placeholder="Restaurante / loja"
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label="Usar GPS na coleta"
+                  onClick={() => captureGps("pickup")}
+                  disabled={geoTarget !== null}
+                >
+                  <MapPin className="size-4" />
+                </Button>
+              </div>
+              {geoTarget === "pickup" ? (
+                <p className="text-xs text-muted-foreground">Buscando localização…</p>
+              ) : addressLabel || coords ? (
+                <p className="text-xs text-muted-foreground">
                   {addressLabel ?? `${coords!.lat.toFixed(4)}, ${coords!.lng.toFixed(4)}`}
-                </span>
+                  {accuracy ? ` · precisão ~${accuracy} m` : ""}
+                </p>
               ) : null}
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="drop">Entrega (ponto final)</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="drop"
+                  value={form.dropoff_address}
+                  onChange={(e) => set("dropoff_address", e.target.value)}
+                  placeholder="Endereço do cliente"
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label="Usar GPS na entrega"
+                  onClick={() => captureGps("dropoff")}
+                  disabled={geoTarget !== null}
+                >
+                  <MapPin className="size-4" />
+                </Button>
+                {form.dropoff_address ? (
+                  <Button asChild variant="outline" size="icon" aria-label="Abrir navegação">
+                    <a
+                      target="_blank"
+                      rel="noreferrer"
+                      href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(form.dropoff_address)}`}
+                    >
+                      <Navigation className="size-4" />
+                    </a>
+                  </Button>
+                ) : null}
+              </div>
+              {geoTarget === "dropoff" ? (
+                <p className="text-xs text-muted-foreground">Buscando localização…</p>
+              ) : null}
+            </div>
+
             <Button type="submit" className="w-full" disabled={insert.isPending}>
               Salvar entrega
             </Button>
