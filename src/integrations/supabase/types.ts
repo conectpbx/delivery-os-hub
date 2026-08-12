@@ -18,6 +18,7 @@ export type Database = {
         Row: {
           color: string | null
           created_at: string
+          fee_percent: number
           id: string
           name: string
           user_id: string
@@ -25,6 +26,7 @@ export type Database = {
         Insert: {
           color?: string | null
           created_at?: string
+          fee_percent?: number
           id?: string
           name: string
           user_id: string
@@ -32,6 +34,7 @@ export type Database = {
         Update: {
           color?: string | null
           created_at?: string
+          fee_percent?: number
           id?: string
           name?: string
           user_id?: string
@@ -46,6 +49,8 @@ export type Database = {
           dropoff_address: string | null
           duration_min: number
           earnings: number
+          fee_percent: number
+          gross_earnings: number
           id: string
           idle_min: number
           lat: number | null
@@ -62,6 +67,8 @@ export type Database = {
           dropoff_address?: string | null
           duration_min?: number
           earnings?: number
+          fee_percent?: number
+          gross_earnings?: number
           id?: string
           idle_min?: number
           lat?: number | null
@@ -78,6 +85,8 @@ export type Database = {
           dropoff_address?: string | null
           duration_min?: number
           earnings?: number
+          fee_percent?: number
+          gross_earnings?: number
           id?: string
           idle_min?: number
           lat?: number | null
