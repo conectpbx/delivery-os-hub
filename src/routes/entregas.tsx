@@ -7,7 +7,7 @@ import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useApps, useDeliveries, useInsert, useInsertApp, useRemove } from "@/lib/data";
+import { useApps, useDeliveries, useInsert, useInsertApp, useRemove, useUpdateApp } from "@/lib/data";
 import { brl, dateTimeLabel, minutesLabel, num } from "@/lib/format";
 
 export const Route = createFileRoute("/entregas")({
@@ -34,13 +34,18 @@ function Entregas() {
   const apps = useApps();
   const insert = useInsert("deliveries", "deliveries");
   const insertApp = useInsertApp();
+  const updateApp = useUpdateApp();
   const remove = useRemove("deliveries", "deliveries");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [addressLabel, setAddressLabel] = useState<string | null>(null);
+  const [geoLoading, setGeoLoading] = useState(false);
   const [addingApp, setAddingApp] = useState(false);
   const [newAppName, setNewAppName] = useState("");
+  const [newAppFee, setNewAppFee] = useState("");
   const [form, setForm] = useState({
     app_name: "",
     earnings: "",
+    fee_percent: "",
     tip: "",
     distance_km: "",
     duration_min: "",
@@ -51,17 +56,74 @@ function Entregas() {
 
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
+  const selectedApp = (apps.data ?? []).find((a) => a.name === form.app_name);
+  const gross = Number(form.earnings || 0);
+  const feePct = Math.min(Math.max(Number(form.fee_percent || 0), 0), 100);
+  const feeValue = (gross * feePct) / 100;
+  const net = gross - feeValue;
+
+  function selectApp(name: string) {
+    const app = (apps.data ?? []).find((a) => a.name === name);
+    setForm((f) => ({ ...f, app_name: name, fee_percent: String(Number(app?.fee_percent ?? 0)) }));
+  }
+
+  async function reverseGeocode(lat: number, lng: number) {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&addressdetails=1&accept-language=pt-BR&lat=${lat}&lon=${lng}`,
+      { headers: { Accept: "application/json" } },
+    );
+    if (!res.ok) throw new Error("geocode");
+    const json = (await res.json()) as {
+      display_name?: string;
+      name?: string;
+      address?: Record<string, string>;
+    };
+    const a = json.address ?? {};
+    const road = a["road"] ?? a["pedestrian"] ?? a["footway"] ?? "";
+    const number = a["house_number"] ?? "";
+    const district = a["suburb"] ?? a["neighbourhood"] ?? a["city_district"] ?? "";
+    const city = a["city"] ?? a["town"] ?? a["village"] ?? a["municipality"] ?? "";
+    const short = [
+      [json.name, road].filter(Boolean).join(" - ") || road,
+      number,
+      district,
+      city,
+    ]
+      .filter(Boolean)
+      .join(", ");
+    return short || json.display_name || "";
+  }
+
   function captureGps() {
     if (!("geolocation" in navigator)) {
       toast.error("GPS indisponível neste dispositivo");
       return;
     }
+    setGeoLoading(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        toast.success("Localização capturada");
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setCoords({ lat, lng });
+        try {
+          const address = await reverseGeocode(lat, lng);
+          if (address) {
+            setAddressLabel(address);
+            setForm((f) => ({ ...f, pickup_address: f.pickup_address || address }));
+            toast.success("Endereço identificado");
+          } else {
+            toast.success("Localização capturada");
+          }
+        } catch {
+          toast.message("Localização capturada (endereço indisponível)");
+        } finally {
+          setGeoLoading(false);
+        }
       },
-      () => toast.error("Não foi possível obter a localização"),
+      () => {
+        setGeoLoading(false);
+        toast.error("Não foi possível obter a localização");
+      },
     );
   }
 
@@ -70,7 +132,9 @@ function Entregas() {
     try {
       await insert.mutateAsync({
         app_name: form.app_name,
-        earnings: Number(form.earnings || 0),
+        gross_earnings: gross,
+        fee_percent: feePct,
+        earnings: Number(net.toFixed(2)),
         tip: Number(form.tip || 0),
         distance_km: Number(form.distance_km || 0),
         duration_min: Number(form.duration_min || 0),
@@ -106,54 +170,65 @@ function Entregas() {
             <div className="space-y-2">
               <Label htmlFor="app">Aplicativo</Label>
               {addingApp ? (
-                <div className="flex gap-2">
-                  <Input
-                    value={newAppName}
-                    onChange={(e) => setNewAppName(e.target.value)}
-                    placeholder="Nome do aplicativo"
-                    className="flex-1"
-                    autoFocus
-                  />
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="outline"
-                    aria-label="Cancelar"
-                    onClick={() => {
-                      setAddingApp(false);
-                      setNewAppName("");
-                    }}
-                  >
-                    <X className="size-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    size="icon"
-                    aria-label="Salvar aplicativo"
-                    disabled={!newAppName.trim() || insertApp.isPending}
-                    onClick={async () => {
-                      const name = newAppName.trim();
-                      if (!name) return;
-                      try {
-                        await insertApp.mutateAsync({ name });
-                        setForm((f) => ({ ...f, app_name: name }));
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <Input
+                      value={newAppName}
+                      onChange={(e) => setNewAppName(e.target.value)}
+                      placeholder="Nome do aplicativo"
+                      className="flex-1"
+                      autoFocus
+                    />
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      aria-label="Cancelar"
+                      onClick={() => {
                         setAddingApp(false);
                         setNewAppName("");
-                        toast.success("Aplicativo cadastrado");
-                      } catch {
-                        toast.error("Erro ao cadastrar aplicativo");
-                      }
-                    }}
-                  >
-                    <Plus className="size-4" />
-                  </Button>
+                        setNewAppFee("");
+                      }}
+                    >
+                      <X className="size-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      aria-label="Salvar aplicativo"
+                      disabled={!newAppName.trim() || insertApp.isPending}
+                      onClick={async () => {
+                        const name = newAppName.trim();
+                        if (!name) return;
+                        try {
+                          const fee = Math.min(Math.max(Number(newAppFee || 0), 0), 100);
+                          await insertApp.mutateAsync({ name, fee_percent: fee });
+                          setForm((f) => ({ ...f, app_name: name, fee_percent: String(fee) }));
+                          setAddingApp(false);
+                          setNewAppName("");
+                          setNewAppFee("");
+                          toast.success("Aplicativo cadastrado");
+                        } catch {
+                          toast.error("Erro ao cadastrar aplicativo");
+                        }
+                      }}
+                    >
+                      <Plus className="size-4" />
+                    </Button>
+                  </div>
+                  <Input
+                    inputMode="decimal"
+                    value={newAppFee}
+                    onChange={(e) => setNewAppFee(e.target.value)}
+                    placeholder="Taxa do app (%) — ex: 15"
+                  />
                 </div>
               ) : (
                 <div className="flex gap-2">
                   <select
                     id="app"
                     value={form.app_name}
-                    onChange={(e) => set("app_name", e.target.value)}
+                    onChange={(e) => selectApp(e.target.value)}
                     className="h-9 flex-1 rounded-md border border-input bg-background px-3 text-sm"
                   >
                     <option value="" disabled>
@@ -162,6 +237,7 @@ function Entregas() {
                     {(apps.data ?? []).map((a) => (
                       <option key={a.id} value={a.name}>
                         {a.name}
+                        {Number(a.fee_percent) > 0 ? ` · taxa ${num(Number(a.fee_percent))}%` : ""}
                       </option>
                     ))}
                   </select>
@@ -178,11 +254,51 @@ function Entregas() {
               )}
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Ganho (R$)" value={form.earnings} onChange={(v) => set("earnings", v)} />
+              <Field
+                label="Valor bruto (R$)"
+                value={form.earnings}
+                onChange={(v) => set("earnings", v)}
+              />
+              <Field
+                label="Taxa do app (%)"
+                value={form.fee_percent}
+                onChange={(v) => set("fee_percent", v)}
+              />
               <Field label="Gorjeta (R$)" value={form.tip} onChange={(v) => set("tip", v)} />
               <Field label="Distância (km)" value={form.distance_km} onChange={(v) => set("distance_km", v)} />
               <Field label="Duração (min)" value={form.duration_min} onChange={(v) => set("duration_min", v)} />
               <Field label="Tempo parado (min)" value={form.idle_min} onChange={(v) => set("idle_min", v)} />
+            </div>
+            <div className="rounded-md border border-border bg-muted/40 p-3 text-xs">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Taxa descontada</span>
+                <span>-{brl(feeValue)}</span>
+              </div>
+              <div className="mt-1 flex justify-between font-medium">
+                <span>Ganho líquido</span>
+                <span>{brl(net + Number(form.tip || 0))}</span>
+              </div>
+              {selectedApp && Number(selectedApp.fee_percent) !== feePct ? (
+                <Button
+                  type="button"
+                  variant="link"
+                  size="sm"
+                  className="mt-1 h-auto p-0 text-xs"
+                  onClick={async () => {
+                    try {
+                      await updateApp.mutateAsync({
+                        id: selectedApp.id,
+                        values: { fee_percent: feePct },
+                      });
+                      toast.success(`Taxa padrão de ${selectedApp.name} atualizada`);
+                    } catch {
+                      toast.error("Erro ao salvar a taxa");
+                    }
+                  }}
+                >
+                  Salvar {num(feePct)}% como taxa padrão de {selectedApp.name}
+                </Button>
+              ) : null}
             </div>
             <div className="space-y-2">
               <Label htmlFor="pickup">Coleta</Label>
@@ -202,13 +318,19 @@ function Entregas() {
                 placeholder="Endereço do cliente"
               />
             </div>
-            <div className="flex items-center gap-2">
-              <Button type="button" variant="outline" className="gap-2" onClick={captureGps}>
-                <MapPin className="size-4" /> GPS automático
+            <div className="flex items-start gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="gap-2"
+                onClick={captureGps}
+                disabled={geoLoading}
+              >
+                <MapPin className="size-4" /> {geoLoading ? "Buscando..." : "GPS automático"}
               </Button>
-              {coords ? (
+              {addressLabel || coords ? (
                 <span className="text-xs text-muted-foreground">
-                  {coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}
+                  {addressLabel ?? `${coords!.lat.toFixed(4)}, ${coords!.lng.toFixed(4)}`}
                 </span>
               ) : null}
             </div>
