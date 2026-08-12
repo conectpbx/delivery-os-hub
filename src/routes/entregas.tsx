@@ -7,7 +7,7 @@ import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useApps, useDeliveries, useInsert, useInsertApp, useRemove } from "@/lib/data";
+import { useApps, useDeliveries, useInsert, useInsertApp, useRemove, useUpdateApp } from "@/lib/data";
 import { brl, dateTimeLabel, minutesLabel, num } from "@/lib/format";
 
 export const Route = createFileRoute("/entregas")({
@@ -34,13 +34,16 @@ function Entregas() {
   const apps = useApps();
   const insert = useInsert("deliveries", "deliveries");
   const insertApp = useInsertApp();
+  const updateApp = useUpdateApp();
   const remove = useRemove("deliveries", "deliveries");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [addingApp, setAddingApp] = useState(false);
   const [newAppName, setNewAppName] = useState("");
+  const [newAppFee, setNewAppFee] = useState("");
   const [form, setForm] = useState({
     app_name: "",
     earnings: "",
+    fee_percent: "",
     tip: "",
     distance_km: "",
     duration_min: "",
@@ -50,6 +53,17 @@ function Entregas() {
   });
 
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  const selectedApp = (apps.data ?? []).find((a) => a.name === form.app_name);
+  const gross = Number(form.earnings || 0);
+  const feePct = Math.min(Math.max(Number(form.fee_percent || 0), 0), 100);
+  const feeValue = (gross * feePct) / 100;
+  const net = gross - feeValue;
+
+  function selectApp(name: string) {
+    const app = (apps.data ?? []).find((a) => a.name === name);
+    setForm((f) => ({ ...f, app_name: name, fee_percent: String(Number(app?.fee_percent ?? 0)) }));
+  }
 
   function captureGps() {
     if (!("geolocation" in navigator)) {
@@ -70,7 +84,9 @@ function Entregas() {
     try {
       await insert.mutateAsync({
         app_name: form.app_name,
-        earnings: Number(form.earnings || 0),
+        gross_earnings: gross,
+        fee_percent: feePct,
+        earnings: Number(net.toFixed(2)),
         tip: Number(form.tip || 0),
         distance_km: Number(form.distance_km || 0),
         duration_min: Number(form.duration_min || 0),
