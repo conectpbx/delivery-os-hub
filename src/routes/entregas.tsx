@@ -193,7 +193,16 @@ function Entregas() {
         lng: coords?.lng ?? null,
       });
       toast.success("Entrega registrada");
-      setForm({ ...form, earnings: "", tip: "", distance_km: "", duration_min: "", idle_min: "" });
+      setForm({
+        ...form,
+        earnings: "",
+        fee_amount: "",
+        tip: "",
+        distance_km: "",
+        duration_min: "",
+        idle_min: "",
+        dropoff_address: "",
+      });
     } catch {
       toast.error("Erro ao salvar a entrega");
     }
