@@ -37,6 +37,8 @@ function Entregas() {
   const updateApp = useUpdateApp();
   const remove = useRemove("deliveries", "deliveries");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [addressLabel, setAddressLabel] = useState<string | null>(null);
+  const [geoLoading, setGeoLoading] = useState(false);
   const [addingApp, setAddingApp] = useState(false);
   const [newAppName, setNewAppName] = useState("");
   const [newAppFee, setNewAppFee] = useState("");
@@ -65,17 +67,63 @@ function Entregas() {
     setForm((f) => ({ ...f, app_name: name, fee_percent: String(Number(app?.fee_percent ?? 0)) }));
   }
 
+  async function reverseGeocode(lat: number, lng: number) {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&addressdetails=1&accept-language=pt-BR&lat=${lat}&lon=${lng}`,
+      { headers: { Accept: "application/json" } },
+    );
+    if (!res.ok) throw new Error("geocode");
+    const json = (await res.json()) as {
+      display_name?: string;
+      name?: string;
+      address?: Record<string, string>;
+    };
+    const a = json.address ?? {};
+    const road = a["road"] ?? a["pedestrian"] ?? a["footway"] ?? "";
+    const number = a["house_number"] ?? "";
+    const district = a["suburb"] ?? a["neighbourhood"] ?? a["city_district"] ?? "";
+    const city = a["city"] ?? a["town"] ?? a["village"] ?? a["municipality"] ?? "";
+    const short = [
+      [json.name, road].filter(Boolean).join(" - ") || road,
+      number,
+      district,
+      city,
+    ]
+      .filter(Boolean)
+      .join(", ");
+    return short || json.display_name || "";
+  }
+
   function captureGps() {
     if (!("geolocation" in navigator)) {
       toast.error("GPS indisponível neste dispositivo");
       return;
     }
+    setGeoLoading(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        toast.success("Localização capturada");
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setCoords({ lat, lng });
+        try {
+          const address = await reverseGeocode(lat, lng);
+          if (address) {
+            setAddressLabel(address);
+            setForm((f) => ({ ...f, pickup_address: f.pickup_address || address }));
+            toast.success("Endereço identificado");
+          } else {
+            toast.success("Localização capturada");
+          }
+        } catch {
+          toast.message("Localização capturada (endereço indisponível)");
+        } finally {
+          setGeoLoading(false);
+        }
       },
-      () => toast.error("Não foi possível obter a localização"),
+      () => {
+        setGeoLoading(false);
+        toast.error("Não foi possível obter a localização");
+      },
     );
   }
 
