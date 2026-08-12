@@ -318,13 +318,19 @@ function Entregas() {
                 placeholder="Endereço do cliente"
               />
             </div>
-            <div className="flex items-center gap-2">
-              <Button type="button" variant="outline" className="gap-2" onClick={captureGps}>
-                <MapPin className="size-4" /> GPS automático
+            <div className="flex items-start gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="gap-2"
+                onClick={captureGps}
+                disabled={geoLoading}
+              >
+                <MapPin className="size-4" /> {geoLoading ? "Buscando..." : "GPS automático"}
               </Button>
-              {coords ? (
+              {addressLabel || coords ? (
                 <span className="text-xs text-muted-foreground">
-                  {coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}
+                  {addressLabel ?? `${coords!.lat.toFixed(4)}, ${coords!.lng.toFixed(4)}`}
                 </span>
               ) : null}
             </div>
