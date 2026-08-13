@@ -23,16 +23,21 @@ export function StatCard({
   }[tone];
 
   return (
-    <div className="surface-card p-4">
+    <div className="surface-card min-w-0 p-4">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-        {icon ? <span className="text-muted-foreground">{icon}</span> : null}
+        <p className="min-w-0 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          {label}
+        </p>
+        {icon ? <span className="shrink-0 text-muted-foreground">{icon}</span> : null}
       </div>
-      <p className={cn("mt-2 text-2xl font-semibold tabular-nums", toneClass)}>{value}</p>
+      <p className={cn("mt-2 truncate text-xl font-semibold tabular-nums sm:text-2xl", toneClass)}>
+        {value}
+      </p>
       {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
     </div>
   );
 }
+
 
 export function SectionCard({
   title,
