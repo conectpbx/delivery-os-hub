@@ -379,7 +379,7 @@ function Entregas() {
                     id="app"
                     value={form.app_name}
                     onChange={(e) => selectApp(e.target.value)}
-                    className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-sm"
+                    className="h-9 w-0 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-sm"
                   >
                     <option value="" disabled>
                       Selecione...
