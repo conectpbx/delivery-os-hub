@@ -302,7 +302,7 @@ function Entregas() {
 
   return (
     <AppShell title="Entregas" subtitle="Registro de corridas, rota no mapa e navegação">
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatCard label="Total recebido" value={brl(total)} tone="primary" />
         <StatCard label="Distância total" value={`${num(km)} km`} />
         <StatCard label="Tempo parado" value={minutesLabel(idle)} tone="warning" />
