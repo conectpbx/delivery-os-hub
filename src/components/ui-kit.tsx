@@ -53,20 +53,19 @@ export function SectionCard({
   className?: string;
 }) {
   return (
-    <section className={cn("surface-card p-4 sm:p-5", className)}>
+    <section className={cn("surface-card min-w-0 p-4 sm:p-5", className)}>
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold">{title}</h2>
-          {description ? (
-            <p className="text-xs text-muted-foreground">{description}</p>
-          ) : null}
+          {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
         </div>
-        {actions}
+        {actions ? <div className="shrink-0">{actions}</div> : null}
       </div>
-      {children}
+      <div className="min-w-0">{children}</div>
     </section>
   );
 }
+
 
 export function EmptyState({ children }: { children: ReactNode }) {
   return (
