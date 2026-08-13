@@ -70,6 +70,7 @@ function Entregas() {
   const [newAppFee, setNewAppFee] = useState("");
   const [stops, setStops] = useState<Stop[]>(() => [newStop("coleta"), newStop("entrega")]);
   const [route, setRoute] = useState<RouteResult | null>(null);
+  const [showRoute, setShowRoute] = useState(false);
   const [routing, setRouting] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [finishing, setFinishing] = useState<{ id: string; address: string } | null>(null);
