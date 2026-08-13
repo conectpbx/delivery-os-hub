@@ -85,20 +85,24 @@ export function AppShell({
             <Button
               variant="ghost"
               size="icon"
-              className="lg:hidden"
+              className="shrink-0 lg:hidden"
               onClick={() => setOpen((v) => !v)}
               aria-label="Abrir menu"
             >
               <Menu className="size-5" />
             </Button>
             <div className="min-w-0 flex-1">
-              <h1 className="truncate text-lg font-semibold tracking-tight">{title}</h1>
+              <h1 className="truncate text-base font-semibold tracking-tight sm:text-lg">{title}</h1>
               {subtitle ? (
                 <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
               ) : null}
             </div>
-            {actions}
+            {actions ? <div className="hidden shrink-0 sm:block">{actions}</div> : null}
           </div>
+          {actions ? (
+            <div className="flex justify-end overflow-x-auto px-4 pb-3 sm:hidden">{actions}</div>
+          ) : null}
+
           {open ? (
             <nav className="grid gap-1 border-t border-border p-3 lg:hidden">
               {nav.map((item) => (
