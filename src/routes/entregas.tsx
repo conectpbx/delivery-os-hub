@@ -346,7 +346,7 @@ function Entregas() {
                         const name = newAppName.trim();
                         if (!name) return;
                         try {
-                          const fee = Math.min(Math.max(Number(newAppFee || 0), 0), 100);
+                          const fee = Math.min(Math.max(dec(newAppFee), 0), 100);
                           await insertApp.mutateAsync({ name, fee_percent: fee });
                           setForm((f) => ({ ...f, app_name: name, fee_percent: String(fee) }));
                           setAddingApp(false);
@@ -426,7 +426,7 @@ function Entregas() {
               </div>
               <div className="mt-1 flex justify-between font-medium">
                 <span>Ganho líquido</span>
-                <span>{brl(net + Number(form.tip || 0))}</span>
+                <span>{brl(net + dec(form.tip))}</span>
               </div>
               {selectedApp && Number(selectedApp.fee_percent) !== feePct ? (
                 <Button
