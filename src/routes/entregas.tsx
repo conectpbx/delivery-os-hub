@@ -308,7 +308,7 @@ function Entregas() {
         <StatCard label="Tempo parado" value={minutesLabel(idle)} tone="warning" />
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-[380px_1fr]">
+      <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-[380px_minmax(0,1fr)] [&>*]:min-w-0">
         <SectionCard title="Nova entrega" description="Preencha após finalizar a corrida">
           <form
             onSubmit={(e) => {
