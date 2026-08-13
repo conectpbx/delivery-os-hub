@@ -124,21 +124,22 @@ export function AppShell({
         <main className="mx-auto w-full max-w-6xl px-4 pb-24 pt-5 sm:px-6 lg:pb-10">{children}</main>
       </div>
 
-      <nav className="no-print fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-border bg-background/95 backdrop-blur lg:hidden">
+      <nav className="no-print fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
         {nav.slice(0, 5).map(({ to, label, icon: Icon }) => (
           <Link
             key={to}
             to={to}
             className={cn(
-              "flex flex-col items-center gap-1 py-2 text-[10px] font-medium",
+              "flex min-w-0 flex-col items-center gap-1 px-1 py-2 text-[10px] font-medium",
               pathname === to ? "text-primary" : "text-muted-foreground",
             )}
           >
-            <Icon className="size-5" />
-            {label}
+            <Icon className="size-5 shrink-0" />
+            <span className="w-full truncate text-center">{label}</span>
           </Link>
         ))}
       </nav>
+
     </div>
   );
 }
