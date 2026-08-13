@@ -242,16 +242,24 @@ function Entregas() {
     const filled = stops.filter((s) => s.address.trim() || (s.lat != null && s.lng != null));
     const first = filled[0];
     const last = finalized ? filled[filled.length - 1] : null;
+    if (!form.app_name) {
+      toast.error("Selecione o aplicativo da corrida");
+      return;
+    }
+    if (gross <= 0) {
+      toast.error("Informe o valor bruto da corrida");
+      return;
+    }
     try {
       await insert.mutateAsync({
         app_name: form.app_name,
         gross_earnings: gross,
         fee_percent: feePct,
         earnings: Number(net.toFixed(2)),
-        tip: Number(form.tip || 0),
-        distance_km: Number(form.distance_km || 0),
-        duration_min: Number(form.duration_min || 0),
-        idle_min: Number(form.idle_min || 0),
+        tip: dec(form.tip),
+        distance_km: dec(form.distance_km),
+        duration_min: Math.round(dec(form.duration_min)),
+        idle_min: Math.round(dec(form.idle_min)),
         pickup_address: first?.address || null,
         dropoff_address: finalized ? last?.address || null : null,
         lat: first?.lat ?? null,
