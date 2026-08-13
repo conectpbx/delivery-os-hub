@@ -451,13 +451,28 @@ function Entregas() {
               ) : null}
             </div>
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Pontos da rota</Label>
-                <span className="text-xs text-muted-foreground">
-                  {stops.length} {stops.length === 1 ? "ponto" : "pontos"}
-                </span>
+            <div className="space-y-2 rounded-md border border-border p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <Label className="text-xs">Rota</Label>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {filledStops.length
+                      ? filledStops.map((s) => s.address || "ponto GPS").join(" → ")
+                      : "Nenhum ponto informado"}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant={showRoute ? "secondary" : "outline"}
+                  size="sm"
+                  onClick={() => setShowRoute((v) => !v)}
+                >
+                  <RouteIcon className="mr-1 size-4" />
+                  {showRoute ? "Ocultar" : filledStops.length ? "Editar rota" : "Inserir rota"}
+                </Button>
               </div>
+              {showRoute ? (
+                <>
               {stops.map((s, i) => (
                 <div key={s.id} className="space-y-1 rounded-md border border-border p-2">
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
