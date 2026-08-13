@@ -302,13 +302,13 @@ function Entregas() {
 
   return (
     <AppShell title="Entregas" subtitle="Registro de corridas, rota no mapa e navegação">
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatCard label="Total recebido" value={brl(total)} tone="primary" />
         <StatCard label="Distância total" value={`${num(km)} km`} />
         <StatCard label="Tempo parado" value={minutesLabel(idle)} tone="warning" />
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-[380px_1fr]">
+      <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-[380px_minmax(0,1fr)] [&>*]:min-w-0">
         <SectionCard title="Nova entrega" description="Preencha após finalizar a corrida">
           <form
             onSubmit={(e) => {
@@ -321,12 +321,12 @@ function Entregas() {
               <Label htmlFor="app">Aplicativo</Label>
               {addingApp ? (
                 <div className="space-y-2">
-                  <div className="flex gap-2">
+                  <div className="flex min-w-0 gap-2">
                     <Input
                       value={newAppName}
                       onChange={(e) => setNewAppName(e.target.value)}
                       placeholder="Nome do aplicativo"
-                      className="flex-1"
+                      className="min-w-0 flex-1"
                       autoFocus
                     />
                     <Button
@@ -374,12 +374,12 @@ function Entregas() {
                   />
                 </div>
               ) : (
-                <div className="flex gap-2">
+                <div className="flex min-w-0 gap-2">
                   <select
                     id="app"
                     value={form.app_name}
                     onChange={(e) => selectApp(e.target.value)}
-                    className="h-9 flex-1 rounded-md border border-input bg-background px-3 text-sm"
+                    className="h-9 w-0 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-sm"
                   >
                     <option value="" disabled>
                       Selecione...
@@ -403,7 +403,7 @@ function Entregas() {
                 </div>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
               <Field label="Valor bruto (R$)" value={form.earnings} onChange={setGross} />
               <Field label="Taxa do app (R$)" value={form.fee_amount} onChange={setFeeAmount} />
               <Field label="Taxa do app (%)" value={form.fee_percent} onChange={setFeePercent} />
@@ -505,12 +505,12 @@ function Entregas() {
                       </Button>
                     ) : null}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex min-w-0 gap-2">
                     <Input
                       value={s.address}
                       onChange={(e) => patchStop(s.id, { address: e.target.value, lat: null, lng: null })}
                       placeholder={s.kind === "coleta" ? "Restaurante / loja" : "Endereço do cliente"}
-                      className="flex-1"
+                      className="min-w-0 flex-1"
                     />
                     <Button
                       type="button"
@@ -533,12 +533,12 @@ function Entregas() {
                   ) : null}
                 </div>
               ))}
-              <div className="flex gap-2">
+              <div className="flex min-w-0 gap-2">
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="flex-1"
+                  className="min-w-0 flex-1"
                   onClick={() => setStops((s) => [...s, newStop("entrega")])}
                 >
                   <Plus className="mr-1 size-4" /> Adicionar ponto
@@ -547,7 +547,7 @@ function Entregas() {
                   type="button"
                   variant="secondary"
                   size="sm"
-                  className="flex-1"
+                  className="min-w-0 flex-1"
                   onClick={() => void previewRoute()}
                   disabled={routing}
                 >
@@ -689,7 +689,7 @@ function Entregas() {
                               value={finishing.address}
                               onChange={(e) => setFinishing({ id: d.id, address: e.target.value })}
                               placeholder="Endereço do ponto final"
-                              className="flex-1"
+                              className="min-w-0 flex-1"
                               autoFocus
                             />
                             <Button

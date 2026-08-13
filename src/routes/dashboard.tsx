@@ -111,7 +111,7 @@ function Dashboard() {
         </div>
       }
     >
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <StatCard
           label="Receita do período"
           value={brl(s.revenue)}
@@ -141,7 +141,7 @@ function Dashboard() {
         />
       </div>
 
-      <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-3 grid grid-cols-2 gap-3 xl:grid-cols-4">
         <StatCard
           label="Tempo parado"
           value={minutesLabel(s.idleMin)}

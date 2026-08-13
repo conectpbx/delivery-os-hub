@@ -23,16 +23,21 @@ export function StatCard({
   }[tone];
 
   return (
-    <div className="surface-card p-4">
+    <div className="surface-card min-w-0 p-4">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-        {icon ? <span className="text-muted-foreground">{icon}</span> : null}
+        <p className="min-w-0 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          {label}
+        </p>
+        {icon ? <span className="shrink-0 text-muted-foreground">{icon}</span> : null}
       </div>
-      <p className={cn("mt-2 text-2xl font-semibold tabular-nums", toneClass)}>{value}</p>
+      <p className={cn("mt-2 truncate text-xl font-semibold tabular-nums sm:text-2xl", toneClass)}>
+        {value}
+      </p>
       {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
     </div>
   );
 }
+
 
 export function SectionCard({
   title,
@@ -48,20 +53,19 @@ export function SectionCard({
   className?: string;
 }) {
   return (
-    <section className={cn("surface-card p-4 sm:p-5", className)}>
+    <section className={cn("surface-card min-w-0 p-4 sm:p-5", className)}>
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold">{title}</h2>
-          {description ? (
-            <p className="text-xs text-muted-foreground">{description}</p>
-          ) : null}
+          {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
         </div>
-        {actions}
+        {actions ? <div className="shrink-0">{actions}</div> : null}
       </div>
-      {children}
+      <div className="min-w-0">{children}</div>
     </section>
   );
 }
+
 
 export function EmptyState({ children }: { children: ReactNode }) {
   return (
