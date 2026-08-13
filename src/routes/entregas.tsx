@@ -78,30 +78,30 @@ function Entregas() {
     setStops((s) => s.map((st) => (st.id === id ? { ...st, ...values } : st)));
 
   const selectedApp = (apps.data ?? []).find((a) => a.name === form.app_name);
-  const gross = Number(form.earnings || 0);
-  const feePct = Math.min(Math.max(Number(form.fee_percent || 0), 0), 100);
+  const gross = dec(form.earnings);
+  const feePct = Math.min(Math.max(dec(form.fee_percent), 0), 100);
   const feeValue = (gross * feePct) / 100;
   const net = gross - feeValue;
 
   const round2 = (v: number) => Math.round(v * 100) / 100;
 
   function setFeeAmount(v: string) {
-    const amount = Math.min(Math.max(Number(v || 0), 0), gross || Number.POSITIVE_INFINITY);
+    const amount = Math.min(Math.max(dec(v), 0), gross || Number.POSITIVE_INFINITY);
     const pct = gross > 0 ? round2((amount / gross) * 100) : 0;
     setForm((f) => ({ ...f, fee_amount: v, fee_percent: gross > 0 ? String(pct) : f.fee_percent }));
   }
 
   function setFeePercent(v: string) {
-    const pct = Math.min(Math.max(Number(v || 0), 0), 100);
+    const pct = Math.min(Math.max(dec(v), 0), 100);
     setForm((f) => ({ ...f, fee_percent: v, fee_amount: String(round2((gross * pct) / 100)) }));
   }
 
   function setGross(v: string) {
-    const g = Number(v || 0);
+    const g = dec(v);
     setForm((f) => ({
       ...f,
       earnings: v,
-      fee_amount: String(round2((g * Math.min(Math.max(Number(f.fee_percent || 0), 0), 100)) / 100)),
+      fee_amount: String(round2((g * Math.min(Math.max(dec(f.fee_percent), 0), 100)) / 100)),
     }));
   }
 
@@ -112,7 +112,7 @@ function Entregas() {
       ...f,
       app_name: name,
       fee_percent: String(pct),
-      fee_amount: String(round2((Number(f.earnings || 0) * pct) / 100)),
+      fee_amount: String(round2((dec(f.earnings) * pct) / 100)),
     }));
   }
 
