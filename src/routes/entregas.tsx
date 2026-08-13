@@ -285,6 +285,7 @@ function Entregas() {
       }));
       setStops([newStop("coleta"), newStop("entrega")]);
       setRoute(null);
+      setShowRoute(false);
     } catch {
       toast.error("Erro ao salvar a entrega");
     }
