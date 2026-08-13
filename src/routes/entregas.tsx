@@ -42,6 +42,19 @@ export const Route = createFileRoute("/entregas")({
 
 type StoredStop = { kind: string; address: string; lat: number | null; lng: number | null };
 
+/** Aceita vírgula decimal (pt-BR) e separador de milhar. */
+function dec(v: string | number | null | undefined): number {
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  if (!v) return 0;
+  const cleaned = String(v)
+    .replace(/\s/g, "")
+    .replace(/[^\d,.-]/g, "")
+    .replace(/\.(?=\d{3}\b)/g, "")
+    .replace(",", ".");
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : 0;
+}
+
 function Entregas() {
   const list = useDeliveries();
   const apps = useApps();
