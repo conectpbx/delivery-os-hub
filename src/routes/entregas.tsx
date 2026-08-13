@@ -42,6 +42,19 @@ export const Route = createFileRoute("/entregas")({
 
 type StoredStop = { kind: string; address: string; lat: number | null; lng: number | null };
 
+/** Aceita vírgula decimal (pt-BR) e separador de milhar. */
+function dec(v: string | number | null | undefined): number {
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  if (!v) return 0;
+  const cleaned = String(v)
+    .replace(/\s/g, "")
+    .replace(/[^\d,.-]/g, "")
+    .replace(/\.(?=\d{3}\b)/g, "")
+    .replace(",", ".");
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : 0;
+}
+
 function Entregas() {
   const list = useDeliveries();
   const apps = useApps();
@@ -57,6 +70,7 @@ function Entregas() {
   const [newAppFee, setNewAppFee] = useState("");
   const [stops, setStops] = useState<Stop[]>(() => [newStop("coleta"), newStop("entrega")]);
   const [route, setRoute] = useState<RouteResult | null>(null);
+  const [showRoute, setShowRoute] = useState(false);
   const [routing, setRouting] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [finishing, setFinishing] = useState<{ id: string; address: string } | null>(null);
@@ -78,30 +92,30 @@ function Entregas() {
     setStops((s) => s.map((st) => (st.id === id ? { ...st, ...values } : st)));
 
   const selectedApp = (apps.data ?? []).find((a) => a.name === form.app_name);
-  const gross = Number(form.earnings || 0);
-  const feePct = Math.min(Math.max(Number(form.fee_percent || 0), 0), 100);
+  const gross = dec(form.earnings);
+  const feePct = Math.min(Math.max(dec(form.fee_percent), 0), 100);
   const feeValue = (gross * feePct) / 100;
   const net = gross - feeValue;
 
   const round2 = (v: number) => Math.round(v * 100) / 100;
 
   function setFeeAmount(v: string) {
-    const amount = Math.min(Math.max(Number(v || 0), 0), gross || Number.POSITIVE_INFINITY);
+    const amount = Math.min(Math.max(dec(v), 0), gross || Number.POSITIVE_INFINITY);
     const pct = gross > 0 ? round2((amount / gross) * 100) : 0;
     setForm((f) => ({ ...f, fee_amount: v, fee_percent: gross > 0 ? String(pct) : f.fee_percent }));
   }
 
   function setFeePercent(v: string) {
-    const pct = Math.min(Math.max(Number(v || 0), 0), 100);
+    const pct = Math.min(Math.max(dec(v), 0), 100);
     setForm((f) => ({ ...f, fee_percent: v, fee_amount: String(round2((gross * pct) / 100)) }));
   }
 
   function setGross(v: string) {
-    const g = Number(v || 0);
+    const g = dec(v);
     setForm((f) => ({
       ...f,
       earnings: v,
-      fee_amount: String(round2((g * Math.min(Math.max(Number(f.fee_percent || 0), 0), 100)) / 100)),
+      fee_amount: String(round2((g * Math.min(Math.max(dec(f.fee_percent), 0), 100)) / 100)),
     }));
   }
 
@@ -112,7 +126,7 @@ function Entregas() {
       ...f,
       app_name: name,
       fee_percent: String(pct),
-      fee_amount: String(round2((Number(f.earnings || 0) * pct) / 100)),
+      fee_amount: String(round2((dec(f.earnings) * pct) / 100)),
     }));
   }
 
@@ -229,16 +243,24 @@ function Entregas() {
     const filled = stops.filter((s) => s.address.trim() || (s.lat != null && s.lng != null));
     const first = filled[0];
     const last = finalized ? filled[filled.length - 1] : null;
+    if (!form.app_name) {
+      toast.error("Selecione o aplicativo da corrida");
+      return;
+    }
+    if (gross <= 0) {
+      toast.error("Informe o valor bruto da corrida");
+      return;
+    }
     try {
       await insert.mutateAsync({
         app_name: form.app_name,
         gross_earnings: gross,
         fee_percent: feePct,
         earnings: Number(net.toFixed(2)),
-        tip: Number(form.tip || 0),
-        distance_km: Number(form.distance_km || 0),
-        duration_min: Number(form.duration_min || 0),
-        idle_min: Number(form.idle_min || 0),
+        tip: dec(form.tip),
+        distance_km: dec(form.distance_km),
+        duration_min: Math.round(dec(form.duration_min)),
+        idle_min: Math.round(dec(form.idle_min)),
         pickup_address: first?.address || null,
         dropoff_address: finalized ? last?.address || null : null,
         lat: first?.lat ?? null,
@@ -263,6 +285,7 @@ function Entregas() {
       }));
       setStops([newStop("coleta"), newStop("entrega")]);
       setRoute(null);
+      setShowRoute(false);
     } catch {
       toast.error("Erro ao salvar a entrega");
     }
@@ -273,6 +296,9 @@ function Entregas() {
   const km = data.reduce((s, d) => s + Number(d.distance_km), 0);
   const idle = data.reduce((s, d) => s + Number(d.idle_min), 0);
   const formNav = navigationUrl(stops);
+  const filledStops = stops.filter((s) => s.address.trim() || (s.lat != null && s.lng != null));
+  const lastStop = filledStops[filledStops.length - 1];
+  const hasFinalPoint = filledStops.length >= 2 && !!lastStop && lastStop.kind === "entrega";
 
   return (
     <AppShell title="Entregas" subtitle="Registro de corridas, rota no mapa e navegação">
@@ -287,7 +313,7 @@ function Entregas() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              void save(true);
+              void save(hasFinalPoint);
             }}
             className="space-y-3"
           >
@@ -325,7 +351,7 @@ function Entregas() {
                         const name = newAppName.trim();
                         if (!name) return;
                         try {
-                          const fee = Math.min(Math.max(Number(newAppFee || 0), 0), 100);
+                          const fee = Math.min(Math.max(dec(newAppFee), 0), 100);
                           await insertApp.mutateAsync({ name, fee_percent: fee });
                           setForm((f) => ({ ...f, app_name: name, fee_percent: String(fee) }));
                           setAddingApp(false);
@@ -405,7 +431,7 @@ function Entregas() {
               </div>
               <div className="mt-1 flex justify-between font-medium">
                 <span>Ganho líquido</span>
-                <span>{brl(net + Number(form.tip || 0))}</span>
+                <span>{brl(net + dec(form.tip))}</span>
               </div>
               {selectedApp && Number(selectedApp.fee_percent) !== feePct ? (
                 <Button
@@ -430,13 +456,28 @@ function Entregas() {
               ) : null}
             </div>
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Pontos da rota</Label>
-                <span className="text-xs text-muted-foreground">
-                  {stops.length} {stops.length === 1 ? "ponto" : "pontos"}
-                </span>
+            <div className="space-y-2 rounded-md border border-border p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <Label className="text-xs">Rota</Label>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {filledStops.length
+                      ? filledStops.map((s) => s.address || "ponto GPS").join(" → ")
+                      : "Nenhum ponto informado"}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant={showRoute ? "secondary" : "outline"}
+                  size="sm"
+                  onClick={() => setShowRoute((v) => !v)}
+                >
+                  <RouteIcon className="mr-1 size-4" />
+                  {showRoute ? "Ocultar" : filledStops.length ? "Editar rota" : "Inserir rota"}
+                </Button>
               </div>
+              {showRoute ? (
+                <>
               {stops.map((s, i) => (
                 <div key={s.id} className="space-y-1 rounded-md border border-border p-2">
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -514,20 +555,18 @@ function Entregas() {
                   {routing ? "Calculando…" : "Ver rota"}
                 </Button>
               </div>
+                </>
+              ) : null}
             </div>
 
             <Button type="submit" className="w-full" disabled={insert.isPending}>
-              Salvar entrega
+              {insert.isPending ? "Salvando…" : "Confirmar entrega"}
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              disabled={insert.isPending}
-              onClick={() => void save(false)}
-            >
-              Salvar sem ponto final
-            </Button>
+            <p className="text-center text-xs text-muted-foreground">
+              {hasFinalPoint
+                ? "Será registrada como concluída."
+                : "Sem ponto final: fica “Em rota” e você define o destino depois."}
+            </p>
           </form>
         </SectionCard>
 

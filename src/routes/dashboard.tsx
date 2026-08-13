@@ -51,7 +51,7 @@ const RANGES = [
 const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
 function Dashboard() {
-  const [range, setRange] = useState<(typeof RANGES)[number]>(RANGES[1]);
+  const [range, setRange] = useState<(typeof RANGES)[number]>(RANGES[0]);
   const deliveries = useDeliveries();
   const fuelings = useFuelings();
   const expenses = useExpenses();
