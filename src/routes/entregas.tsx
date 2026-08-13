@@ -550,20 +550,18 @@ function Entregas() {
                   {routing ? "Calculando…" : "Ver rota"}
                 </Button>
               </div>
+                </>
+              ) : null}
             </div>
 
             <Button type="submit" className="w-full" disabled={insert.isPending}>
-              Salvar entrega
+              {insert.isPending ? "Salvando…" : "Confirmar entrega"}
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              disabled={insert.isPending}
-              onClick={() => void save(false)}
-            >
-              Salvar sem ponto final
-            </Button>
+            <p className="text-center text-xs text-muted-foreground">
+              {hasFinalPoint
+                ? "Será registrada como concluída."
+                : "Sem ponto final: fica “Em rota” e você define o destino depois."}
+            </p>
           </form>
         </SectionCard>
 
