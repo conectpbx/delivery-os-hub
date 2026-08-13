@@ -312,7 +312,7 @@ function Entregas() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              void save(true);
+              void save(hasFinalPoint);
             }}
             className="space-y-3"
           >
