@@ -15,6 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { BrandLoading } from "@/components/BrandLoader";
 
 const nav = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -51,11 +52,7 @@ export function AppShell({
   }, [pathname]);
 
   if (loading || !session) {
-    return (
-      <div className="flex min-h-screen items-center justify-center text-muted-foreground">
-        Carregando…
-      </div>
-    );
+    return <BrandLoading />;
   }
 
   return (
