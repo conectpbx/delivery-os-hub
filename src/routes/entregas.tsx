@@ -737,49 +737,131 @@ function Entregas() {
 
                       {status === "em_rota" ? (
                         finishing?.id === d.id ? (
-                          <div className="mt-2 space-y-2">
+                          <div className="mt-2 space-y-2 rounded-md border border-border p-2">
+                            <p className="text-xs font-medium text-muted-foreground">
+                              Pontos restantes da rota
+                            </p>
+                            {finishing.stops.map((s, i) => (
+                              <div key={s.id} className="space-y-1">
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                  <span className="font-medium text-foreground">
+                                    {raw.length + i + 1}.
+                                  </span>
+                                  <select
+                                    value={s.kind}
+                                    onChange={(e) =>
+                                      patchFinishStop(s.id, {
+                                        kind: e.target.value as Stop["kind"],
+                                      })
+                                    }
+                                    className="h-7 rounded border border-input bg-background px-2 text-xs"
+                                    aria-label={`Tipo do ponto ${i + 1}`}
+                                  >
+                                    <option value="coleta">Coleta</option>
+                                    <option value="entrega">Entrega</option>
+                                  </select>
+                                  {finishing.stops.length > 1 ? (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="ml-auto size-7"
+                                      aria-label={`Remover ponto ${i + 1}`}
+                                      onClick={() =>
+                                        setFinishing((f) =>
+                                          f
+                                            ? { ...f, stops: f.stops.filter((x) => x.id !== s.id) }
+                                            : f,
+                                        )
+                                      }
+                                    >
+                                      <X className="size-3.5" />
+                                    </Button>
+                                  ) : null}
+                                </div>
+                                <div className="flex min-w-0 gap-2">
+                                  <Input
+                                    value={s.address}
+                                    onChange={(e) =>
+                                      patchFinishStop(s.id, {
+                                        address: e.target.value,
+                                        lat: null,
+                                        lng: null,
+                                      })
+                                    }
+                                    placeholder={
+                                      s.kind === "coleta"
+                                        ? "Nova coleta"
+                                        : "Endereço de entrega"
+                                    }
+                                    className="min-w-0 flex-1"
+                                  />
+                                  <Button
+                                    type="button"
+                                    size="icon"
+                                    variant="outline"
+                                    aria-label={`Usar GPS no ponto ${i + 1}`}
+                                    disabled={finishGeo !== null}
+                                    onClick={() => captureFinishGps(s.id)}
+                                  >
+                                    <MapPin className="size-4" />
+                                  </Button>
+                                </div>
+                                {finishGeo === s.id ? (
+                                  <p className="text-xs text-muted-foreground">
+                                    Buscando localização…
+                                  </p>
+                                ) : s.lat != null && s.lng != null ? (
+                                  <p className="text-xs text-muted-foreground">
+                                    {s.lat.toFixed(4)}, {s.lng.toFixed(4)}
+                                  </p>
+                                ) : null}
+                              </div>
+                            ))}
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="w-full"
+                              onClick={() =>
+                                setFinishing((f) =>
+                                  f ? { ...f, stops: [...f.stops, newStop("entrega")] } : f,
+                                )
+                              }
+                            >
+                              <Plus className="mr-1 size-4" /> Adicionar ponto
+                            </Button>
                             <div className="flex gap-2">
-                              <Input
-                                value={finishing.address}
-                                onChange={(e) =>
-                                  setFinishing({ ...finishing, id: d.id, address: e.target.value })
+                              <Button
+                                type="button"
+                                size="sm"
+                                disabled={
+                                  !finishing.stops.some((s) => s.address.trim()) ||
+                                  updateDelivery.isPending
                                 }
-                                placeholder="Endereço do ponto final"
-                                className="min-w-0 flex-1"
-                                autoFocus
-                              />
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                disabled={finishGps}
-                                onClick={() => captureFinishGps(d.id)}
-                              >
-                                <MapPin className="mr-1 size-4" />
-                                {finishGps ? "Buscando…" : "GPS"}
-                              </Button>
-                            </div>
-                            <div className="flex gap-2">
-                              <Button
-                                type="button"
-                                size="sm"
-                                disabled={!finishing.address.trim() || updateDelivery.isPending}
                                 onClick={async () => {
-                                  const address = finishing.address.trim();
-                                  const { lat, lng } = finishing;
+                                  const filled = finishing.stops
+                                    .filter((s) => s.address.trim())
+                                    .map((s) => ({
+                                      kind: s.kind,
+                                      address: s.address.trim(),
+                                      lat: s.lat,
+                                      lng: s.lng,
+                                    }));
+                                  const last = filled[filled.length - 1];
                                   try {
                                     await updateDelivery.mutateAsync({
                                       id: d.id,
                                       values: {
-                                        dropoff_address: address,
+                                        dropoff_address: last?.address ?? "",
                                         status: "concluida",
-                                        stops: [...raw, { kind: "entrega", address, lat, lng }],
+                                        stops: [...raw, ...filled],
                                       },
                                     });
                                     setFinishing(null);
-                                    toast.success("Ponto final definido");
+                                    toast.success("Rota concluída");
                                   } catch {
-                                    toast.error("Erro ao salvar o ponto final");
+                                    toast.error("Erro ao salvar a rota");
                                   }
                                 }}
                               >
@@ -802,13 +884,14 @@ function Entregas() {
                             variant="outline"
                             className="mt-2"
                             onClick={() =>
-                              setFinishing({ id: d.id, address: "", lat: null, lng: null })
+                              setFinishing({ id: d.id, stops: [newStop("entrega")] })
                             }
                           >
                             <MapPin className="mr-1 size-4" /> Definir ponto final
                           </Button>
                         )
                       ) : null}
+
                     </li>
                   );
                 })}
