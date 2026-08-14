@@ -73,13 +73,9 @@ function Entregas() {
   const [showRoute, setShowRoute] = useState(false);
   const [routing, setRouting] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [finishing, setFinishing] = useState<{
-    id: string;
-    address: string;
-    lat: number | null;
-    lng: number | null;
-  } | null>(null);
-  const [finishGps, setFinishGps] = useState(false);
+  const [finishing, setFinishing] = useState<{ id: string; stops: Stop[] } | null>(null);
+  const [finishGeo, setFinishGeo] = useState<string | null>(null);
+
   const [form, setForm] = useState({
     app_name: "",
     earnings: "",
