@@ -3,6 +3,8 @@ import { Suspense, lazy, useEffect, useState } from "react";
 import { GripVertical, MapPin, Navigation, Plus, Route as RouteIcon, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
+import { BrandSpinner } from "@/components/BrandLoader";
+
 import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
