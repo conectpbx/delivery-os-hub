@@ -679,7 +679,7 @@ function Entregas() {
             )}
           </SectionCard>
 
-          <SectionCard title="Histórico completo" description={`${data.length} corridas registradas`}>
+          <SectionCard title="Histórico de hoje" description={`${data.length} corridas hoje`}>
             {data.length ? (
               <ul className="divide-y divide-border">
                 {data.map((d) => {
