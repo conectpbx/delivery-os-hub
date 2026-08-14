@@ -819,7 +819,7 @@ function Entregas() {
                 })}
               </ul>
             ) : (
-              <EmptyState>Nenhuma entrega registrada ainda.</EmptyState>
+              <EmptyState>Nenhuma entrega registrada hoje.</EmptyState>
             )}
           </SectionCard>
         </div>
