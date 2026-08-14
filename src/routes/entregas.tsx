@@ -198,6 +198,51 @@ function Entregas() {
     );
   }
 
+  function captureFinishGps(id: string) {
+    if (!("geolocation" in navigator)) {
+      toast.error("GPS indisponível neste dispositivo");
+      return;
+    }
+    setFinishGps(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        try {
+          const address = await reverseGeocode(lat, lng);
+          setFinishing((f) => ({
+            id,
+            lat,
+            lng,
+            address: address || f?.address || `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+          }));
+          toast.success(address ? "Endereço preenchido pelo GPS" : "Localização capturada");
+        } catch {
+          setFinishing((f) => ({
+            id,
+            lat,
+            lng,
+            address: f?.address || `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+          }));
+          toast.message("Localização capturada (endereço indisponível)");
+        } finally {
+          setFinishGps(false);
+        }
+      },
+      (err) => {
+        setFinishGps(false);
+        toast.error(
+          err.code === err.PERMISSION_DENIED
+            ? "Permissão de localização negada — libere o GPS nas configurações do navegador"
+            : "Não foi possível obter a localização",
+        );
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+    );
+  }
+
+
+
   async function previewRoute() {
     const filled = stops.filter((s) => s.address.trim() || (s.lat != null && s.lng != null));
     if (filled.length < 2) {
