@@ -631,8 +631,13 @@ function Entregas() {
             {mounted && (route?.points.length || stops.some((s) => s.lat != null)) ? (
               <div className="space-y-3">
                 <Suspense
-                  fallback={<div className="h-64 w-full animate-pulse rounded-md bg-muted" />}
+                  fallback={
+                    <div className="flex h-64 w-full items-center justify-center rounded-md border border-border bg-muted/40">
+                      <BrandSpinner />
+                    </div>
+                  }
                 >
+
                   <RouteMap
                     coords={route?.coords ?? []}
                     points={
