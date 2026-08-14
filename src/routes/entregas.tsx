@@ -697,46 +697,63 @@ function Entregas() {
 
                       {status === "em_rota" ? (
                         finishing?.id === d.id ? (
-                          <div className="mt-2 flex gap-2">
-                            <Input
-                              value={finishing.address}
-                              onChange={(e) => setFinishing({ id: d.id, address: e.target.value })}
-                              placeholder="Endereço do ponto final"
-                              className="min-w-0 flex-1"
-                              autoFocus
-                            />
-                            <Button
-                              type="button"
-                              size="sm"
-                              disabled={!finishing.address.trim() || updateDelivery.isPending}
-                              onClick={async () => {
-                                const address = finishing.address.trim();
-                                try {
-                                  await updateDelivery.mutateAsync({
-                                    id: d.id,
-                                    values: {
-                                      dropoff_address: address,
-                                      status: "concluida",
-                                      stops: [...raw, { kind: "entrega", address, lat: null, lng: null }],
-                                    },
-                                  });
-                                  setFinishing(null);
-                                  toast.success("Ponto final definido");
-                                } catch {
-                                  toast.error("Erro ao salvar o ponto final");
+                          <div className="mt-2 space-y-2">
+                            <div className="flex gap-2">
+                              <Input
+                                value={finishing.address}
+                                onChange={(e) =>
+                                  setFinishing({ ...finishing, id: d.id, address: e.target.value })
                                 }
-                              }}
-                            >
-                              Concluir
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setFinishing(null)}
-                            >
-                              Cancelar
-                            </Button>
+                                placeholder="Endereço do ponto final"
+                                className="min-w-0 flex-1"
+                                autoFocus
+                              />
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={finishGps}
+                                onClick={() => captureFinishGps(d.id)}
+                              >
+                                <MapPin className="mr-1 size-4" />
+                                {finishGps ? "Buscando…" : "GPS"}
+                              </Button>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                disabled={!finishing.address.trim() || updateDelivery.isPending}
+                                onClick={async () => {
+                                  const address = finishing.address.trim();
+                                  const { lat, lng } = finishing;
+                                  try {
+                                    await updateDelivery.mutateAsync({
+                                      id: d.id,
+                                      values: {
+                                        dropoff_address: address,
+                                        status: "concluida",
+                                        stops: [...raw, { kind: "entrega", address, lat, lng }],
+                                      },
+                                    });
+                                    setFinishing(null);
+                                    toast.success("Ponto final definido");
+                                  } catch {
+                                    toast.error("Erro ao salvar o ponto final");
+                                  }
+                                }}
+                              >
+                                Concluir
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setFinishing(null)}
+                              >
+                                Cancelar
+                              </Button>
+                            </div>
                           </div>
                         ) : (
                           <Button
@@ -744,7 +761,9 @@ function Entregas() {
                             size="sm"
                             variant="outline"
                             className="mt-2"
-                            onClick={() => setFinishing({ id: d.id, address: "" })}
+                            onClick={() =>
+                              setFinishing({ id: d.id, address: "", lat: null, lng: null })
+                            }
                           >
                             <MapPin className="mr-1 size-4" /> Definir ponto final
                           </Button>
