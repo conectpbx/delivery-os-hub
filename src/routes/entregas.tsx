@@ -194,39 +194,37 @@ function Entregas() {
     );
   }
 
-  function captureFinishGps(id: string) {
+  const patchFinishStop = (stopId: string, values: Partial<Stop>) =>
+    setFinishing((f) =>
+      f ? { ...f, stops: f.stops.map((s) => (s.id === stopId ? { ...s, ...values } : s)) } : f,
+    );
+
+  function captureFinishGps(stopId: string) {
     if (!("geolocation" in navigator)) {
       toast.error("GPS indisponível neste dispositivo");
       return;
     }
-    setFinishGps(true);
+    setFinishGeo(stopId);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
+        patchFinishStop(stopId, { lat, lng });
         try {
           const address = await reverseGeocode(lat, lng);
-          setFinishing((f) => ({
-            id,
-            lat,
-            lng,
-            address: address || f?.address || `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
-          }));
+          patchFinishStop(stopId, {
+            address: address || `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+          });
           toast.success(address ? "Endereço preenchido pelo GPS" : "Localização capturada");
         } catch {
-          setFinishing((f) => ({
-            id,
-            lat,
-            lng,
-            address: f?.address || `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
-          }));
+          patchFinishStop(stopId, { address: `${lat.toFixed(5)}, ${lng.toFixed(5)}` });
           toast.message("Localização capturada (endereço indisponível)");
         } finally {
-          setFinishGps(false);
+          setFinishGeo(null);
         }
       },
       (err) => {
-        setFinishGps(false);
+        setFinishGeo(null);
         toast.error(
           err.code === err.PERMISSION_DENIED
             ? "Permissão de localização negada — libere o GPS nas configurações do navegador"
@@ -236,6 +234,7 @@ function Entregas() {
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
     );
   }
+
 
 
 
