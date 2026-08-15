@@ -717,12 +717,11 @@ function Entregas() {
                   </div>
                 ) : null}
                 {!route ? (
-
-                ) : (
                   <p className="text-xs text-muted-foreground">
                     Toque em “Ver rota” para traçar o trajeto entre os pontos.
                   </p>
-                )}
+                ) : null}
+
               </div>
             ) : (
               <EmptyState>
