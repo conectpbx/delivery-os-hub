@@ -287,6 +287,18 @@ function Entregas() {
     toast.success("Distância e tempo aplicados");
   }
 
+  function applyLeg(index: number) {
+    const leg = route?.legs[index];
+    if (!leg) return;
+    setForm((f) => ({
+      ...f,
+      distance_km: String(leg.distanceKm),
+      duration_min: String(leg.durationMin),
+    }));
+    toast.success(`Trecho ${index + 1} aplicado no formulário`);
+  }
+
+
   async function save(finalized: boolean) {
     const filled = stops.filter((s) => s.address.trim() || (s.lat != null && s.lng != null));
     const first = filled[0];
