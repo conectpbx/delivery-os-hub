@@ -240,7 +240,28 @@ function Entregas() {
   }
 
 
-
+  /** Resolve endereços e devolve distância/tempo totais encadeados (ponto a ponto). */
+  async function routeTotals(
+    pts: { address: string; lat: number | null; lng: number | null }[],
+  ): Promise<{ distanceKm: number; durationMin: number; pts: typeof pts } | null> {
+    const resolved: typeof pts = [];
+    for (const s of pts) {
+      if (s.lat != null && s.lng != null) {
+        resolved.push(s);
+        continue;
+      }
+      if (!s.address.trim()) continue;
+      const hit = await geocodeAddress(s.address);
+      resolved.push(hit ? { ...s, ...hit } : s);
+    }
+    const coords = resolved
+      .filter((s) => s.lat != null && s.lng != null)
+      .map((s) => [s.lat!, s.lng!] as [number, number]);
+    if (coords.length < 2) return null;
+    const r = await fetchRoute(coords);
+    if (!r) return null;
+    return { distanceKm: r.distanceKm, durationMin: r.durationMin, pts: resolved };
+  }
 
   async function previewRoute() {
     const filled = stops.filter((s) => s.address.trim() || (s.lat != null && s.lng != null));
