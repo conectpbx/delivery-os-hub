@@ -393,9 +393,10 @@ function Entregas() {
   });
   const data = all.filter((d) => new Date(d.occurred_at).getTime() >= rangeStart);
 
-  const total = data.reduce((s, d) => s + Number(d.earnings) + Number(d.tip), 0);
-  const km = data.reduce((s, d) => s + Number(d.distance_km), 0);
-  const idle = data.reduce((s, d) => s + Number(d.idle_min), 0);
+  const total = today.reduce((s, d) => s + Number(d.earnings) + Number(d.tip), 0);
+  const km = today.reduce((s, d) => s + Number(d.distance_km), 0);
+  const idle = today.reduce((s, d) => s + Number(d.idle_min), 0);
+
   const formNav = navigationUrl(stops);
   const filledStops = stops.filter((s) => s.address.trim() || (s.lat != null && s.lng != null));
   const lastStop = filledStops[filledStops.length - 1];
