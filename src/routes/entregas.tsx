@@ -969,14 +969,28 @@ function Entregas() {
                                     }));
                                   const last = filled[filled.length - 1];
                                   try {
+                                    const allPts = [...raw, ...filled];
+                                    let routed: typeof allPts = allPts;
+                                    const extra: {
+                                      distance_km?: number;
+                                      duration_min?: number;
+                                    } = {};
+                                    const totals = await routeTotals(allPts);
+                                    if (totals) {
+                                      routed = totals.pts as typeof allPts;
+                                      extra.distance_km = totals.distanceKm;
+                                      extra.duration_min = totals.durationMin;
+                                    }
                                     await updateDelivery.mutateAsync({
                                       id: d.id,
                                       values: {
                                         dropoff_address: last?.address ?? "",
                                         status: "concluida",
-                                        stops: [...raw, ...filled],
+                                        stops: routed,
+                                        ...extra,
                                       },
                                     });
+
                                     setFinishing(null);
                                     toast.success("Rota concluída");
                                   } catch {
