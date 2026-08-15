@@ -77,6 +77,8 @@ function Entregas() {
   const [mounted, setMounted] = useState(false);
   const [finishing, setFinishing] = useState<{ id: string; stops: Stop[] } | null>(null);
   const [finishGeo, setFinishGeo] = useState<string | null>(null);
+  const [histRange, setHistRange] = useState<"hoje" | "7d" | "30d" | "tudo">("hoje");
+
 
   const [form, setForm] = useState({
     app_name: "",
