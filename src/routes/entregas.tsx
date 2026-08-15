@@ -821,8 +821,13 @@ function Entregas() {
                             {minutesLabel(Number(d.duration_min))} rodando ·{" "}
                             {minutesLabel(Number(d.idle_min))} parado
                           </p>
-                          {raw.length > 1 ? (
+                          {d.pickup_address ? (
                             <p className="truncate text-xs text-muted-foreground">
+                              Coleta: {d.pickup_address}
+                            </p>
+                          ) : null}
+                          {raw.length > 1 ? (
+                            <p className="text-xs text-muted-foreground">
                               {raw.map((s) => s.address).filter(Boolean).join(" → ")}
                             </p>
                           ) : d.dropoff_address ? (
@@ -830,6 +835,7 @@ function Entregas() {
                               → {d.dropoff_address}
                             </p>
                           ) : null}
+
                         </div>
                         {nav ? (
                           <Button asChild variant="ghost" size="icon" aria-label="Navegar">
