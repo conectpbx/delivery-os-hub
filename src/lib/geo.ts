@@ -58,6 +58,7 @@ export async function fetchRoute(points: [number, number][]): Promise<RouteResul
       distance: number;
       duration: number;
       geometry: { coordinates: [number, number][] };
+      legs?: Array<{ distance: number; duration: number }>;
     }>;
   };
   const route = json.routes?.[0];
@@ -67,8 +68,13 @@ export async function fetchRoute(points: [number, number][]): Promise<RouteResul
     durationMin: Math.round(route.duration / 60),
     coords: route.geometry.coordinates.map(([lng, lat]) => [lat, lng] as [number, number]),
     points,
+    legs: (route.legs ?? []).map((l) => ({
+      distanceKm: Math.round((l.distance / 1000) * 100) / 100,
+      durationMin: Math.round(l.duration / 60),
+    })),
   };
 }
+
 
 export function navigationUrl(stops: { address: string; lat: number | null; lng: number | null }[]) {
   const usable = stops.filter((s) => s.address || (s.lat != null && s.lng != null));
