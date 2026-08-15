@@ -378,10 +378,21 @@ function Entregas() {
   todayStart.setHours(0, 0, 0, 0);
   const todayEnd = new Date();
   todayEnd.setHours(23, 59, 59, 999);
-  const data = (list.data ?? []).filter((d) => {
+  const rangeStart =
+    histRange === "hoje"
+      ? todayStart.getTime()
+      : histRange === "7d"
+        ? todayEnd.getTime() - 7 * 86400000
+        : histRange === "30d"
+          ? todayEnd.getTime() - 30 * 86400000
+          : 0;
+  const all = list.data ?? [];
+  const today = all.filter((d) => {
     const t = new Date(d.occurred_at).getTime();
     return t >= todayStart.getTime() && t <= todayEnd.getTime();
   });
+  const data = all.filter((d) => new Date(d.occurred_at).getTime() >= rangeStart);
+
   const total = data.reduce((s, d) => s + Number(d.earnings) + Number(d.tip), 0);
   const km = data.reduce((s, d) => s + Number(d.distance_km), 0);
   const idle = data.reduce((s, d) => s + Number(d.idle_min), 0);
