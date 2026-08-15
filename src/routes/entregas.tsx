@@ -77,6 +77,8 @@ function Entregas() {
   const [mounted, setMounted] = useState(false);
   const [finishing, setFinishing] = useState<{ id: string; stops: Stop[] } | null>(null);
   const [finishGeo, setFinishGeo] = useState<string | null>(null);
+  const [histRange, setHistRange] = useState<"hoje" | "7d" | "30d" | "tudo">("hoje");
+
 
   const [form, setForm] = useState({
     app_name: "",
@@ -238,7 +240,28 @@ function Entregas() {
   }
 
 
-
+  /** Resolve endereços e devolve distância/tempo totais encadeados (ponto a ponto). */
+  async function routeTotals(
+    pts: { address: string; lat: number | null; lng: number | null }[],
+  ): Promise<{ distanceKm: number; durationMin: number; pts: typeof pts } | null> {
+    const resolved: typeof pts = [];
+    for (const s of pts) {
+      if (s.lat != null && s.lng != null) {
+        resolved.push(s);
+        continue;
+      }
+      if (!s.address.trim()) continue;
+      const hit = await geocodeAddress(s.address);
+      resolved.push(hit ? { ...s, ...hit } : s);
+    }
+    const coords = resolved
+      .filter((s) => s.lat != null && s.lng != null)
+      .map((s) => [s.lat!, s.lng!] as [number, number]);
+    if (coords.length < 2) return null;
+    const r = await fetchRoute(coords);
+    if (!r) return null;
+    return { distanceKm: r.distanceKm, durationMin: r.durationMin, pts: resolved };
+  }
 
   async function previewRoute() {
     const filled = stops.filter((s) => s.address.trim() || (s.lat != null && s.lng != null));
@@ -355,13 +378,25 @@ function Entregas() {
   todayStart.setHours(0, 0, 0, 0);
   const todayEnd = new Date();
   todayEnd.setHours(23, 59, 59, 999);
-  const data = (list.data ?? []).filter((d) => {
+  const rangeStart =
+    histRange === "hoje"
+      ? todayStart.getTime()
+      : histRange === "7d"
+        ? todayEnd.getTime() - 7 * 86400000
+        : histRange === "30d"
+          ? todayEnd.getTime() - 30 * 86400000
+          : 0;
+  const all = list.data ?? [];
+  const today = all.filter((d) => {
     const t = new Date(d.occurred_at).getTime();
     return t >= todayStart.getTime() && t <= todayEnd.getTime();
   });
-  const total = data.reduce((s, d) => s + Number(d.earnings) + Number(d.tip), 0);
-  const km = data.reduce((s, d) => s + Number(d.distance_km), 0);
-  const idle = data.reduce((s, d) => s + Number(d.idle_min), 0);
+  const data = all.filter((d) => new Date(d.occurred_at).getTime() >= rangeStart);
+
+  const total = today.reduce((s, d) => s + Number(d.earnings) + Number(d.tip), 0);
+  const km = today.reduce((s, d) => s + Number(d.distance_km), 0);
+  const idle = today.reduce((s, d) => s + Number(d.idle_min), 0);
+
   const formNav = navigationUrl(stops);
   const filledStops = stops.filter((s) => s.address.trim() || (s.lat != null && s.lng != null));
   const lastStop = filledStops[filledStops.length - 1];
@@ -730,8 +765,30 @@ function Entregas() {
             )}
           </SectionCard>
 
-          <SectionCard title="Histórico de hoje" description={`${data.length} corridas hoje`}>
+          <SectionCard
+            title="Histórico completo"
+            description={`${data.length} corridas no período`}
+          >
+            <div className="mb-3 flex flex-wrap gap-1">
+              {([
+                ["hoje", "Hoje"],
+                ["7d", "7 dias"],
+                ["30d", "30 dias"],
+                ["tudo", "Tudo"],
+              ] as const).map(([k, label]) => (
+                <Button
+                  key={k}
+                  type="button"
+                  size="sm"
+                  variant={histRange === k ? "default" : "outline"}
+                  onClick={() => setHistRange(k)}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
             {data.length ? (
+
               <ul className="divide-y divide-border">
                 {data.map((d) => {
                   const raw = (d as unknown as { stops?: StoredStop[] }).stops ?? [];
@@ -764,8 +821,13 @@ function Entregas() {
                             {minutesLabel(Number(d.duration_min))} rodando ·{" "}
                             {minutesLabel(Number(d.idle_min))} parado
                           </p>
-                          {raw.length > 1 ? (
+                          {d.pickup_address ? (
                             <p className="truncate text-xs text-muted-foreground">
+                              Coleta: {d.pickup_address}
+                            </p>
+                          ) : null}
+                          {raw.length > 1 ? (
+                            <p className="text-xs text-muted-foreground">
                               {raw.map((s) => s.address).filter(Boolean).join(" → ")}
                             </p>
                           ) : d.dropoff_address ? (
@@ -773,6 +835,7 @@ function Entregas() {
                               → {d.dropoff_address}
                             </p>
                           ) : null}
+
                         </div>
                         {nav ? (
                           <Button asChild variant="ghost" size="icon" aria-label="Navegar">
@@ -906,14 +969,28 @@ function Entregas() {
                                     }));
                                   const last = filled[filled.length - 1];
                                   try {
+                                    const allPts = [...raw, ...filled];
+                                    let routed: typeof allPts = allPts;
+                                    const extra: {
+                                      distance_km?: number;
+                                      duration_min?: number;
+                                    } = {};
+                                    const totals = await routeTotals(allPts);
+                                    if (totals) {
+                                      routed = totals.pts as typeof allPts;
+                                      extra.distance_km = totals.distanceKm;
+                                      extra.duration_min = totals.durationMin;
+                                    }
                                     await updateDelivery.mutateAsync({
                                       id: d.id,
                                       values: {
                                         dropoff_address: last?.address ?? "",
                                         status: "concluida",
-                                        stops: [...raw, ...filled],
+                                        stops: routed,
+                                        ...extra,
                                       },
                                     });
+
                                     setFinishing(null);
                                     toast.success("Rota concluída");
                                   } catch {
