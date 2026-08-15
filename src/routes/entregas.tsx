@@ -765,8 +765,30 @@ function Entregas() {
             )}
           </SectionCard>
 
-          <SectionCard title="Histórico de hoje" description={`${data.length} corridas hoje`}>
+          <SectionCard
+            title="Histórico completo"
+            description={`${data.length} corridas no período`}
+          >
+            <div className="mb-3 flex flex-wrap gap-1">
+              {([
+                ["hoje", "Hoje"],
+                ["7d", "7 dias"],
+                ["30d", "30 dias"],
+                ["tudo", "Tudo"],
+              ] as const).map(([k, label]) => (
+                <Button
+                  key={k}
+                  type="button"
+                  size="sm"
+                  variant={histRange === k ? "default" : "outline"}
+                  onClick={() => setHistRange(k)}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
             {data.length ? (
+
               <ul className="divide-y divide-border">
                 {data.map((d) => {
                   const raw = (d as unknown as { stops?: StoredStop[] }).stops ?? [];
