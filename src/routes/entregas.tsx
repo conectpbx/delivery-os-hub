@@ -287,6 +287,18 @@ function Entregas() {
     toast.success("Distância e tempo aplicados");
   }
 
+  function applyLeg(index: number) {
+    const leg = route?.legs[index];
+    if (!leg) return;
+    setForm((f) => ({
+      ...f,
+      distance_km: String(leg.distanceKm),
+      duration_min: String(leg.durationMin),
+    }));
+    toast.success(`Trecho ${index + 1} aplicado no formulário`);
+  }
+
+
   async function save(finalized: boolean) {
     const filled = stops.filter((s) => s.address.trim() || (s.lat != null && s.lng != null));
     const first = filled[0];
@@ -668,11 +680,48 @@ function Entregas() {
                       </Button>
                     ) : null}
                   </div>
-                ) : (
+                ) : null}
+                {route && route.legs.length > 1 ? (
+                  <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
+                    <p className="text-xs font-medium">
+                      Trechos encadeados ({route.legs.length}) — cada ponto final vira a origem do
+                      próximo
+                    </p>
+                    <ul className="space-y-1">
+                      {route.legs.map((leg, i) => {
+                        const from = filledStops[i];
+                        const to = filledStops[i + 1];
+                        return (
+                          <li
+                            key={i}
+                            className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground"
+                          >
+                            <span className="min-w-0 flex-1 truncate">
+                              {i + 1}. {from?.address || "Ponto"} → {to?.address || "Ponto"}
+                            </span>
+                            <span className="font-medium text-foreground">
+                              {num(leg.distanceKm)} km · {minutesLabel(leg.durationMin)}
+                            </span>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => applyLeg(i)}
+                            >
+                              Aplicar
+                            </Button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                ) : null}
+                {!route ? (
                   <p className="text-xs text-muted-foreground">
                     Toque em “Ver rota” para traçar o trajeto entre os pontos.
                   </p>
-                )}
+                ) : null}
+
               </div>
             ) : (
               <EmptyState>
