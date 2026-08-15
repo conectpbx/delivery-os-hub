@@ -6,12 +6,19 @@ export type Stop = {
   lng: number | null;
 };
 
+export type RouteLeg = {
+  distanceKm: number;
+  durationMin: number;
+};
+
 export type RouteResult = {
   distanceKm: number;
   durationMin: number;
   coords: [number, number][]; // [lat, lng]
   points: [number, number][];
+  legs: RouteLeg[]; // trecho a trecho: ponto 1→2, 2→3, ...
 };
+
 
 export function newStop(kind: Stop["kind"] = "entrega"): Stop {
   return {
