@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Trash2 } from "lucide-react";
+import { LocateFixed, Play, Square, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
@@ -18,6 +18,8 @@ import {
   useUpsertProfile,
 } from "@/lib/data";
 import { brl, dateLabel, num } from "@/lib/format";
+import { nearestFuelStation, reverseGeocodeAddress } from "@/lib/geo";
+import { useTripTracker } from "@/lib/trip-tracker";
 import { avgFuelPrice, costPerKm, summarize } from "@/lib/metrics";
 
 export const Route = createFileRoute("/financeiro")({
