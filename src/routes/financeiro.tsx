@@ -58,10 +58,46 @@ function Financeiro() {
   const [fuel, setFuel] = useState({ liters: "", price_per_liter: "", odometer: "", station: "" });
   const [exp, setExp] = useState({ category: CATEGORIES[0]!, description: "", amount: "" });
   const [eff, setEff] = useState("");
+  const [gps, setGps] = useState(false);
+  const { trip, error: tripError, start, finish, reset } = useTripTracker();
 
   const cpk = costPerKm(fuelings.data ?? [], profile.data);
   const s = summarize(deliveries.data ?? [], expenses.data ?? [], maintenances.data ?? [], cpk);
   const fuelTotal = (fuelings.data ?? []).reduce((a, f) => a + Number(f.total), 0);
+  const lastOdometer = (fuelings.data ?? []).find((f) => f.odometer != null)?.odometer ?? null;
+  const estimatedOdometer =
+    lastOdometer != null ? Math.round(Number(lastOdometer) + trip.distanceKm) : null;
+
+  async function captureStation() {
+    if (!navigator.geolocation) return toast.error("GPS indisponível");
+    setGps(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { latitude: lat, longitude: lng } = pos.coords;
+          const station = await nearestFuelStation(lat, lng);
+          if (station) {
+            setFuel((f) => ({ ...f, station }));
+            toast.success(`Posto: ${station}`);
+          } else {
+            const place = await reverseGeocodeAddress(lat, lng);
+            setFuel((f) => ({ ...f, station: place?.address ?? "" }));
+            toast.message("Posto não identificado", { description: "Usei o endereço atual." });
+          }
+        } catch {
+          toast.error("Não consegui identificar o posto");
+        } finally {
+          setGps(false);
+        }
+      },
+      (err) => {
+        setGps(false);
+        toast.error(err.message);
+      },
+      { enableHighAccuracy: true, timeout: 15000 },
+    );
+  }
+
 
   return (
     <AppShell title="Financeiro" subtitle="Abastecimento, despesas e lucro real">
