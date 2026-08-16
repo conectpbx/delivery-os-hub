@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Trash2 } from "lucide-react";
+import { LocateFixed, Play, Square, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
@@ -18,6 +18,8 @@ import {
   useUpsertProfile,
 } from "@/lib/data";
 import { brl, dateLabel, num } from "@/lib/format";
+import { nearestFuelStation, reverseGeocodeAddress } from "@/lib/geo";
+import { useTripTracker } from "@/lib/trip-tracker";
 import { avgFuelPrice, costPerKm, summarize } from "@/lib/metrics";
 
 export const Route = createFileRoute("/financeiro")({
@@ -56,10 +58,50 @@ function Financeiro() {
   const [fuel, setFuel] = useState({ liters: "", price_per_liter: "", odometer: "", station: "" });
   const [exp, setExp] = useState({ category: CATEGORIES[0]!, description: "", amount: "" });
   const [eff, setEff] = useState("");
+  const [gps, setGps] = useState(false);
+  const { trip, error: tripError, start, finish, reset } = useTripTracker();
 
   const cpk = costPerKm(fuelings.data ?? [], profile.data);
   const s = summarize(deliveries.data ?? [], expenses.data ?? [], maintenances.data ?? [], cpk);
   const fuelTotal = (fuelings.data ?? []).reduce((a, f) => a + Number(f.total), 0);
+  const lastOdometer = (fuelings.data ?? []).find((f) => f.odometer != null)?.odometer ?? null;
+  const estimatedOdometer =
+    lastOdometer != null ? Math.round(Number(lastOdometer) + trip.distanceKm) : null;
+
+  async function captureStation() {
+    if (!navigator.geolocation) {
+      toast.error("GPS indisponível");
+      return;
+    }
+
+    setGps(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { latitude: lat, longitude: lng } = pos.coords;
+          const station = await nearestFuelStation(lat, lng);
+          if (station) {
+            setFuel((f) => ({ ...f, station }));
+            toast.success(`Posto: ${station}`);
+          } else {
+            const place = await reverseGeocodeAddress(lat, lng);
+            setFuel((f) => ({ ...f, station: place?.address ?? "" }));
+            toast.message("Posto não identificado", { description: "Usei o endereço atual." });
+          }
+        } catch {
+          toast.error("Não consegui identificar o posto");
+        } finally {
+          setGps(false);
+        }
+      },
+      (err) => {
+        setGps(false);
+        toast.error(err.message);
+      },
+      { enableHighAccuracy: true, timeout: 15000 },
+    );
+  }
+
 
   return (
     <AppShell title="Financeiro" subtitle="Abastecimento, despesas e lucro real">
@@ -70,7 +112,63 @@ function Financeiro() {
         <StatCard label="Custo por km" value={brl(cpk)} hint={`${num(Number(profile.data?.fuel_efficiency ?? 12))} km/L`} />
       </div>
 
+      <SectionCard
+        className="mt-4"
+        title="Jornada por GPS"
+        description="Inicie no começo do dia e finalize no fim — a quilometragem é somada automaticamente"
+      >
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="min-w-0">
+            <p className="text-2xl font-semibold tabular-nums">{num(trip.distanceKm)} km</p>
+            <p className="truncate text-xs text-muted-foreground">
+              {trip.active
+                ? `Capturando desde ${dateLabel(trip.startedAt ?? new Date().toISOString())} · ${trip.points} pontos`
+                : trip.endedAt
+                  ? `Jornada finalizada · ${trip.points} pontos`
+                  : "Nenhuma jornada em andamento"}
+            </p>
+          </div>
+          <div className="ml-auto flex flex-wrap gap-2">
+            {trip.active ? (
+              <Button variant="destructive" onClick={finish}>
+                <Square className="mr-2 size-4" /> Finalizar
+              </Button>
+            ) : (
+              <Button onClick={start}>
+                <Play className="mr-2 size-4" /> Iniciar jornada
+              </Button>
+            )}
+            <Button
+              variant="secondary"
+              disabled={trip.distanceKm <= 0}
+              onClick={() => {
+                if (estimatedOdometer == null) {
+                  toast.error("Registre um abastecimento com odômetro para usar como base");
+                  return;
+                }
+                setFuel((f) => ({ ...f, odometer: String(estimatedOdometer) }));
+                toast.success(`Odômetro estimado: ${estimatedOdometer} km`);
+              }}
+            >
+              Preencher odômetro
+            </Button>
+            {trip.distanceKm > 0 && !trip.active ? (
+              <Button variant="ghost" onClick={reset}>
+                Zerar
+              </Button>
+            ) : null}
+          </div>
+        </div>
+        <p className="mt-3 text-xs text-muted-foreground">
+          {lastOdometer != null
+            ? `Base: ${num(Number(lastOdometer))} km do último abastecimento → estimativa ${num(estimatedOdometer ?? 0)} km.`
+            : "Informe o odômetro em um abastecimento para servir de base ao cálculo."}
+          {tripError ? ` · GPS: ${tripError}` : ""}
+        </p>
+      </SectionCard>
+
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
+
         <SectionCard title="Novo abastecimento">
           <form
             className="grid grid-cols-2 gap-3"
@@ -92,7 +190,26 @@ function Financeiro() {
             <Text label="Litros" value={fuel.liters} onChange={(v) => setFuel({ ...fuel, liters: v })} />
             <Text label="R$/litro" value={fuel.price_per_liter} onChange={(v) => setFuel({ ...fuel, price_per_liter: v })} />
             <Text label="Odômetro" value={fuel.odometer} onChange={(v) => setFuel({ ...fuel, odometer: v })} />
-            <Text label="Posto" value={fuel.station} onChange={(v) => setFuel({ ...fuel, station: v })} />
+            <div className="space-y-2">
+              <Label className="text-xs">Posto</Label>
+              <div className="flex gap-2">
+                <Input
+                  className="min-w-0"
+                  value={fuel.station}
+                  onChange={(e) => setFuel({ ...fuel, station: e.target.value })}
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  aria-label="Capturar posto por GPS"
+                  disabled={gps}
+                  onClick={() => void captureStation()}
+                >
+                  <LocateFixed className="size-4" />
+                </Button>
+              </div>
+            </div>
             <Button type="submit" className="col-span-2">
               Salvar abastecimento
             </Button>

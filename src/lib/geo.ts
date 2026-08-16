@@ -45,6 +45,52 @@ export async function geocodeAddress(address: string) {
   return { lat: Number(hit.lat), lng: Number(hit.lon) };
 }
 
+/** Geocodificação reversa: coordenadas → endereço legível. */
+export async function reverseGeocodeAddress(lat: number, lng: number) {
+  const res = await fetch(
+    `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&addressdetails=1&accept-language=pt-BR&lat=${lat}&lon=${lng}`,
+    { headers: { Accept: "application/json" } },
+  );
+  if (!res.ok) return null;
+  const json = (await res.json()) as {
+    display_name?: string;
+    name?: string;
+    address?: Record<string, string>;
+  };
+  const a = json.address ?? {};
+  const road = a["road"] ?? a["pedestrian"] ?? "";
+  const city = a["city"] ?? a["town"] ?? a["village"] ?? a["municipality"] ?? "";
+  const short = [json.name || road, a["house_number"], city].filter(Boolean).join(", ");
+  return { name: json.name ?? "", address: short || json.display_name || "" };
+}
+
+/** Busca o posto de combustível mais próximo (Overpass / OpenStreetMap). */
+export async function nearestFuelStation(lat: number, lng: number) {
+  const query = `[out:json][timeout:15];node(around:400,${lat},${lng})[amenity=fuel];out body 5;`;
+  const res = await fetch("https://overpass-api.de/api/interpreter", {
+    method: "POST",
+    body: `data=${encodeURIComponent(query)}`,
+  });
+  if (!res.ok) return null;
+  const json = (await res.json()) as {
+    elements?: Array<{ lat: number; lon: number; tags?: Record<string, string> }>;
+  };
+  const list = json.elements ?? [];
+  if (!list.length) return null;
+  let best = list[0]!;
+  let bestD = Infinity;
+  for (const el of list) {
+    const d = (el.lat - lat) ** 2 + (el.lon - lng) ** 2;
+    if (d < bestD) {
+      bestD = d;
+      best = el;
+    }
+  }
+  const t = best.tags ?? {};
+  const name = t["name"] ?? t["brand"] ?? t["operator"] ?? "";
+  return name || null;
+}
+
 /** Rota real por ruas usando o OSRM público (gratuito). */
 export async function fetchRoute(points: [number, number][]): Promise<RouteResult | null> {
   if (points.length < 2) return null;
