@@ -69,7 +69,11 @@ function Financeiro() {
     lastOdometer != null ? Math.round(Number(lastOdometer) + trip.distanceKm) : null;
 
   async function captureStation() {
-    if (!navigator.geolocation) return toast.error("GPS indisponível");
+    if (!navigator.geolocation) {
+      toast.error("GPS indisponível");
+      return;
+    }
+
     setGps(true);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
