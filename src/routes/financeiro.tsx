@@ -190,7 +190,26 @@ function Financeiro() {
             <Text label="Litros" value={fuel.liters} onChange={(v) => setFuel({ ...fuel, liters: v })} />
             <Text label="R$/litro" value={fuel.price_per_liter} onChange={(v) => setFuel({ ...fuel, price_per_liter: v })} />
             <Text label="Odômetro" value={fuel.odometer} onChange={(v) => setFuel({ ...fuel, odometer: v })} />
-            <Text label="Posto" value={fuel.station} onChange={(v) => setFuel({ ...fuel, station: v })} />
+            <div className="space-y-2">
+              <Label className="text-xs">Posto</Label>
+              <div className="flex gap-2">
+                <Input
+                  className="min-w-0"
+                  value={fuel.station}
+                  onChange={(e) => setFuel({ ...fuel, station: e.target.value })}
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  aria-label="Capturar posto por GPS"
+                  disabled={gps}
+                  onClick={() => void captureStation()}
+                >
+                  <LocateFixed className="size-4" />
+                </Button>
+              </div>
+            </div>
             <Button type="submit" className="col-span-2">
               Salvar abastecimento
             </Button>
