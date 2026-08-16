@@ -112,7 +112,63 @@ function Financeiro() {
         <StatCard label="Custo por km" value={brl(cpk)} hint={`${num(Number(profile.data?.fuel_efficiency ?? 12))} km/L`} />
       </div>
 
+      <SectionCard
+        className="mt-4"
+        title="Jornada por GPS"
+        description="Inicie no começo do dia e finalize no fim — a quilometragem é somada automaticamente"
+      >
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="min-w-0">
+            <p className="text-2xl font-semibold tabular-nums">{num(trip.distanceKm)} km</p>
+            <p className="truncate text-xs text-muted-foreground">
+              {trip.active
+                ? `Capturando desde ${dateLabel(trip.startedAt ?? new Date().toISOString())} · ${trip.points} pontos`
+                : trip.endedAt
+                  ? `Jornada finalizada · ${trip.points} pontos`
+                  : "Nenhuma jornada em andamento"}
+            </p>
+          </div>
+          <div className="ml-auto flex flex-wrap gap-2">
+            {trip.active ? (
+              <Button variant="destructive" onClick={finish}>
+                <Square className="mr-2 size-4" /> Finalizar
+              </Button>
+            ) : (
+              <Button onClick={start}>
+                <Play className="mr-2 size-4" /> Iniciar jornada
+              </Button>
+            )}
+            <Button
+              variant="secondary"
+              disabled={trip.distanceKm <= 0}
+              onClick={() => {
+                if (estimatedOdometer == null) {
+                  toast.error("Registre um abastecimento com odômetro para usar como base");
+                  return;
+                }
+                setFuel((f) => ({ ...f, odometer: String(estimatedOdometer) }));
+                toast.success(`Odômetro estimado: ${estimatedOdometer} km`);
+              }}
+            >
+              Preencher odômetro
+            </Button>
+            {trip.distanceKm > 0 && !trip.active ? (
+              <Button variant="ghost" onClick={reset}>
+                Zerar
+              </Button>
+            ) : null}
+          </div>
+        </div>
+        <p className="mt-3 text-xs text-muted-foreground">
+          {lastOdometer != null
+            ? `Base: ${num(Number(lastOdometer))} km do último abastecimento → estimativa ${num(estimatedOdometer ?? 0)} km.`
+            : "Informe o odômetro em um abastecimento para servir de base ao cálculo."}
+          {tripError ? ` · GPS: ${tripError}` : ""}
+        </p>
+      </SectionCard>
+
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
+
         <SectionCard title="Novo abastecimento">
           <form
             className="grid grid-cols-2 gap-3"
