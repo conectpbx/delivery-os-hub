@@ -398,21 +398,24 @@ function Entregas() {
   const kmSum = today.reduce((s, d) => s + Number(d.distance_km), 0);
   const idle = today.reduce((s, d) => s + Number(d.idle_min), 0);
 
-  // Encadeamento do dia: rota da 1ª entrega + trecho de cada ponto final ao próximo.
+  // Encadeamento do dia: TODOS os pontos (coletas e entregas) na ordem em que ocorreram.
   const chainPoints = [...today]
     .sort((a, b) => new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime())
-    .flatMap((d, i) => {
+    .flatMap((d) => {
       const st = ((d as unknown as { stops?: StoredStop[] }).stops ?? []).filter(
         (s) => s.lat != null && s.lng != null,
       );
-      const pickup =
-        st[0] ?? (d.lat != null && d.lng != null ? { lat: d.lat, lng: d.lng } : null);
-      const drop = st.length > 1 ? st[st.length - 1] : null;
-      const pts: [number, number][] = [];
-      if (i === 0 && pickup) pts.push([pickup.lat as number, pickup.lng as number]);
-      if (drop) pts.push([drop.lat as number, drop.lng as number]);
-      return pts;
+      if (st.length) return st.map((s) => [s.lat as number, s.lng as number] as [number, number]);
+      if (d.lat != null && d.lng != null) return [[d.lat, d.lng] as [number, number]];
+      return [] as [number, number][];
+    })
+    // remove pontos repetidos em sequência (ex.: fim de uma entrega = início da próxima)
+    .filter((p, i, arr) => {
+      const prev = arr[i - 1];
+      if (!prev) return true;
+      return Math.abs(prev[0] - p[0]) > 1e-5 || Math.abs(prev[1] - p[1]) > 1e-5;
     });
+
 
   const chainKey = chainPoints.map(([a, b]) => `${a.toFixed(5)},${b.toFixed(5)}`).join("|");
   const chained = useQuery({
@@ -438,7 +441,7 @@ function Entregas() {
           value={chained.isFetching ? "…" : `${num(km)} km`}
           hint={
             chained.data != null
-              ? `Rota encadeada do dia (soma simples: ${num(kmSum)} km)`
+              ? `Trajeto real do dia por todos os pontos (soma simples: ${num(kmSum)} km)`
               : "Soma das entregas — encadeia quando houver pontos com GPS"
           }
         />
