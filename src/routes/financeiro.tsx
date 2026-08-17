@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { LocateFixed, Play, Square, Trash2 } from "lucide-react";
+import { LocateFixed, Play, Plug, Square, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
@@ -20,6 +20,7 @@ import {
 import { brl, dateLabel, num } from "@/lib/format";
 import { nearestFuelStation, reverseGeocodeAddress } from "@/lib/geo";
 import { useTripTracker } from "@/lib/trip-tracker";
+import { isMixedContentBlocked, useOdometerBridge } from "@/lib/odometer-bridge";
 import { avgFuelPrice, costPerKm, summarize } from "@/lib/metrics";
 
 export const Route = createFileRoute("/financeiro")({
@@ -60,6 +61,7 @@ function Financeiro() {
   const [eff, setEff] = useState("");
   const [gps, setGps] = useState(false);
   const { trip, error: tripError, start, finish, reset } = useTripTracker();
+  const bridge = useOdometerBridge();
 
   const cpk = costPerKm(fuelings.data ?? [], profile.data);
   const s = summarize(deliveries.data ?? [], expenses.data ?? [], maintenances.data ?? [], cpk);
