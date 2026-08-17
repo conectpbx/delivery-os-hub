@@ -441,7 +441,7 @@ function Entregas() {
           value={chained.isFetching ? "…" : `${num(km)} km`}
           hint={
             chained.data != null
-              ? `Rota encadeada do dia (soma simples: ${num(kmSum)} km)`
+              ? `Trajeto real do dia por todos os pontos (soma simples: ${num(kmSum)} km)`
               : "Soma das entregas — encadeia quando houver pontos com GPS"
           }
         />
