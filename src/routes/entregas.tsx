@@ -433,9 +433,18 @@ function Entregas() {
     <AppShell title="Entregas" subtitle="Registro de corridas, rota no mapa e navegação">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatCard label="Total recebido" value={brl(total)} tone="primary" />
-        <StatCard label="Distância total" value={`${num(km)} km`} />
+        <StatCard
+          label="Distância total"
+          value={chained.isFetching ? "…" : `${num(km)} km`}
+          hint={
+            chained.data != null
+              ? `Rota encadeada do dia (soma simples: ${num(kmSum)} km)`
+              : "Soma das entregas — encadeia quando houver pontos com GPS"
+          }
+        />
         <StatCard label="Tempo parado" value={minutesLabel(idle)} tone="warning" />
       </div>
+
 
       <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-[380px_minmax(0,1fr)] [&>*]:min-w-0">
         <SectionCard title="Nova entrega" description="Preencha após finalizar a corrida">
