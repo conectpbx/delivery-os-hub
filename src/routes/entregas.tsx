@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Suspense, lazy, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { GripVertical, MapPin, Navigation, Plus, Route as RouteIcon, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
@@ -394,8 +395,34 @@ function Entregas() {
   const data = all.filter((d) => new Date(d.occurred_at).getTime() >= rangeStart);
 
   const total = today.reduce((s, d) => s + Number(d.earnings) + Number(d.tip), 0);
-  const km = today.reduce((s, d) => s + Number(d.distance_km), 0);
+  const kmSum = today.reduce((s, d) => s + Number(d.distance_km), 0);
   const idle = today.reduce((s, d) => s + Number(d.idle_min), 0);
+
+  // Encadeamento do dia: rota da 1ª entrega + trecho de cada ponto final ao próximo.
+  const chainPoints = [...today]
+    .sort((a, b) => new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime())
+    .flatMap((d, i) => {
+      const st = ((d as unknown as { stops?: StoredStop[] }).stops ?? []).filter(
+        (s) => s.lat != null && s.lng != null,
+      );
+      const pickup =
+        st[0] ?? (d.lat != null && d.lng != null ? { lat: d.lat, lng: d.lng } : null);
+      const drop = st.length > 1 ? st[st.length - 1] : null;
+      const pts: [number, number][] = [];
+      if (i === 0 && pickup) pts.push([pickup.lat as number, pickup.lng as number]);
+      if (drop) pts.push([drop.lat as number, drop.lng as number]);
+      return pts;
+    });
+
+  const chainKey = chainPoints.map(([a, b]) => `${a.toFixed(5)},${b.toFixed(5)}`).join("|");
+  const chained = useQuery({
+    queryKey: ["chained-km", chainKey],
+    enabled: chainPoints.length >= 2,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => (await fetchRoute(chainPoints))?.distanceKm ?? null,
+  });
+  const km = chained.data ?? kmSum;
+
 
   const formNav = navigationUrl(stops);
   const filledStops = stops.filter((s) => s.address.trim() || (s.lat != null && s.lng != null));
@@ -406,9 +433,18 @@ function Entregas() {
     <AppShell title="Entregas" subtitle="Registro de corridas, rota no mapa e navegação">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatCard label="Total recebido" value={brl(total)} tone="primary" />
-        <StatCard label="Distância total" value={`${num(km)} km`} />
+        <StatCard
+          label="Distância total"
+          value={chained.isFetching ? "…" : `${num(km)} km`}
+          hint={
+            chained.data != null
+              ? `Rota encadeada do dia (soma simples: ${num(kmSum)} km)`
+              : "Soma das entregas — encadeia quando houver pontos com GPS"
+          }
+        />
         <StatCard label="Tempo parado" value={minutesLabel(idle)} tone="warning" />
       </div>
+
 
       <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-[380px_minmax(0,1fr)] [&>*]:min-w-0">
         <SectionCard title="Nova entrega" description="Preencha após finalizar a corrida">
