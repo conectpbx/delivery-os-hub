@@ -72,7 +72,7 @@ export function isMixedContentBlocked(url: string) {
 }
 
 export async function fetchReading(url: string, signal?: AbortSignal): Promise<BridgeReading> {
-  const res = await fetch(url, { signal, headers: { accept: "application/json" } });
+  const res = await fetch(url, { signal: signal ?? null, headers: { accept: "application/json" } });
   if (!res.ok) throw new Error(`Servidor respondeu ${res.status}`);
   const text = await res.text();
   try {
