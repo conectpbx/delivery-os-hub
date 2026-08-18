@@ -21,7 +21,14 @@ import { brl, dateLabel, num } from "@/lib/format";
 import { nearestFuelStation, reverseGeocodeAddress } from "@/lib/geo";
 import { useTripTracker } from "@/lib/trip-tracker";
 import { isMixedContentBlocked, useOdometerBridge } from "@/lib/odometer-bridge";
-import { avgFuelPrice, costPerKm, summarize } from "@/lib/metrics";
+import {
+  avgFuelPrice,
+  costPerKm,
+  filterByPeriod,
+  PERIODS,
+  summarize,
+  type Period,
+} from "@/lib/metrics";
 
 export const Route = createFileRoute("/financeiro")({
   head: () => ({
@@ -64,13 +71,18 @@ function Financeiro() {
     occurred_at: new Date().toISOString().slice(0, 10),
   });
   const [eff, setEff] = useState("");
+  const [period, setPeriod] = useState<Period>(PERIODS[2]!);
   const [gps, setGps] = useState(false);
   const { trip, error: tripError, start, finish, reset } = useTripTracker();
   const bridge = useOdometerBridge();
 
   const cpk = costPerKm(fuelings.data ?? [], profile.data);
-  const s = summarize(deliveries.data ?? [], expenses.data ?? [], maintenances.data ?? [], cpk);
-  const fuelTotal = (fuelings.data ?? []).reduce((a, f) => a + Number(f.total), 0);
+  const perDeliveries = filterByPeriod(deliveries.data ?? [], (d) => d.occurred_at, period);
+  const perExpenses = filterByPeriod(expenses.data ?? [], (e) => e.occurred_at, period);
+  const perMaint = filterByPeriod(maintenances.data ?? [], (m) => m.performed_at, period);
+  const perFuelings = filterByPeriod(fuelings.data ?? [], (f) => f.occurred_at, period);
+  const s = summarize(perDeliveries, perExpenses, perMaint, cpk);
+  const fuelTotal = perFuelings.reduce((a, f) => a + Number(f.total), 0);
   const lastOdometer = (fuelings.data ?? []).find((f) => f.odometer != null)?.odometer ?? null;
   const estimatedOdometer =
     lastOdometer != null ? Math.round(Number(lastOdometer) + trip.distanceKm) : null;
@@ -111,10 +123,38 @@ function Financeiro() {
 
 
   return (
-    <AppShell title="Financeiro" subtitle="Abastecimento, despesas e lucro real">
+    <AppShell
+      title="Financeiro"
+      subtitle={`Abastecimento, despesas e lucro real · ${period.label}`}
+      actions={
+        <div className="flex gap-1 rounded-lg bg-muted p-1">
+          {PERIODS.map((p) => (
+            <Button
+              key={p.key}
+              size="sm"
+              variant={period.key === p.key ? "default" : "ghost"}
+              className="h-7 px-3 text-xs"
+              onClick={() => setPeriod(p)}
+            >
+              {p.label}
+            </Button>
+          ))}
+        </div>
+      }
+    >
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Receita total" value={brl(s.revenue)} tone="primary" />
-        <StatCard label="Lucro real" value={brl(s.profit)} tone={s.profit >= 0 ? "success" : "destructive"} />
+        <StatCard
+          label="Receita total"
+          value={brl(s.revenue)}
+          hint={`${s.count} entregas no período`}
+          tone="primary"
+        />
+        <StatCard
+          label="Lucro real"
+          value={brl(s.profit)}
+          hint={`Custos ${brl(s.fuelCost + s.otherCost + s.maintenanceCost)}`}
+          tone={s.profit >= 0 ? "success" : "destructive"}
+        />
         <StatCard label="Gasto com combustível" value={brl(fuelTotal)} hint={`Média ${brl(avgFuelPrice(fuelings.data ?? []))}/L`} />
         <StatCard label="Custo por km" value={brl(cpk)} hint={`${num(Number(profile.data?.fuel_efficiency ?? 12))} km/L`} />
       </div>
