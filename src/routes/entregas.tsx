@@ -1005,14 +1005,33 @@ function Entregas() {
                               size="sm"
                               variant="outline"
                               className="w-full"
-                              onClick={() =>
-                                setFinishing((f) =>
-                                  f ? { ...f, stops: [...f.stops, newStop("entrega")] } : f,
-                                )
-                              }
+                              disabled={updateDelivery.isPending}
+                              onClick={async () => {
+                                try {
+                                  const saved = await persistFinishStops(
+                                    d.id,
+                                    raw,
+                                    finishing.stops,
+                                  );
+                                  setFinishing((f) =>
+                                    f
+                                      ? {
+                                          ...f,
+                                          stops: saved
+                                            ? [newStop("entrega")]
+                                            : [...f.stops, newStop("entrega")],
+                                        }
+                                      : f,
+                                  );
+                                  if (saved) toast.success("Ponto anterior salvo na rota");
+                                } catch {
+                                  toast.error("Erro ao salvar o ponto anterior");
+                                }
+                              }}
                             >
                               <Plus className="mr-1 size-4" /> Adicionar ponto
                             </Button>
+
                             <div className="flex gap-2">
                               <Button
                                 type="button"
