@@ -65,6 +65,33 @@ function Metas() {
   });
   const [daily, setDaily] = useState("");
 
+  useGoalCelebrations(
+    (goals.data ?? []).flatMap((g) => {
+      const key = g.month.slice(0, 7);
+      const m = months.find((x) => x.month === key);
+      return [
+        {
+          id: `meta-${g.id}-receita`,
+          label: `Receita de ${monthLabel(key)}`,
+          value: m?.revenue ?? 0,
+          target: Number(g.revenue_target),
+        },
+        {
+          id: `meta-${g.id}-lucro`,
+          label: `Lucro de ${monthLabel(key)}`,
+          value: m?.profit ?? 0,
+          target: Number(g.profit_target),
+        },
+        {
+          id: `meta-${g.id}-entregas`,
+          label: `Entregas de ${monthLabel(key)}`,
+          value: m?.count ?? 0,
+          target: Number(g.deliveries_target),
+        },
+      ];
+    }),
+  );
+
   void maintenances;
 
   return (
