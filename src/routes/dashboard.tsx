@@ -92,6 +92,16 @@ function Dashboard() {
     cpk,
   ).revenue;
 
+  useGoalCelebrations([
+    {
+      id: `diaria-${new Date().toISOString().slice(0, 10)}-receita`,
+      label: "Meta diária de receita",
+      value: todayRevenue,
+      target: dailyGoal,
+    },
+  ]);
+
+
   return (
     <AppShell
       title="Dashboard"
