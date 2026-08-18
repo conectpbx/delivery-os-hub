@@ -204,6 +204,21 @@ function Entregas() {
       f ? { ...f, stops: f.stops.map((s) => (s.id === stopId ? { ...s, ...values } : s)) } : f,
     );
 
+  /** Grava os pontos já informados na entrega em rota (sem concluir). */
+  async function persistFinishStops(id: string, raw: StoredStop[], list2: Stop[]) {
+    const filled = list2
+      .filter((s) => s.address.trim() || (s.lat != null && s.lng != null))
+      .map((s) => ({ kind: s.kind, address: s.address.trim(), lat: s.lat, lng: s.lng }));
+    if (!filled.length) return false;
+    await updateDelivery.mutateAsync({
+      id,
+      values: { stops: [...raw, ...filled], status: "em_rota" },
+    });
+    return true;
+  }
+
+
+
   function captureFinishGps(stopId: string) {
     if (!("geolocation" in navigator)) {
       toast.error("GPS indisponível neste dispositivo");
@@ -398,6 +413,11 @@ function Entregas() {
   const kmSum = today.reduce((s, d) => s + Number(d.distance_km), 0);
   const idle = today.reduce((s, d) => s + Number(d.idle_min), 0);
 
+  // Encadeamento só faz sentido enquanto há entregas em andamento (em rota).
+  const emRota = today.filter(
+    (d) => (d as unknown as { status?: string }).status === "em_rota",
+  ).length;
+
   // Encadeamento do dia: TODOS os pontos (coletas e entregas) na ordem em que ocorreram.
   const chainPoints = [...today]
     .sort((a, b) => new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime())
@@ -420,11 +440,12 @@ function Entregas() {
   const chainKey = chainPoints.map(([a, b]) => `${a.toFixed(5)},${b.toFixed(5)}`).join("|");
   const chained = useQuery({
     queryKey: ["chained-km", chainKey],
-    enabled: chainPoints.length >= 2,
+    enabled: emRota > 0 && chainPoints.length >= 2,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => (await fetchRoute(chainPoints))?.distanceKm ?? null,
   });
-  const km = chained.data ?? kmSum;
+  const km = emRota > 0 ? (chained.data ?? kmSum) : kmSum;
+
 
 
   const formNav = navigationUrl(stops);
@@ -438,13 +459,16 @@ function Entregas() {
         <StatCard label="Total recebido" value={brl(total)} tone="primary" />
         <StatCard
           label="Distância total"
-          value={chained.isFetching ? "…" : `${num(km)} km`}
+          value={emRota > 0 && chained.isFetching ? "…" : `${num(km)} km`}
           hint={
-            chained.data != null
-              ? `Trajeto real do dia por todos os pontos (soma simples: ${num(kmSum)} km)`
-              : "Soma das entregas — encadeia quando houver pontos com GPS"
+            emRota === 0
+              ? "Soma das entregas concluídas do dia"
+              : chained.data != null
+                ? `Trajeto encadeado (${emRota} em andamento) · soma simples: ${num(kmSum)} km`
+                : "Encadeando os pontos das entregas em andamento…"
           }
         />
+
         <StatCard label="Tempo parado" value={minutesLabel(idle)} tone="warning" />
       </div>
 
@@ -981,14 +1005,33 @@ function Entregas() {
                               size="sm"
                               variant="outline"
                               className="w-full"
-                              onClick={() =>
-                                setFinishing((f) =>
-                                  f ? { ...f, stops: [...f.stops, newStop("entrega")] } : f,
-                                )
-                              }
+                              disabled={updateDelivery.isPending}
+                              onClick={async () => {
+                                try {
+                                  const saved = await persistFinishStops(
+                                    d.id,
+                                    raw,
+                                    finishing.stops,
+                                  );
+                                  setFinishing((f) =>
+                                    f
+                                      ? {
+                                          ...f,
+                                          stops: saved
+                                            ? [newStop("entrega")]
+                                            : [...f.stops, newStop("entrega")],
+                                        }
+                                      : f,
+                                  );
+                                  if (saved) toast.success("Ponto anterior salvo na rota");
+                                } catch {
+                                  toast.error("Erro ao salvar o ponto anterior");
+                                }
+                              }}
                             >
                               <Plus className="mr-1 size-4" /> Adicionar ponto
                             </Button>
+
                             <div className="flex gap-2">
                               <Button
                                 type="button"
@@ -1039,6 +1082,33 @@ function Entregas() {
                               >
                                 Concluir
                               </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="secondary"
+                                disabled={
+                                  !finishing.stops.some((s) => s.address.trim()) ||
+                                  updateDelivery.isPending
+                                }
+                                onClick={async () => {
+                                  try {
+                                    const saved = await persistFinishStops(
+                                      d.id,
+                                      raw,
+                                      finishing.stops,
+                                    );
+                                    if (saved) {
+                                      setFinishing({ id: d.id, stops: [newStop("entrega")] });
+                                      toast.success("Pontos salvos — entrega segue em rota");
+                                    }
+                                  } catch {
+                                    toast.error("Erro ao salvar os pontos");
+                                  }
+                                }}
+                              >
+                                Salvar pontos
+                              </Button>
+
                               <Button
                                 type="button"
                                 size="sm"
