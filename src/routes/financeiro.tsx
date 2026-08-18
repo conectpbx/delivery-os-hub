@@ -57,7 +57,12 @@ function Financeiro() {
   const delExpense = useRemove("expenses", "expenses");
 
   const [fuel, setFuel] = useState({ liters: "", price_per_liter: "", odometer: "", station: "" });
-  const [exp, setExp] = useState({ category: CATEGORIES[0]!, description: "", amount: "" });
+  const [exp, setExp] = useState({
+    category: CATEGORIES[0]!,
+    description: "",
+    amount: "",
+    occurred_at: new Date().toISOString().slice(0, 10),
+  });
   const [eff, setEff] = useState("");
   const [gps, setGps] = useState(false);
   const { trip, error: tripError, start, finish, reset } = useTripTracker();
