@@ -444,13 +444,16 @@ function Entregas() {
         <StatCard label="Total recebido" value={brl(total)} tone="primary" />
         <StatCard
           label="Distância total"
-          value={chained.isFetching ? "…" : `${num(km)} km`}
+          value={emRota > 0 && chained.isFetching ? "…" : `${num(km)} km`}
           hint={
-            chained.data != null
-              ? `Trajeto real do dia por todos os pontos (soma simples: ${num(kmSum)} km)`
-              : "Soma das entregas — encadeia quando houver pontos com GPS"
+            emRota === 0
+              ? "Soma das entregas concluídas do dia"
+              : chained.data != null
+                ? `Trajeto encadeado (${emRota} em andamento) · soma simples: ${num(kmSum)} km`
+                : "Encadeando os pontos das entregas em andamento…"
           }
         />
+
         <StatCard label="Tempo parado" value={minutesLabel(idle)} tone="warning" />
       </div>
 
