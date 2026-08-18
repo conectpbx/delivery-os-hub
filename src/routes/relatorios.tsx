@@ -50,11 +50,20 @@ function Relatorios() {
   const fuelings = useFuelings();
   const maintenances = useMaintenances();
   const profile = useProfile();
+  const [period, setPeriod] = useState<Period>(PERIODS[2]!);
 
   const cpk = costPerKm(fuelings.data ?? [], profile.data);
+  const perDeliveries = filterByPeriod(deliveries.data ?? [], (d) => d.occurred_at, period);
+  const perExpenses = filterByPeriod(expenses.data ?? [], (e) => e.occurred_at, period);
+  const perMaint = filterByPeriod(maintenances.data ?? [], (m) => m.performed_at, period);
+  const perFuelings = filterByPeriod(fuelings.data ?? [], (f) => f.occurred_at, period);
+
   const months = byMonth(deliveries.data ?? [], expenses.data ?? [], cpk).slice(-12);
-  const total = summarize(deliveries.data ?? [], expenses.data ?? [], maintenances.data ?? [], cpk);
-  const ranking = byApp(deliveries.data ?? [], cpk);
+  const total = summarize(perDeliveries, perExpenses, perMaint, cpk);
+  const ranking = byApp(perDeliveries, cpk);
+  const categories = costsByCategory(perExpenses);
+  const fuelPaid = perFuelings.reduce((a, f) => a + Number(f.total), 0);
+  const totalCost = total.fuelCost + total.otherCost + total.maintenanceCost;
   const last = months[months.length - 1];
   const prev = months[months.length - 2];
   const delta = last && prev && prev.profit ? ((last.profit - prev.profit) / Math.abs(prev.profit)) * 100 : 0;
@@ -65,10 +74,17 @@ function Relatorios() {
     lucro: m.profit,
   }));
 
+  const costRows: { label: string; value: number; hint?: string }[] = [
+    { label: "Combustível (estimado por km)", value: total.fuelCost, hint: `${num(total.distance)} km × ${brl(cpk)}/km` },
+    { label: "Abastecimentos pagos", value: fuelPaid, hint: `${perFuelings.length} abastecimento(s)` },
+    { label: "Manutenção", value: total.maintenanceCost, hint: `${perMaint.length} serviço(s)` },
+    ...categories.map((c) => ({ label: `Despesa · ${c.category}`, value: c.amount })),
+  ];
+
   function exportDeliveries() {
     downloadCsv("entregas-delivery-os.csv", [
       ["Data", "Aplicativo", "Ganho", "Gorjeta", "KM", "Duração (min)", "Parado (min)", "Destino"],
-      ...(deliveries.data ?? []).map((d) => [
+      ...perDeliveries.map((d) => [
         dateTimeLabel(d.occurred_at),
         d.app_name,
         Number(d.earnings),
@@ -88,17 +104,40 @@ function Relatorios() {
     ]);
   }
 
+  function exportCosts() {
+    downloadCsv("custos-delivery-os.csv", [
+      ["Item", "Valor"],
+      ...costRows.map((r) => [r.label, r.value]),
+    ]);
+  }
+
   return (
     <AppShell
       title="Relatórios"
-      subtitle="Comparação entre meses, PDF e exportação para Excel"
+      subtitle={`Período: ${period.label} · comparação entre meses, PDF e Excel`}
       actions={
         <div className="flex flex-wrap gap-2">
+          <div className="flex gap-1 rounded-lg bg-muted p-1">
+            {PERIODS.map((p) => (
+              <Button
+                key={p.key}
+                size="sm"
+                variant={period.key === p.key ? "default" : "ghost"}
+                className="h-7 px-3 text-xs"
+                onClick={() => setPeriod(p)}
+              >
+                {p.label}
+              </Button>
+            ))}
+          </div>
           <Button variant="outline" size="sm" className="gap-2" onClick={exportDeliveries}>
             <FileDown className="size-4" /> Entregas (Excel)
           </Button>
           <Button variant="outline" size="sm" className="gap-2" onClick={exportMonths}>
             <FileDown className="size-4" /> Resumo (Excel)
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={exportCosts}>
+            <FileDown className="size-4" /> Custos (Excel)
           </Button>
           <Button size="sm" className="gap-2" onClick={() => window.print()}>
             <Printer className="size-4" /> Gerar PDF
@@ -107,9 +146,19 @@ function Relatorios() {
       }
     >
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Receita acumulada" value={brl(total.revenue)} tone="primary" />
-        <StatCard label="Lucro acumulado" value={brl(total.profit)} tone={total.profit >= 0 ? "success" : "destructive"} />
-        <StatCard label="Quilometragem total" value={`${num(total.distance)} km`} />
+        <StatCard
+          label="Receita acumulada"
+          value={brl(total.revenue)}
+          hint={`${total.count} entregas · ${period.label.toLowerCase()}`}
+          tone="primary"
+        />
+        <StatCard
+          label="Lucro acumulado"
+          value={brl(total.profit)}
+          hint={`Margem ${num(total.revenue ? (total.profit / total.revenue) * 100 : 0)}%`}
+          tone={total.profit >= 0 ? "success" : "destructive"}
+        />
+        <StatCard label="Custos no período" value={brl(totalCost)} tone="destructive" hint={`${brl(total.fuelCost)} combustível`} />
         <StatCard
           label="Variação vs mês anterior"
           value={`${delta >= 0 ? "+" : ""}${num(delta, 0)}%`}
@@ -117,6 +166,32 @@ function Relatorios() {
           hint={prev ? `${monthLabel(prev.month)} → ${last ? monthLabel(last.month) : ""}` : "sem histórico"}
         />
       </div>
+
+      <SectionCard className="mt-4" title="Detalhamento dos custos" description={`Período: ${period.label}`}>
+        {totalCost > 0 || fuelPaid > 0 ? (
+          <ul className="divide-y divide-border">
+            {costRows
+              .filter((r) => r.value > 0)
+              .map((r) => (
+                <li key={r.label} className="flex items-center justify-between gap-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{r.label}</p>
+                    {r.hint ? <p className="truncate text-xs text-muted-foreground">{r.hint}</p> : null}
+                  </div>
+                  <span className="text-sm font-semibold tabular-nums">{brl(r.value)}</span>
+                </li>
+              ))}
+            <li className="flex items-center justify-between gap-3 py-2.5">
+              <p className="text-sm font-semibold">Total considerado no lucro</p>
+              <span className="text-sm font-semibold tabular-nums text-destructive">{brl(totalCost)}</span>
+            </li>
+          </ul>
+        ) : (
+          <EmptyState>Nenhum custo registrado neste período.</EmptyState>
+        )}
+      </SectionCard>
+
+
 
       <SectionCard className="mt-4" title="Comparação entre meses" description="Receita x lucro real">
         {chart.length ? (
