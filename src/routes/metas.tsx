@@ -19,6 +19,7 @@ import {
   useUpsertProfile,
 } from "@/lib/data";
 import { brl, monthKey, monthLabel, num } from "@/lib/format";
+import { useGoalCelebrations } from "@/lib/celebrate";
 import { byMonth, costPerKm } from "@/lib/metrics";
 
 export const Route = createFileRoute("/metas")({
