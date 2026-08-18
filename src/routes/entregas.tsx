@@ -204,6 +204,21 @@ function Entregas() {
       f ? { ...f, stops: f.stops.map((s) => (s.id === stopId ? { ...s, ...values } : s)) } : f,
     );
 
+  /** Grava os pontos já informados na entrega em rota (sem concluir). */
+  async function persistFinishStops(id: string, raw: StoredStop[], list2: Stop[]) {
+    const filled = list2
+      .filter((s) => s.address.trim() || (s.lat != null && s.lng != null))
+      .map((s) => ({ kind: s.kind, address: s.address.trim(), lat: s.lat, lng: s.lng }));
+    if (!filled.length) return false;
+    await updateDelivery.mutateAsync({
+      id,
+      values: { stops: [...raw, ...filled], status: "em_rota" },
+    });
+    return true;
+  }
+
+
+
   function captureFinishGps(stopId: string) {
     if (!("geolocation" in navigator)) {
       toast.error("GPS indisponível neste dispositivo");
