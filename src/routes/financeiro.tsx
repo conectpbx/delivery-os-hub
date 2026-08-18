@@ -57,7 +57,12 @@ function Financeiro() {
   const delExpense = useRemove("expenses", "expenses");
 
   const [fuel, setFuel] = useState({ liters: "", price_per_liter: "", odometer: "", station: "" });
-  const [exp, setExp] = useState({ category: CATEGORIES[0]!, description: "", amount: "" });
+  const [exp, setExp] = useState({
+    category: CATEGORIES[0]!,
+    description: "",
+    amount: "",
+    occurred_at: new Date().toISOString().slice(0, 10),
+  });
   const [eff, setEff] = useState("");
   const [gps, setGps] = useState(false);
   const { trip, error: tripError, start, finish, reset } = useTripTracker();
@@ -312,9 +317,15 @@ function Financeiro() {
               await addExpense.mutateAsync({
                 category: exp.category,
                 description: exp.description || null,
-                amount: Number(exp.amount || 0),
+                amount: Number(String(exp.amount).replace(",", ".") || 0),
+                occurred_at: exp.occurred_at,
               });
-              setExp({ category: CATEGORIES[0]!, description: "", amount: "" });
+              setExp({
+                category: CATEGORIES[0]!,
+                description: "",
+                amount: "",
+                occurred_at: new Date().toISOString().slice(0, 10),
+              });
               toast.success("Despesa registrada");
             }}
           >
@@ -329,6 +340,14 @@ function Financeiro() {
                   <option key={c}>{c}</option>
                 ))}
               </select>
+            </div>
+            <div className="col-span-2 space-y-2">
+              <Label className="text-xs">Data</Label>
+              <Input
+                type="date"
+                value={exp.occurred_at}
+                onChange={(e) => setExp({ ...exp, occurred_at: e.target.value })}
+              />
             </div>
             <Text label="Valor (R$)" value={exp.amount} onChange={(v) => setExp({ ...exp, amount: v })} />
             <Text label="Descrição" value={exp.description} onChange={(v) => setExp({ ...exp, description: v })} />
