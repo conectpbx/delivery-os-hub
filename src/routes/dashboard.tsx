@@ -21,6 +21,7 @@ import {
   useProfile,
 } from "@/lib/data";
 import { brl, dateLabel, dateTimeLabel, minutesLabel, num } from "@/lib/format";
+import { useGoalCelebrations } from "@/lib/celebrate";
 import { byApp, costPerKm, endOfDay, heatmap, inRange, startOfDay, summarize } from "@/lib/metrics";
 
 export const Route = createFileRoute("/dashboard")({
