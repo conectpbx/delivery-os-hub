@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { FileDown, Printer } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
@@ -12,7 +13,17 @@ import {
   useProfile,
 } from "@/lib/data";
 import { brl, dateTimeLabel, downloadCsv, monthLabel, num } from "@/lib/format";
-import { byApp, costPerKm, byMonth, summarize } from "@/lib/metrics";
+import {
+  byApp,
+  costPerKm,
+  byMonth,
+  costsByCategory,
+  filterByPeriod,
+  PERIODS,
+  summarize,
+  type Period,
+} from "@/lib/metrics";
+
 
 export const Route = createFileRoute("/relatorios")({
   head: () => ({
