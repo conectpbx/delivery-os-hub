@@ -398,6 +398,11 @@ function Entregas() {
   const kmSum = today.reduce((s, d) => s + Number(d.distance_km), 0);
   const idle = today.reduce((s, d) => s + Number(d.idle_min), 0);
 
+  // Encadeamento só faz sentido enquanto há entregas em andamento (em rota).
+  const emRota = today.filter(
+    (d) => (d as unknown as { status?: string }).status === "em_rota",
+  ).length;
+
   // Encadeamento do dia: TODOS os pontos (coletas e entregas) na ordem em que ocorreram.
   const chainPoints = [...today]
     .sort((a, b) => new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime())
@@ -420,11 +425,12 @@ function Entregas() {
   const chainKey = chainPoints.map(([a, b]) => `${a.toFixed(5)},${b.toFixed(5)}`).join("|");
   const chained = useQuery({
     queryKey: ["chained-km", chainKey],
-    enabled: chainPoints.length >= 2,
+    enabled: emRota > 0 && chainPoints.length >= 2,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => (await fetchRoute(chainPoints))?.distanceKm ?? null,
   });
-  const km = chained.data ?? kmSum;
+  const km = emRota > 0 ? (chained.data ?? kmSum) : kmSum;
+
 
 
   const formNav = navigationUrl(stops);
