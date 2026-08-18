@@ -250,7 +250,7 @@ function Relatorios() {
           )}
         </SectionCard>
 
-        <SectionCard title="Desempenho por aplicativo" description="Todo o histórico">
+        <SectionCard title="Desempenho por aplicativo" description={`Período: ${period.label}`}>
           {ranking.length ? (
             <ul className="space-y-3">
               {ranking.map((r) => (
