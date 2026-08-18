@@ -1085,6 +1085,33 @@ function Entregas() {
                               <Button
                                 type="button"
                                 size="sm"
+                                variant="secondary"
+                                disabled={
+                                  !finishing.stops.some((s) => s.address.trim()) ||
+                                  updateDelivery.isPending
+                                }
+                                onClick={async () => {
+                                  try {
+                                    const saved = await persistFinishStops(
+                                      d.id,
+                                      raw,
+                                      finishing.stops,
+                                    );
+                                    if (saved) {
+                                      setFinishing({ id: d.id, stops: [newStop("entrega")] });
+                                      toast.success("Pontos salvos — entrega segue em rota");
+                                    }
+                                  } catch {
+                                    toast.error("Erro ao salvar os pontos");
+                                  }
+                                }}
+                              >
+                                Salvar pontos
+                              </Button>
+
+                              <Button
+                                type="button"
+                                size="sm"
                                 variant="outline"
                                 onClick={() => setFinishing(null)}
                               >
