@@ -21,14 +21,8 @@ import { brl, dateLabel, num } from "@/lib/format";
 import { nearestFuelStation, reverseGeocodeAddress } from "@/lib/geo";
 import { useTripTracker } from "@/lib/trip-tracker";
 import { isMixedContentBlocked, useOdometerBridge } from "@/lib/odometer-bridge";
-import {
-  avgFuelPrice,
-  costPerKm,
-  filterByPeriod,
-  PERIODS,
-  summarize,
-  type Period,
-} from "@/lib/metrics";
+import { avgFuelPrice, costPerKm, filterByRange, summarize } from "@/lib/metrics";
+import { PeriodFilter, PeriodSummary, usePeriodSelection } from "@/components/PeriodFilter";
 
 export const Route = createFileRoute("/financeiro")({
   head: () => ({
@@ -71,16 +65,16 @@ function Financeiro() {
     occurred_at: new Date().toISOString().slice(0, 10),
   });
   const [eff, setEff] = useState("");
-  const [period, setPeriod] = useState<Period>(PERIODS[3]!);
+  const period = usePeriodSelection(3);
   const [gps, setGps] = useState(false);
   const { trip, error: tripError, start, finish, reset } = useTripTracker();
   const bridge = useOdometerBridge();
 
   const cpk = costPerKm(fuelings.data ?? [], profile.data);
-  const perDeliveries = filterByPeriod(deliveries.data ?? [], (d) => d.occurred_at, period);
-  const perExpenses = filterByPeriod(expenses.data ?? [], (e) => e.occurred_at, period);
-  const perMaint = filterByPeriod(maintenances.data ?? [], (m) => m.performed_at, period);
-  const perFuelings = filterByPeriod(fuelings.data ?? [], (f) => f.occurred_at, period);
+  const perDeliveries = filterByRange(deliveries.data ?? [], (d) => d.occurred_at, period.fromDate, period.toDate);
+  const perExpenses = filterByRange(expenses.data ?? [], (e) => e.occurred_at, period.fromDate, period.toDate);
+  const perMaint = filterByRange(maintenances.data ?? [], (m) => m.performed_at, period.fromDate, period.toDate);
+  const perFuelings = filterByRange(fuelings.data ?? [], (f) => f.occurred_at, period.fromDate, period.toDate);
   const s = summarize(perDeliveries, perExpenses, perMaint, cpk);
   const fuelTotal = perFuelings.reduce((a, f) => a + Number(f.total), 0);
   const lastOdometer = (fuelings.data ?? []).find((f) => f.odometer != null)?.odometer ?? null;
@@ -127,22 +121,11 @@ function Financeiro() {
       title="Financeiro"
       subtitle={`Abastecimento, despesas e lucro real · ${period.label}`}
       actions={
-        <div className="flex gap-1 rounded-lg bg-muted p-1">
-          {PERIODS.map((p) => (
-            <Button
-              key={p.key}
-              size="sm"
-              variant={period.key === p.key ? "default" : "ghost"}
-              className="h-7 px-3 text-xs"
-              onClick={() => setPeriod(p)}
-            >
-              {p.label}
-            </Button>
-          ))}
-        </div>
+        <PeriodFilter selection={period} />
       }
     >
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <PeriodSummary selection={period} />
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Receita total"
           value={brl(s.revenue)}

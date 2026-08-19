@@ -144,6 +144,11 @@ export function filterByPeriod<T>(items: T[], key: (item: T) => string, period: 
   return items.filter((i) => inRange(key(i), from, to));
 }
 
+export function filterByRange<T>(items: T[], key: (item: T) => string, from: Date, to: Date) {
+  return items.filter((i) => inRange(key(i), from, to));
+}
+
+
 export function costsByCategory(expenses: Expense[]) {
   const map = new Map<string, number>();
   for (const e of expenses) map.set(e.category, (map.get(e.category) ?? 0) + Number(e.amount));
