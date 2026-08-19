@@ -465,6 +465,12 @@ function Entregas() {
   const linkKm = chained.data ?? null;
   const km = ordered.length <= 1 ? baseKm : linkKm != null ? baseKm + linkKm : kmSum;
 
+  const formNav = navigationUrl(stops);
+  const filledStops = stops.filter((s) => s.address.trim() || (s.lat != null && s.lng != null));
+  const lastStop = filledStops[filledStops.length - 1];
+  const hasFinalPoint = filledStops.length >= 2 && !!lastStop && lastStop.kind === "entrega";
+
+
   return (
     <AppShell title="Entregas" subtitle="Registro de corridas, rota no mapa e navegação">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
