@@ -332,7 +332,7 @@ function Financeiro() {
             </Button>
           </form>
           <ul className="mt-4 divide-y divide-border">
-            {(fuelings.data ?? []).slice(0, 6).map((f) => (
+            {perFuelings.slice(0, 6).map((f) => (
               <li key={f.id} className="flex items-center justify-between gap-2 py-2 text-sm">
                 <span className="text-muted-foreground">
                   {dateLabel(f.occurred_at)} · {num(Number(f.liters))} L · {f.station ?? "posto"}
@@ -346,7 +346,7 @@ function Financeiro() {
               </li>
             ))}
           </ul>
-          {!(fuelings.data ?? []).length ? <EmptyState>Nenhum abastecimento.</EmptyState> : null}
+          {!perFuelings.length ? <EmptyState>Nenhum abastecimento em {period.label.toLowerCase()}.</EmptyState> : null}
         </SectionCard>
 
         <SectionCard title="Nova despesa">
