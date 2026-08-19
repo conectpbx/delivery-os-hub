@@ -72,7 +72,7 @@ function Entregas() {
   const [addingApp, setAddingApp] = useState(false);
   const [newAppName, setNewAppName] = useState("");
   const [newAppFee, setNewAppFee] = useState("");
-  const [stops, setStops, clearStopsDraft] = usePersistentState<Stop[]>("entregas.stops", [
+  const [stops, setStops] = usePersistentState<Stop[]>("entregas.stops", [
     newStop("coleta"),
     newStop("entrega"),
   ]);
@@ -80,7 +80,7 @@ function Entregas() {
   const [showRoute, setShowRoute] = useState(false);
   const [routing, setRouting] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [finishing, setFinishing, clearFinishDraft] = usePersistentState<{
+  const [finishing, setFinishing] = usePersistentState<{
     id: string;
     stops: Stop[];
   } | null>("entregas.finishing", null);
@@ -88,7 +88,7 @@ function Entregas() {
   const [histRange, setHistRange] = useState<"hoje" | "7d" | "30d" | "tudo">("hoje");
 
 
-  const [form, setForm, clearFormDraft] = usePersistentState("entregas.form", {
+  const [form, setForm] = usePersistentState("entregas.form", {
     app_name: "",
     earnings: "",
     fee_percent: "",
