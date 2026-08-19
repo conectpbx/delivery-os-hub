@@ -152,7 +152,7 @@ function Financeiro() {
             <p className="text-2xl font-semibold tabular-nums">{num(trip.distanceKm)} km</p>
             <p className="truncate text-xs text-muted-foreground">
               {trip.active
-                ? `Capturando desde ${dateLabel(trip.startedAt ?? new Date().toISOString())} · ${trip.points} pontos`
+                ? `Capturando ${trip.source === "external" ? "via app nativo" : "via GPS do navegador"} desde ${dateLabel(trip.startedAt ?? new Date().toISOString())} · ${trip.points} pontos`
                 : trip.endedAt
                   ? `Jornada finalizada · ${trip.points} pontos`
                   : "Nenhuma jornada em andamento"}
