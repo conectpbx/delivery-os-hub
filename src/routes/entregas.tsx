@@ -19,6 +19,8 @@ import {
   useUpdate,
   useUpdateApp,
 } from "@/lib/data";
+import type { Delivery } from "@/lib/data";
+
 import { brl, dateTimeLabel, minutesLabel, num } from "@/lib/format";
 import { fetchRoute, geocodeAddress, navigationUrl, newStop, type RouteResult, type Stop } from "@/lib/geo";
 import { usePersistentState } from "@/lib/persistent-state";
@@ -421,45 +423,55 @@ function Entregas() {
   const kmSum = today.reduce((s, d) => s + Number(d.distance_km), 0);
   const idle = today.reduce((s, d) => s + Number(d.idle_min), 0);
 
-  // Encadeamento só faz sentido enquanto há entregas em andamento (em rota).
   const emRota = today.filter(
     (d) => (d as unknown as { status?: string }).status === "em_rota",
   ).length;
 
-  // Encadeamento do dia: TODOS os pontos (coletas e entregas) na ordem em que ocorreram.
-  const chainPoints = [...today]
-    .sort((a, b) => new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime())
-    .flatMap((d) => {
-      const st = ((d as unknown as { stops?: StoredStop[] }).stops ?? []).filter(
-        (s) => s.lat != null && s.lng != null,
-      );
-      if (st.length) return st.map((s) => [s.lat as number, s.lng as number] as [number, number]);
-      if (d.lat != null && d.lng != null) return [[d.lat, d.lng] as [number, number]];
-      return [] as [number, number][];
-    })
-    // remove pontos repetidos em sequência (ex.: fim de uma entrega = início da próxima)
-    .filter((p, i, arr) => {
-      const prev = arr[i - 1];
-      if (!prev) return true;
-      return Math.abs(prev[0] - p[0]) > 1e-5 || Math.abs(prev[1] - p[1]) > 1e-5;
-    });
+  // Ordem cronológica das entregas do dia.
+  const ordered = [...today].sort(
+    (a, b) => new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime(),
+  );
+  const pointsOf = (d: Delivery): [number, number][] => {
+    const st = ((d as unknown as { stops?: StoredStop[] }).stops ?? []).filter(
+      (s) => s.lat != null && s.lng != null,
+    );
+    if (st.length) return st.map((s) => [s.lat as number, s.lng as number] as [number, number]);
+    if (d.lat != null && d.lng != null) return [[d.lat, d.lng] as [number, number]];
+    return [];
+  };
 
+  // Base: distância registrada da PRIMEIRA entrega salva do dia.
+  const first = ordered[0];
+  const baseKm = first ? Number(first.distance_km) : 0;
+
+  // Elo: do último ponto da 1ª entrega em diante, passando por todos os pontos
+  // (coletas e entregas) das demais entregas, na ordem em que ocorreram.
+  const firstPts = first ? pointsOf(first) : [];
+  const chainPoints = [
+    ...(firstPts.length ? [firstPts[firstPts.length - 1]!] : []),
+    ...ordered.slice(1).flatMap(pointsOf),
+  ].filter((p, i, arr) => {
+    const prev = arr[i - 1];
+    if (!prev) return true;
+    return Math.abs(prev[0] - p[0]) > 1e-5 || Math.abs(prev[1] - p[1]) > 1e-5;
+  });
 
   const chainKey = chainPoints.map(([a, b]) => `${a.toFixed(5)},${b.toFixed(5)}`).join("|");
   const chained = useQuery({
     queryKey: ["chained-km", chainKey],
-    enabled: emRota > 0 && chainPoints.length >= 2,
+    enabled: chainPoints.length >= 2,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => (await fetchRoute(chainPoints))?.distanceKm ?? null,
   });
-  const km = emRota > 0 ? (chained.data ?? kmSum) : kmSum;
 
-
+  const linkKm = chained.data ?? null;
+  const km = ordered.length <= 1 ? baseKm : linkKm != null ? baseKm + linkKm : kmSum;
 
   const formNav = navigationUrl(stops);
   const filledStops = stops.filter((s) => s.address.trim() || (s.lat != null && s.lng != null));
   const lastStop = filledStops[filledStops.length - 1];
   const hasFinalPoint = filledStops.length >= 2 && !!lastStop && lastStop.kind === "entrega";
+
 
   return (
     <AppShell title="Entregas" subtitle="Registro de corridas, rota no mapa e navegação">
@@ -467,15 +479,20 @@ function Entregas() {
         <StatCard label="Total recebido" value={brl(total)} tone="primary" />
         <StatCard
           label="Distância total"
-          value={emRota > 0 && chained.isFetching ? "…" : `${num(km)} km`}
+          value={chained.isFetching ? "…" : `${num(km)} km`}
           hint={
-            emRota === 0
-              ? "Soma das entregas concluídas do dia"
-              : chained.data != null
-                ? `Trajeto encadeado (${emRota} em andamento) · soma simples: ${num(kmSum)} km`
-                : "Encadeando os pontos das entregas em andamento…"
+            ordered.length <= 1
+              ? "Distância da entrega do dia"
+              : linkKm != null
+                ? `1ª entrega ${num(baseKm)} km + ${num(linkKm)} km entre os demais pontos${
+                    emRota ? ` · ${emRota} em andamento` : ""
+                  }`
+                : chainPoints.length >= 2
+                  ? "Calculando trajeto entre os pontos…"
+                  : `Soma simples (sem coordenadas): ${num(kmSum)} km`
           }
         />
+
 
         <StatCard label="Tempo parado" value={minutesLabel(idle)} tone="warning" />
       </div>
