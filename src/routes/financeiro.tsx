@@ -396,7 +396,7 @@ function Financeiro() {
             </Button>
           </form>
           <ul className="mt-4 divide-y divide-border">
-            {(expenses.data ?? []).slice(0, 6).map((x) => (
+            {perExpenses.slice(0, 6).map((x) => (
               <li key={x.id} className="flex items-center justify-between gap-2 py-2 text-sm">
                 <span className="text-muted-foreground">
                   {dateLabel(x.occurred_at)} · {x.category}
@@ -410,7 +410,7 @@ function Financeiro() {
               </li>
             ))}
           </ul>
-          {!(expenses.data ?? []).length ? <EmptyState>Nenhuma despesa.</EmptyState> : null}
+          {!perExpenses.length ? <EmptyState>Nenhuma despesa em {period.label.toLowerCase()}.</EmptyState> : null}
         </SectionCard>
       </div>
 
