@@ -56,12 +56,8 @@ function pickGps(source: Record<string, unknown>): GpsReading | null {
   const lng = pickNumber(source, ["lng", "lon", "longitude", "longitude_deg", "gps_lng", "gps_lon"]);
   if (lat == null || lng == null) return null;
   const accuracy = pickNumber(source, ["accuracy", "acc", "gps_accuracy", "horizontal_accuracy"]);
-  return {
-    lat,
-    lng,
-    accuracy: accuracy ?? undefined,
-    at: new Date().toISOString(),
-  };
+  const base = { lat, lng, at: new Date().toISOString() };
+  return accuracy != null ? { ...base, accuracy } : base;
 }
 
 /** Normaliza respostas do tipo { odometer, speed, lat, lng, accuracy } vindas do servidor HTTP local do app. */
@@ -146,11 +142,8 @@ export function useOdometerBridge(
       setReading(next);
       setError(null);
       if (next.gps && onGpsRef.current) {
-        onGpsRef.current({
-          lat: next.gps.lat,
-          lng: next.gps.lng,
-          accuracy: next.gps.accuracy,
-        });
+        const point = { lat: next.gps.lat, lng: next.gps.lng };
+        onGpsRef.current(next.gps.accuracy != null ? { ...point, accuracy: next.gps.accuracy } : point);
       }
       return next;
     } catch (e) {
