@@ -57,8 +57,13 @@ function Financeiro() {
   const delFuel = useRemove("fuelings", "fuelings");
   const delExpense = useRemove("expenses", "expenses");
 
-  const [fuel, setFuel] = useState({ liters: "", price_per_liter: "", odometer: "", station: "" });
-  const [exp, setExp] = useState({
+  const [fuel, setFuel] = usePersistentState("financeiro.fuel", {
+    liters: "",
+    price_per_liter: "",
+    odometer: "",
+    station: "",
+  });
+  const [exp, setExp] = usePersistentState("financeiro.expense", {
     category: CATEGORIES[0]!,
     description: "",
     amount: "",
