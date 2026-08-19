@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { FileDown, Printer } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
@@ -13,16 +12,8 @@ import {
   useProfile,
 } from "@/lib/data";
 import { brl, dateTimeLabel, downloadCsv, monthLabel, num } from "@/lib/format";
-import {
-  byApp,
-  costPerKm,
-  byMonth,
-  costsByCategory,
-  filterByPeriod,
-  PERIODS,
-  summarize,
-  type Period,
-} from "@/lib/metrics";
+import { byApp, costPerKm, byMonth, costsByCategory, filterByRange, summarize } from "@/lib/metrics";
+import { PeriodFilter, PeriodSummary, usePeriodSelection } from "@/components/PeriodFilter";
 
 
 export const Route = createFileRoute("/relatorios")({
@@ -50,13 +41,13 @@ function Relatorios() {
   const fuelings = useFuelings();
   const maintenances = useMaintenances();
   const profile = useProfile();
-  const [period, setPeriod] = useState<Period>(PERIODS[3]!);
+  const period = usePeriodSelection(3);
 
   const cpk = costPerKm(fuelings.data ?? [], profile.data);
-  const perDeliveries = filterByPeriod(deliveries.data ?? [], (d) => d.occurred_at, period);
-  const perExpenses = filterByPeriod(expenses.data ?? [], (e) => e.occurred_at, period);
-  const perMaint = filterByPeriod(maintenances.data ?? [], (m) => m.performed_at, period);
-  const perFuelings = filterByPeriod(fuelings.data ?? [], (f) => f.occurred_at, period);
+  const perDeliveries = filterByRange(deliveries.data ?? [], (d) => d.occurred_at, period.fromDate, period.toDate);
+  const perExpenses = filterByRange(expenses.data ?? [], (e) => e.occurred_at, period.fromDate, period.toDate);
+  const perMaint = filterByRange(maintenances.data ?? [], (m) => m.performed_at, period.fromDate, period.toDate);
+  const perFuelings = filterByRange(fuelings.data ?? [], (f) => f.occurred_at, period.fromDate, period.toDate);
 
   const months = byMonth(deliveries.data ?? [], expenses.data ?? [], cpk).slice(-12);
   const total = summarize(perDeliveries, perExpenses, perMaint, cpk);
@@ -117,19 +108,7 @@ function Relatorios() {
       subtitle={`Período: ${period.label} · comparação entre meses, PDF e Excel`}
       actions={
         <div className="flex flex-wrap gap-2">
-          <div className="flex gap-1 rounded-lg bg-muted p-1">
-            {PERIODS.map((p) => (
-              <Button
-                key={p.key}
-                size="sm"
-                variant={period.key === p.key ? "default" : "ghost"}
-                className="h-7 px-3 text-xs"
-                onClick={() => setPeriod(p)}
-              >
-                {p.label}
-              </Button>
-            ))}
-          </div>
+          <PeriodFilter selection={period} />
           <Button variant="outline" size="sm" className="gap-2" onClick={exportDeliveries}>
             <FileDown className="size-4" /> Entregas (Excel)
           </Button>
@@ -145,7 +124,8 @@ function Relatorios() {
         </div>
       }
     >
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <PeriodSummary selection={period} />
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Receita acumulada"
           value={brl(total.revenue)}
