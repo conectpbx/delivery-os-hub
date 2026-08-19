@@ -67,8 +67,8 @@ function Financeiro() {
   const [eff, setEff] = useState("");
   const period = usePeriodSelection(3);
   const [gps, setGps] = useState(false);
-  const { trip, error: tripError, start, finish, reset } = useTripTracker();
-  const bridge = useOdometerBridge();
+  const { trip, error: tripError, start, finish, reset, pushGps } = useTripTracker();
+  const bridge = useOdometerBridge(5000, pushGps);
 
   const cpk = costPerKm(fuelings.data ?? [], profile.data);
   const perDeliveries = filterByRange(deliveries.data ?? [], (d) => d.occurred_at, period.fromDate, period.toDate);
@@ -152,7 +152,7 @@ function Financeiro() {
             <p className="text-2xl font-semibold tabular-nums">{num(trip.distanceKm)} km</p>
             <p className="truncate text-xs text-muted-foreground">
               {trip.active
-                ? `Capturando desde ${dateLabel(trip.startedAt ?? new Date().toISOString())} · ${trip.points} pontos`
+                ? `Capturando ${trip.source === "external" ? "via app nativo" : "via GPS do navegador"} desde ${dateLabel(trip.startedAt ?? new Date().toISOString())} · ${trip.points} pontos`
                 : trip.endedAt
                   ? `Jornada finalizada · ${trip.points} pontos`
                   : "Nenhuma jornada em andamento"}
@@ -204,6 +204,7 @@ function Financeiro() {
               <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
                 {bridge.reading.odometerKm != null ? `${num(bridge.reading.odometerKm)} km` : "sem odômetro"}
                 {bridge.reading.speedKmh != null ? ` · ${num(bridge.reading.speedKmh)} km/h` : ""}
+                {bridge.reading.gps ? ` · GPS ${num(bridge.reading.gps.lat)}, ${num(bridge.reading.gps.lng)}` : ""}
               </span>
             ) : null}
           </div>
@@ -262,7 +263,7 @@ function Financeiro() {
           <p className="mt-2 text-xs text-muted-foreground">
             {bridge.error
               ? `Erro: ${bridge.error}`
-              : "O app do celular precisa responder JSON (ex.: {\"odometer\": 45210, \"speed\": 32}) e liberar CORS (Access-Control-Allow-Origin: *)."}
+              : "O app do celular precisa responder JSON (ex.: {\"odometer\": 45210, \"speed\": 32, \"lat\": -23.55, \"lng\": -46.63, \"accuracy\": 8}) e liberar CORS (Access-Control-Allow-Origin: *). Se enviar lat/lng, a distância da jornada será calculada automaticamente."}
           </p>
         </div>
       </SectionCard>
