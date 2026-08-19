@@ -263,7 +263,7 @@ function Financeiro() {
           <p className="mt-2 text-xs text-muted-foreground">
             {bridge.error
               ? `Erro: ${bridge.error}`
-              : "O app do celular precisa responder JSON (ex.: {\"odometer\": 45210, \"speed\": 32}) e liberar CORS (Access-Control-Allow-Origin: *)."}
+              : "O app do celular precisa responder JSON (ex.: {\"odometer\": 45210, \"speed\": 32, \"lat\": -23.55, \"lng\": -46.63, \"accuracy\": 8}) e liberar CORS (Access-Control-Allow-Origin: *). Se enviar lat/lng, a distância da jornada será calculada automaticamente."}
           </p>
         </div>
       </SectionCard>
