@@ -23,6 +23,7 @@ import { useTripTracker } from "@/lib/trip-tracker";
 import { isMixedContentBlocked, useOdometerBridge } from "@/lib/odometer-bridge";
 import { avgFuelPrice, costPerKm, filterByRange, summarize } from "@/lib/metrics";
 import { PeriodFilter, PeriodSummary, usePeriodSelection } from "@/components/PeriodFilter";
+import { usePersistentState } from "@/lib/persistent-state";
 
 export const Route = createFileRoute("/financeiro")({
   head: () => ({
