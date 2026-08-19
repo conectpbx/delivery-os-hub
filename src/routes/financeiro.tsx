@@ -71,7 +71,7 @@ function Financeiro() {
     occurred_at: new Date().toISOString().slice(0, 10),
   });
   const [eff, setEff] = useState("");
-  const [period, setPeriod] = useState<Period>(PERIODS[2]!);
+  const [period, setPeriod] = useState<Period>(PERIODS[3]!);
   const [gps, setGps] = useState(false);
   const { trip, error: tripError, start, finish, reset } = useTripTracker();
   const bridge = useOdometerBridge();
