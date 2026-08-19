@@ -204,6 +204,7 @@ function Financeiro() {
               <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
                 {bridge.reading.odometerKm != null ? `${num(bridge.reading.odometerKm)} km` : "sem odômetro"}
                 {bridge.reading.speedKmh != null ? ` · ${num(bridge.reading.speedKmh)} km/h` : ""}
+                {bridge.reading.gps ? ` · GPS ${num(bridge.reading.gps.lat)}, ${num(bridge.reading.gps.lng)}` : ""}
               </span>
             ) : null}
           </div>
