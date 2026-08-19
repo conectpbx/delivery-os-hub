@@ -67,8 +67,8 @@ function Financeiro() {
   const [eff, setEff] = useState("");
   const period = usePeriodSelection(3);
   const [gps, setGps] = useState(false);
-  const { trip, error: tripError, start, finish, reset } = useTripTracker();
-  const bridge = useOdometerBridge();
+  const { trip, error: tripError, start, finish, reset, pushGps } = useTripTracker();
+  const bridge = useOdometerBridge(5000, pushGps);
 
   const cpk = costPerKm(fuelings.data ?? [], profile.data);
   const perDeliveries = filterByRange(deliveries.data ?? [], (d) => d.occurred_at, period.fromDate, period.toDate);
