@@ -21,6 +21,7 @@ import {
 } from "@/lib/data";
 import { brl, dateTimeLabel, minutesLabel, num } from "@/lib/format";
 import { fetchRoute, geocodeAddress, navigationUrl, newStop, type RouteResult, type Stop } from "@/lib/geo";
+import { usePersistentState } from "@/lib/persistent-state";
 
 const RouteMap = lazy(() => import("@/components/RouteMap"));
 
@@ -71,17 +72,23 @@ function Entregas() {
   const [addingApp, setAddingApp] = useState(false);
   const [newAppName, setNewAppName] = useState("");
   const [newAppFee, setNewAppFee] = useState("");
-  const [stops, setStops] = useState<Stop[]>(() => [newStop("coleta"), newStop("entrega")]);
+  const [stops, setStops] = usePersistentState<Stop[]>("entregas.stops", [
+    newStop("coleta"),
+    newStop("entrega"),
+  ]);
   const [route, setRoute] = useState<RouteResult | null>(null);
   const [showRoute, setShowRoute] = useState(false);
   const [routing, setRouting] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [finishing, setFinishing] = useState<{ id: string; stops: Stop[] } | null>(null);
+  const [finishing, setFinishing] = usePersistentState<{
+    id: string;
+    stops: Stop[];
+  } | null>("entregas.finishing", null);
   const [finishGeo, setFinishGeo] = useState<string | null>(null);
   const [histRange, setHistRange] = useState<"hoje" | "7d" | "30d" | "tudo">("hoje");
 
 
-  const [form, setForm] = useState({
+  const [form, setForm] = usePersistentState("entregas.form", {
     app_name: "",
     earnings: "",
     fee_percent: "",
@@ -91,6 +98,7 @@ function Entregas() {
     duration_min: "",
     idle_min: "",
   });
+
 
   useEffect(() => setMounted(true), []);
 
