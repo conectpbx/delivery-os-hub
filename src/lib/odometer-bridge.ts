@@ -2,9 +2,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const KEY = "deliveryos.odometer-bridge";
 
+export type GpsReading = {
+  lat: number;
+  lng: number;
+  accuracy?: number;
+  at: string;
+};
+
 export type BridgeReading = {
   odometerKm: number | null;
   speedKmh: number | null;
+  gps: GpsReading | null;
   raw: unknown;
   at: string;
 };
@@ -43,7 +51,20 @@ function pickNumber(source: Record<string, unknown>, keys: string[]): number | n
   return null;
 }
 
-/** Normaliza respostas do tipo { odometer, speed } vindas do servidor HTTP local do app. */
+function pickGps(source: Record<string, unknown>): GpsReading | null {
+  const lat = pickNumber(source, ["lat", "latitude", "latitude_deg", "gps_lat"]);
+  const lng = pickNumber(source, ["lng", "lon", "longitude", "longitude_deg", "gps_lng", "gps_lon"]);
+  if (lat == null || lng == null) return null;
+  const accuracy = pickNumber(source, ["accuracy", "acc", "gps_accuracy", "horizontal_accuracy"]);
+  return {
+    lat,
+    lng,
+    accuracy: accuracy ?? undefined,
+    at: new Date().toISOString(),
+  };
+}
+
+/** Normaliza respostas do tipo { odometer, speed, lat, lng, accuracy } vindas do servidor HTTP local do app. */
 export function parseReading(payload: unknown): BridgeReading {
   const flat: Record<string, unknown> =
     payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
@@ -63,7 +84,9 @@ export function parseReading(payload: unknown): BridgeReading {
   const mps = pickNumber(merged, ["speed_ms", "speed_mps"]);
   if (mps != null) speedKmh = mps * 3.6;
 
-  return { odometerKm, speedKmh, raw: payload, at: new Date().toISOString() };
+  const gps = pickGps(merged);
+
+  return { odometerKm, speedKmh, gps, raw: payload, at: new Date().toISOString() };
 }
 
 export function isMixedContentBlocked(url: string) {
@@ -80,21 +103,30 @@ export async function fetchReading(url: string, signal?: AbortSignal): Promise<B
   } catch {
     const value = Number(text.trim().replace(",", "."));
     if (Number.isFinite(value)) {
-      return { odometerKm: value, speedKmh: null, raw: text, at: new Date().toISOString() };
+      return { odometerKm: value, speedKmh: null, gps: null, raw: text, at: new Date().toISOString() };
     }
     throw new Error("Resposta não é JSON válido");
   }
 }
 
 /**
- * Lê velocidade/odômetro de um app na mesma rede Wi-Fi
+ * Lê velocidade/odômetro/GPS de um app na mesma rede Wi-Fi
  * (ex.: http://192.168.0.10:8080/status) por polling.
+ * Útil para receber dados de um app nativo React que captura GPS em background.
  */
-export function useOdometerBridge(intervalMs = 5000) {
+export function useOdometerBridge(
+  intervalMs = 5000,
+  onGps?: (point: { lat: number; lng: number; accuracy?: number }) => void,
+) {
   const [config, setConfig] = useState<BridgeState>(EMPTY);
   const [reading, setReading] = useState<BridgeReading | null>(null);
   const [error, setError] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const onGpsRef = useRef(onGps);
+
+  useEffect(() => {
+    onGpsRef.current = onGps;
+  }, [onGps]);
 
   useEffect(() => {
     setConfig(loadConfig());
@@ -113,6 +145,13 @@ export function useOdometerBridge(intervalMs = 5000) {
       const next = await fetchReading(url);
       setReading(next);
       setError(null);
+      if (next.gps && onGpsRef.current) {
+        onGpsRef.current({
+          lat: next.gps.lat,
+          lng: next.gps.lng,
+          accuracy: next.gps.accuracy,
+        });
+      }
       return next;
     } catch (e) {
       setError(
