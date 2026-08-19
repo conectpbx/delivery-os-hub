@@ -71,7 +71,7 @@ function Financeiro() {
     occurred_at: new Date().toISOString().slice(0, 10),
   });
   const [eff, setEff] = useState("");
-  const [period, setPeriod] = useState<Period>(PERIODS[2]!);
+  const [period, setPeriod] = useState<Period>(PERIODS[3]!);
   const [gps, setGps] = useState(false);
   const { trip, error: tripError, start, finish, reset } = useTripTracker();
   const bridge = useOdometerBridge();
@@ -332,7 +332,7 @@ function Financeiro() {
             </Button>
           </form>
           <ul className="mt-4 divide-y divide-border">
-            {(fuelings.data ?? []).slice(0, 6).map((f) => (
+            {perFuelings.slice(0, 6).map((f) => (
               <li key={f.id} className="flex items-center justify-between gap-2 py-2 text-sm">
                 <span className="text-muted-foreground">
                   {dateLabel(f.occurred_at)} · {num(Number(f.liters))} L · {f.station ?? "posto"}
@@ -346,7 +346,7 @@ function Financeiro() {
               </li>
             ))}
           </ul>
-          {!(fuelings.data ?? []).length ? <EmptyState>Nenhum abastecimento.</EmptyState> : null}
+          {!perFuelings.length ? <EmptyState>Nenhum abastecimento em {period.label.toLowerCase()}.</EmptyState> : null}
         </SectionCard>
 
         <SectionCard title="Nova despesa">
@@ -396,7 +396,7 @@ function Financeiro() {
             </Button>
           </form>
           <ul className="mt-4 divide-y divide-border">
-            {(expenses.data ?? []).slice(0, 6).map((x) => (
+            {perExpenses.slice(0, 6).map((x) => (
               <li key={x.id} className="flex items-center justify-between gap-2 py-2 text-sm">
                 <span className="text-muted-foreground">
                   {dateLabel(x.occurred_at)} · {x.category}
@@ -410,7 +410,7 @@ function Financeiro() {
               </li>
             ))}
           </ul>
-          {!(expenses.data ?? []).length ? <EmptyState>Nenhuma despesa.</EmptyState> : null}
+          {!perExpenses.length ? <EmptyState>Nenhuma despesa em {period.label.toLowerCase()}.</EmptyState> : null}
         </SectionCard>
       </div>
 

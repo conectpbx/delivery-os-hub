@@ -50,7 +50,7 @@ function Relatorios() {
   const fuelings = useFuelings();
   const maintenances = useMaintenances();
   const profile = useProfile();
-  const [period, setPeriod] = useState<Period>(PERIODS[2]!);
+  const [period, setPeriod] = useState<Period>(PERIODS[3]!);
 
   const cpk = costPerKm(fuelings.data ?? [], profile.data);
   const perDeliveries = filterByPeriod(deliveries.data ?? [], (d) => d.occurred_at, period);
