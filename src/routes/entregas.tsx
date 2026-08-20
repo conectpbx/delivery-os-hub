@@ -440,7 +440,7 @@ function Entregas() {
     return [];
   };
 
-  // Base: distância registrada da PRIMEIRA entrega salva do dia.
+  // Base: distância registrada da PRIMEIRA entrega SALVA do dia (inclui "em_rota" / não concluída).
   const first = ordered[0];
   const baseKm = first ? Number(first.distance_km) : 0;
 
@@ -484,7 +484,7 @@ function Entregas() {
             ordered.length <= 1
               ? "Distância da entrega do dia"
               : linkKm != null
-                ? `1ª entrega ${num(baseKm)} km + ${num(linkKm)} km entre os demais pontos${
+                ? `Base 1ª entrega salva ${num(baseKm)} km + ${num(linkKm)} km entre pontos seguintes${
                     emRota ? ` · ${emRota} em andamento` : ""
                   }`
                 : chainPoints.length >= 2
@@ -492,6 +492,7 @@ function Entregas() {
                   : `Soma simples (sem coordenadas): ${num(kmSum)} km`
           }
         />
+
 
 
         <StatCard label="Tempo parado" value={minutesLabel(idle)} tone="warning" />
