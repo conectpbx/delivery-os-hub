@@ -485,13 +485,12 @@ function Entregas() {
     },
   });
 
-  // Total = soma das distâncias reais de cada entrega do dia (o que o entregador
-  // efetivamente rodou em cada corrida). O trajeto encadeado só é usado para
-  // estimar, à parte, o deslocamento vazio entre uma entrega e a próxima.
+  // Total percorrido no dia = soma das distâncias reais de cada entrega
+  // (coleta -> entrega) + deslocamento vazio entre o ponto final de uma
+  // entrega e o ponto inicial da próxima.
   const chainKm = chained.data ?? null;
-  const km = kmSum;
   const deadheadKm = chainKm != null ? Math.max(Math.round((chainKm - kmSum) * 100) / 100, 0) : null;
-
+  const km = Math.round((kmSum + (deadheadKm ?? 0)) * 100) / 100;
 
   const formNav = navigationUrl(stops);
   const filledStops = stops.filter((s) => s.address.trim() || (s.lat != null && s.lng != null));
@@ -507,8 +506,8 @@ function Entregas() {
           label="Distância total"
           value={`${num(km)} km`}
           hint={
-            `Soma de ${today.length} entrega${today.length === 1 ? "" : "s"} do dia` +
-            (deadheadKm ? ` · +${num(deadheadKm)} km entre entregas` : "") +
+            `${num(kmSum)} km nas ${today.length} entrega${today.length === 1 ? "" : "s"} do dia` +
+            (deadheadKm ? ` + ${num(deadheadKm)} km entre entregas` : "") +
             (emRota ? ` · ${emRota} em andamento` : "")
           }
         />
