@@ -485,12 +485,13 @@ function Entregas() {
     },
   });
 
-  // Total percorrido no dia = soma das distâncias reais de cada entrega
-  // (coleta -> entrega) + deslocamento vazio entre o ponto final de uma
-  // entrega e o ponto inicial da próxima.
+  // "Distância total" = somente o deslocamento entre entregas (entre o ponto final
+  // de uma entrega e o ponto inicial da próxima). A soma das distâncias de cada
+  // entrega individual continua disponível no hint como referência.
   const chainKm = chained.data ?? null;
   const deadheadKm = chainKm != null ? Math.max(Math.round((chainKm - kmSum) * 100) / 100, 0) : null;
-  const km = Math.round((kmSum + (deadheadKm ?? 0)) * 100) / 100;
+  const km = deadheadKm ?? 0;
+
 
   const formNav = navigationUrl(stops);
   const filledStops = stops.filter((s) => s.address.trim() || (s.lat != null && s.lng != null));
