@@ -318,6 +318,12 @@ function Entregas() {
         return;
       }
       setRoute(result);
+      // Preenche a distância/tempo automaticamente — não depende mais de tocar em "Aplicar".
+      setForm((f) => ({
+        ...f,
+        distance_km: String(result.distanceKm),
+        duration_min: String(result.durationMin),
+      }));
       toast.success(`Rota: ${num(result.distanceKm)} km · ${minutesLabel(result.durationMin)}`);
     } catch {
       toast.error("Erro ao calcular a rota");
