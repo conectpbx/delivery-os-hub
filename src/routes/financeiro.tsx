@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { LocateFixed, Play, Plug, Square, Trash2 } from "lucide-react";
+import { LocateFixed, Play, Square, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
@@ -20,7 +20,6 @@ import {
 import { brl, dateLabel, num } from "@/lib/format";
 import { nearestFuelStation, reverseGeocodeAddress } from "@/lib/geo";
 import { useTripTracker } from "@/lib/trip-tracker";
-import { isMixedContentBlocked, useOdometerBridge } from "@/lib/odometer-bridge";
 import { avgFuelPrice, costPerKm, filterByRange, summarize } from "@/lib/metrics";
 import { PeriodFilter, PeriodSummary, usePeriodSelection } from "@/components/PeriodFilter";
 import { usePersistentState } from "@/lib/persistent-state";
@@ -74,7 +73,6 @@ function Financeiro() {
   const period = usePeriodSelection(3);
   const [gps, setGps] = useState(false);
   const { trip, error: tripError, start, finish, reset, pushGps } = useTripTracker();
-  const bridge = useOdometerBridge(5000, pushGps);
 
   const cpk = costPerKm(fuelings.data ?? [], profile.data);
   const perDeliveries = filterByRange(deliveries.data ?? [], (d) => d.occurred_at, period.fromDate, period.toDate);
@@ -202,76 +200,6 @@ function Financeiro() {
           {tripError ? ` · GPS: ${tripError}` : ""}
         </p>
 
-        <div className="mt-4 rounded-lg border border-border p-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <Plug className="size-4 text-primary" />
-            <p className="text-sm font-medium">App externo na rede Wi-Fi</p>
-            {bridge.reading ? (
-              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
-                {bridge.reading.odometerKm != null ? `${num(bridge.reading.odometerKm)} km` : "sem odômetro"}
-                {bridge.reading.speedKmh != null ? ` · ${num(bridge.reading.speedKmh)} km/h` : ""}
-                {bridge.reading.gps ? ` · GPS ${num(bridge.reading.gps.lat)}, ${num(bridge.reading.gps.lng)}` : ""}
-              </span>
-            ) : null}
-          </div>
-          <div className="mt-3 flex flex-wrap items-end gap-2">
-            <div className="min-w-0 flex-1 space-y-2">
-              <Label className="text-xs">URL do status (ex.: http://192.168.0.10:8080/status)</Label>
-              <Input
-                inputMode="url"
-                placeholder="http://192.168.0.10:8080/status"
-                value={bridge.config.url}
-                onChange={(e) => bridge.update({ url: e.target.value })}
-              />
-            </div>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={async () => {
-                const url = bridge.config.url.trim();
-                if (!url) {
-                  toast.error("Informe a URL do app");
-                  return;
-                }
-                if (isMixedContentBlocked(url)) {
-                  toast.error("Página HTTPS não consegue ler http:// da rede local", {
-                    description: "Use o app em HTTP local ou habilite HTTPS/túnel no servidor do celular.",
-                  });
-                  return;
-                }
-                const r = await bridge.test(url);
-                if (r) toast.success("Conectado ao app externo");
-              }}
-            >
-              Testar
-            </Button>
-            <Button
-              type="button"
-              variant={bridge.config.enabled ? "destructive" : "default"}
-              onClick={() => bridge.update({ enabled: !bridge.config.enabled })}
-            >
-              {bridge.config.enabled ? "Parar leitura" : "Ler a cada 5s"}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={bridge.reading?.odometerKm == null}
-              onClick={() => {
-                const km = bridge.reading?.odometerKm;
-                if (km == null) return;
-                setFuel((f) => ({ ...f, odometer: String(Math.round(km)) }));
-                toast.success(`Odômetro do app: ${Math.round(km)} km`);
-              }}
-            >
-              Usar no odômetro
-            </Button>
-          </div>
-          <p className="mt-2 text-xs text-muted-foreground">
-            {bridge.error
-              ? `Erro: ${bridge.error}`
-              : "O app do celular precisa responder JSON (ex.: {\"odometer\": 45210, \"speed\": 32, \"lat\": -23.55, \"lng\": -46.63, \"accuracy\": 8}) e liberar CORS (Access-Control-Allow-Origin: *). Se enviar lat/lng, a distância da jornada será calculada automaticamente."}
-          </p>
-        </div>
       </SectionCard>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
