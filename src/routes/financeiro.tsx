@@ -20,7 +20,6 @@ import {
 import { brl, dateLabel, num } from "@/lib/format";
 import { nearestFuelStation, reverseGeocodeAddress } from "@/lib/geo";
 import { useTripTracker } from "@/lib/trip-tracker";
-import { isMixedContentBlocked, useOdometerBridge } from "@/lib/odometer-bridge";
 import { avgFuelPrice, costPerKm, filterByRange, summarize } from "@/lib/metrics";
 import { PeriodFilter, PeriodSummary, usePeriodSelection } from "@/components/PeriodFilter";
 import { usePersistentState } from "@/lib/persistent-state";
@@ -74,7 +73,6 @@ function Financeiro() {
   const period = usePeriodSelection(3);
   const [gps, setGps] = useState(false);
   const { trip, error: tripError, start, finish, reset, pushGps } = useTripTracker();
-  const bridge = useOdometerBridge(5000, pushGps);
 
   const cpk = costPerKm(fuelings.data ?? [], profile.data);
   const perDeliveries = filterByRange(deliveries.data ?? [], (d) => d.occurred_at, period.fromDate, period.toDate);
