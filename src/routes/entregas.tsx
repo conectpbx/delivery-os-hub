@@ -440,17 +440,9 @@ function Entregas() {
     return [];
   };
 
-  // Base: distância registrada da PRIMEIRA entrega SALVA do dia (inclui "em_rota" / não concluída).
-  const first = ordered[0];
-  const baseKm = first ? Number(first.distance_km) : 0;
-
-  // Elo: do último ponto da 1ª entrega em diante, passando por todos os pontos
-  // (coletas e entregas) das demais entregas, na ordem em que ocorreram.
-  const firstPts = first ? pointsOf(first) : [];
-  const chainPoints = [
-    ...(firstPts.length ? [firstPts[firstPts.length - 1]!] : []),
-    ...ordered.slice(1).flatMap(pointsOf),
-  ].filter((p, i, arr) => {
+  // Trajeto acumulado: todos os pontos salvos do dia (coletas e entregas), na ordem
+  // em que foram salvos. A distância é a soma dos trechos consecutivos entre eles.
+  const chainPoints = ordered.flatMap(pointsOf).filter((p, i, arr) => {
     const prev = arr[i - 1];
     if (!prev) return true;
     return Math.abs(prev[0] - p[0]) > 1e-5 || Math.abs(prev[1] - p[1]) > 1e-5;
@@ -465,7 +457,8 @@ function Entregas() {
   });
 
   const linkKm = chained.data ?? null;
-  const km = ordered.length <= 1 ? baseKm : linkKm != null ? baseKm + linkKm : kmSum;
+  const km = linkKm != null ? linkKm : kmSum;
+  const legsCount = Math.max(chainPoints.length - 1, 0);
 
   const formNav = navigationUrl(stops);
   const filledStops = stops.filter((s) => s.address.trim() || (s.lat != null && s.lng != null));
@@ -481,17 +474,16 @@ function Entregas() {
           label="Distância total"
           value={chained.isFetching ? "…" : `${num(km)} km`}
           hint={
-            ordered.length <= 1
-              ? "Distância da entrega do dia"
-              : linkKm != null
-                ? `Base 1ª entrega salva ${num(baseKm)} km + ${num(linkKm)} km entre pontos seguintes${
-                    emRota ? ` · ${emRota} em andamento` : ""
-                  }`
-                : chainPoints.length >= 2
-                  ? "Calculando trajeto entre os pontos…"
-                  : `Soma simples (sem coordenadas): ${num(kmSum)} km`
+            linkKm != null
+              ? `Trajeto acumulado entre ${chainPoints.length} pontos (${legsCount} trecho${
+                  legsCount === 1 ? "" : "s"
+                })${emRota ? ` · ${emRota} em andamento` : ""}`
+              : chainPoints.length >= 2
+                ? "Calculando trajeto entre os pontos…"
+                : `Soma simples (sem coordenadas): ${num(kmSum)} km`
           }
         />
+
 
 
 
