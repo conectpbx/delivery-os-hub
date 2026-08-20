@@ -318,6 +318,12 @@ function Entregas() {
         return;
       }
       setRoute(result);
+      // Preenche a distância/tempo automaticamente — não depende mais de tocar em "Aplicar".
+      setForm((f) => ({
+        ...f,
+        distance_km: String(result.distanceKm),
+        duration_min: String(result.durationMin),
+      }));
       toast.success(`Rota: ${num(result.distanceKm)} km · ${minutesLabel(result.durationMin)}`);
     } catch {
       toast.error("Erro ao calcular a rota");
@@ -335,6 +341,23 @@ function Entregas() {
     }));
     toast.success("Distância e tempo aplicados");
   }
+
+  // Recalcula a rota sozinho sempre que dois ou mais pontos têm coordenadas —
+  // não é mais preciso tocar em "Ver rota" manualmente a cada parada.
+  const coordsKey = stops
+    .filter((s) => s.lat != null && s.lng != null)
+    .map((s) => `${s.lat},${s.lng}`)
+    .join("|");
+
+  useEffect(() => {
+    const withCoords = stops.filter((s) => s.lat != null && s.lng != null);
+    if (withCoords.length < 2) return;
+    const timer = setTimeout(() => {
+      void previewRoute();
+    }, 500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coordsKey]);
 
   function applyLeg(index: number) {
     const leg = route?.legs[index];
