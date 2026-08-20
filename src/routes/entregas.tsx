@@ -441,11 +441,14 @@ function Entregas() {
   };
 
   // Trajeto acumulado: todos os pontos salvos do dia (coletas e entregas), na ordem
-  // em que foram salvos. A distância é a soma dos trechos consecutivos entre eles.
-  const chainPoints = ordered.flatMap(pointsOf).filter((p, i, arr) => {
-    const prev = arr[i - 1];
-    if (!prev) return true;
-    return Math.abs(prev[0] - p[0]) > 1e-5 || Math.abs(prev[1] - p[1]) > 1e-5;
+  // em que foram salvos. Pontos repetidos (mesmo local salvo mais de uma vez, por
+  // exemplo ao reeditar uma entrega "em rota") são ignorados para não inflar o total.
+  const seen = new Set<string>();
+  const chainPoints = ordered.flatMap(pointsOf).filter((p) => {
+    const key = `${p[0].toFixed(4)},${p[1].toFixed(4)}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
   });
 
   const chainKey = chainPoints.map(([a, b]) => `${a.toFixed(5)},${b.toFixed(5)}`).join("|");
@@ -453,12 +456,39 @@ function Entregas() {
     queryKey: ["chained-km", chainKey],
     enabled: chainPoints.length >= 2,
     staleTime: 5 * 60 * 1000,
-    queryFn: async () => (await fetchRoute(chainPoints))?.distanceKm ?? null,
+    queryFn: async () => {
+      const r = await fetchRoute(chainPoints);
+      if (!r) return null;
+      // Sanidade: descarta trechos absurdos (GPS impreciso ou endereço errado),
+      // limitando cada trecho a um máximo plausível vs. a distância em linha reta.
+      const hav = (a: [number, number], b: [number, number]) => {
+        const R = 6371;
+        const dLat = ((b[0] - a[0]) * Math.PI) / 180;
+        const dLng = ((b[1] - a[1]) * Math.PI) / 180;
+        const lat1 = (a[0] * Math.PI) / 180;
+        const lat2 = (b[0] * Math.PI) / 180;
+        const h =
+          Math.sin(dLat / 2) ** 2 + Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
+        return 2 * R * Math.asin(Math.sqrt(h));
+      };
+      if (!r.legs.length) return r.distanceKm;
+      let sum = 0;
+      r.legs.forEach((leg, i) => {
+        const a = chainPoints[i];
+        const b = chainPoints[i + 1];
+        if (!a || !b) return;
+        const straight = hav(a, b);
+        const cap = straight * 2.5 + 2;
+        sum += Math.min(leg.distanceKm, cap);
+      });
+      return Math.round(sum * 100) / 100;
+    },
   });
 
   const linkKm = chained.data ?? null;
   const km = linkKm != null ? linkKm : kmSum;
   const legsCount = Math.max(chainPoints.length - 1, 0);
+
 
   const formNav = navigationUrl(stops);
   const filledStops = stops.filter((s) => s.address.trim() || (s.lat != null && s.lng != null));
