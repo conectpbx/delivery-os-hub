@@ -507,8 +507,8 @@ function Entregas() {
           label="Distância total"
           value={`${num(km)} km`}
           hint={
-            `${num(kmSum)} km nas ${today.length} entrega${today.length === 1 ? "" : "s"} do dia` +
-            (deadheadKm ? ` + ${num(deadheadKm)} km entre entregas` : "") +
+            `${num(deadheadKm ?? 0)} km entre entregas` +
+            (today.length ? ` · ${num(kmSum)} km nas ${today.length} entrega${today.length === 1 ? "" : "s"} do dia` : "") +
             (emRota ? ` · ${emRota} em andamento` : "")
           }
         />
