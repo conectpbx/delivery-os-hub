@@ -342,6 +342,23 @@ function Entregas() {
     toast.success("Distância e tempo aplicados");
   }
 
+  // Recalcula a rota sozinho sempre que dois ou mais pontos têm coordenadas —
+  // não é mais preciso tocar em "Ver rota" manualmente a cada parada.
+  const coordsKey = stops
+    .filter((s) => s.lat != null && s.lng != null)
+    .map((s) => `${s.lat},${s.lng}`)
+    .join("|");
+
+  useEffect(() => {
+    const withCoords = stops.filter((s) => s.lat != null && s.lng != null);
+    if (withCoords.length < 2) return;
+    const timer = setTimeout(() => {
+      void previewRoute();
+    }, 500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coordsKey]);
+
   function applyLeg(index: number) {
     const leg = route?.legs[index];
     if (!leg) return;
