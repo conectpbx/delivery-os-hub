@@ -485,9 +485,12 @@ function Entregas() {
     },
   });
 
-  const linkKm = chained.data ?? null;
-  const km = linkKm != null ? linkKm : kmSum;
-  const legsCount = Math.max(chainPoints.length - 1, 0);
+  // Total = soma das distâncias reais de cada entrega do dia (o que o entregador
+  // efetivamente rodou em cada corrida). O trajeto encadeado só é usado para
+  // estimar, à parte, o deslocamento vazio entre uma entrega e a próxima.
+  const chainKm = chained.data ?? null;
+  const km = kmSum;
+  const deadheadKm = chainKm != null ? Math.max(Math.round((chainKm - kmSum) * 100) / 100, 0) : null;
 
 
   const formNav = navigationUrl(stops);
@@ -502,17 +505,14 @@ function Entregas() {
         <StatCard label="Total recebido" value={brl(total)} tone="primary" />
         <StatCard
           label="Distância total"
-          value={chained.isFetching ? "…" : `${num(km)} km`}
+          value={`${num(km)} km`}
           hint={
-            linkKm != null
-              ? `Trajeto acumulado entre ${chainPoints.length} pontos (${legsCount} trecho${
-                  legsCount === 1 ? "" : "s"
-                })${emRota ? ` · ${emRota} em andamento` : ""}`
-              : chainPoints.length >= 2
-                ? "Calculando trajeto entre os pontos…"
-                : `Soma simples (sem coordenadas): ${num(kmSum)} km`
+            `Soma de ${today.length} entrega${today.length === 1 ? "" : "s"} do dia` +
+            (deadheadKm ? ` · +${num(deadheadKm)} km entre entregas` : "") +
+            (emRota ? ` · ${emRota} em andamento` : "")
           }
         />
+
 
 
 
