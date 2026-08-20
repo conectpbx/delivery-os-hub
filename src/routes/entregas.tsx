@@ -493,9 +493,6 @@ function Entregas() {
   const km = Math.round((kmSum + (deadheadKm ?? 0)) * 100) / 100;
 
   const formNav = navigationUrl(stops);
-
-
-  const formNav = navigationUrl(stops);
   const filledStops = stops.filter((s) => s.address.trim() || (s.lat != null && s.lng != null));
   const lastStop = filledStops[filledStops.length - 1];
   const hasFinalPoint = filledStops.length >= 2 && !!lastStop && lastStop.kind === "entrega";
