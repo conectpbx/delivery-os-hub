@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Suspense, lazy, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { GripVertical, MapPin, Navigation, Plus, Route as RouteIcon, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
@@ -18,8 +19,11 @@ import {
   useUpdate,
   useUpdateApp,
 } from "@/lib/data";
+import type { Delivery } from "@/lib/data";
+
 import { brl, dateTimeLabel, minutesLabel, num } from "@/lib/format";
-import { fetchRoute, geocodeAddress, navigationUrl, newStop, type RouteResult, type Stop } from "@/lib/geo";
+import { fetchRouteWithFallback, geocodeAddress, navigationUrl, newStop, type RouteResult, type Stop } from "@/lib/geo";
+import { usePersistentState } from "@/lib/persistent-state";
 
 const RouteMap = lazy(() => import("@/components/RouteMap"));
 
@@ -70,17 +74,23 @@ function Entregas() {
   const [addingApp, setAddingApp] = useState(false);
   const [newAppName, setNewAppName] = useState("");
   const [newAppFee, setNewAppFee] = useState("");
-  const [stops, setStops] = useState<Stop[]>(() => [newStop("coleta"), newStop("entrega")]);
+  const [stops, setStops] = usePersistentState<Stop[]>("entregas.stops", [
+    newStop("coleta"),
+    newStop("entrega"),
+  ]);
   const [route, setRoute] = useState<RouteResult | null>(null);
   const [showRoute, setShowRoute] = useState(false);
   const [routing, setRouting] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [finishing, setFinishing] = useState<{ id: string; stops: Stop[] } | null>(null);
+  const [finishing, setFinishing] = usePersistentState<{
+    id: string;
+    stops: Stop[];
+  } | null>("entregas.finishing", null);
   const [finishGeo, setFinishGeo] = useState<string | null>(null);
   const [histRange, setHistRange] = useState<"hoje" | "7d" | "30d" | "tudo">("hoje");
 
 
-  const [form, setForm] = useState({
+  const [form, setForm] = usePersistentState("entregas.form", {
     app_name: "",
     earnings: "",
     fee_percent: "",
@@ -90,6 +100,7 @@ function Entregas() {
     duration_min: "",
     idle_min: "",
   });
+
 
   useEffect(() => setMounted(true), []);
 
@@ -203,6 +214,21 @@ function Entregas() {
       f ? { ...f, stops: f.stops.map((s) => (s.id === stopId ? { ...s, ...values } : s)) } : f,
     );
 
+  /** Grava os pontos já informados na entrega em rota (sem concluir). */
+  async function persistFinishStops(id: string, raw: StoredStop[], list2: Stop[]) {
+    const filled = list2
+      .filter((s) => s.address.trim() || (s.lat != null && s.lng != null))
+      .map((s) => ({ kind: s.kind, address: s.address.trim(), lat: s.lat, lng: s.lng }));
+    if (!filled.length) return false;
+    await updateDelivery.mutateAsync({
+      id,
+      values: { stops: [...raw, ...filled], status: "em_rota" },
+    });
+    return true;
+  }
+
+
+
   function captureFinishGps(stopId: string) {
     if (!("geolocation" in navigator)) {
       toast.error("GPS indisponível neste dispositivo");
@@ -243,7 +269,7 @@ function Entregas() {
   /** Resolve endereços e devolve distância/tempo totais encadeados (ponto a ponto). */
   async function routeTotals(
     pts: { address: string; lat: number | null; lng: number | null }[],
-  ): Promise<{ distanceKm: number; durationMin: number; pts: typeof pts } | null> {
+  ): Promise<{ distanceKm: number; durationMin: number; pts: typeof pts; approximate: boolean } | null> {
     const resolved: typeof pts = [];
     for (const s of pts) {
       if (s.lat != null && s.lng != null) {
@@ -258,9 +284,14 @@ function Entregas() {
       .filter((s) => s.lat != null && s.lng != null)
       .map((s) => [s.lat!, s.lng!] as [number, number]);
     if (coords.length < 2) return null;
-    const r = await fetchRoute(coords);
+    const r = await fetchRouteWithFallback(coords);
     if (!r) return null;
-    return { distanceKm: r.distanceKm, durationMin: r.durationMin, pts: resolved };
+    return {
+      distanceKm: r.distanceKm,
+      durationMin: r.durationMin,
+      pts: resolved,
+      approximate: !!r.approximate,
+    };
   }
 
   async function previewRoute() {
@@ -286,13 +317,23 @@ function Entregas() {
         patchStop(s.id, hit);
         resolved.push({ ...s, ...hit });
       }
-      const result = await fetchRoute(resolved.map((s) => [s.lat!, s.lng!] as [number, number]));
+      const result = await fetchRouteWithFallback(resolved.map((s) => [s.lat!, s.lng!] as [number, number]));
       if (!result) {
-        toast.error("Não foi possível traçar a rota agora");
+        toast.error("Não foi possível calcular a distância agora — verifique sua conexão e tente de novo.");
         return;
       }
       setRoute(result);
-      toast.success(`Rota: ${num(result.distanceKm)} km · ${minutesLabel(result.durationMin)}`);
+      // Preenche a distância/tempo automaticamente — não depende mais de tocar em "Aplicar".
+      setForm((f) => ({
+        ...f,
+        distance_km: String(result.distanceKm),
+        duration_min: String(result.durationMin),
+      }));
+      if (result.approximate) {
+        toast.message(`Distância aproximada (linha reta): ${num(result.distanceKm)} km · rota por ruas indisponível agora`);
+      } else {
+        toast.success(`Rota: ${num(result.distanceKm)} km · ${minutesLabel(result.durationMin)}`);
+      }
     } catch {
       toast.error("Erro ao calcular a rota");
     } finally {
@@ -309,6 +350,23 @@ function Entregas() {
     }));
     toast.success("Distância e tempo aplicados");
   }
+
+  // Recalcula a rota sozinho sempre que dois ou mais pontos têm coordenadas —
+  // não é mais preciso tocar em "Ver rota" manualmente a cada parada.
+  const coordsKey = stops
+    .filter((s) => s.lat != null && s.lng != null)
+    .map((s) => `${s.lat},${s.lng}`)
+    .join("|");
+
+  useEffect(() => {
+    const withCoords = stops.filter((s) => s.lat != null && s.lng != null);
+    if (withCoords.length < 2) return;
+    const timer = setTimeout(() => {
+      void previewRoute();
+    }, 500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coordsKey]);
 
   function applyLeg(index: number) {
     const leg = route?.legs[index];
@@ -394,21 +452,106 @@ function Entregas() {
   const data = all.filter((d) => new Date(d.occurred_at).getTime() >= rangeStart);
 
   const total = today.reduce((s, d) => s + Number(d.earnings) + Number(d.tip), 0);
-  const km = today.reduce((s, d) => s + Number(d.distance_km), 0);
+  const kmSum = today.reduce((s, d) => s + Number(d.distance_km), 0);
   const idle = today.reduce((s, d) => s + Number(d.idle_min), 0);
+
+  const emRota = today.filter(
+    (d) => (d as unknown as { status?: string }).status === "em_rota",
+  ).length;
+
+  // Ordem cronológica das entregas do dia.
+  const ordered = [...today].sort(
+    (a, b) => new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime(),
+  );
+  const pointsOf = (d: Delivery): [number, number][] => {
+    const st = ((d as unknown as { stops?: StoredStop[] }).stops ?? []).filter(
+      (s) => s.lat != null && s.lng != null,
+    );
+    if (st.length) return st.map((s) => [s.lat as number, s.lng as number] as [number, number]);
+    if (d.lat != null && d.lng != null) return [[d.lat, d.lng] as [number, number]];
+    return [];
+  };
+
+  // Trajeto acumulado: todos os pontos salvos do dia (coletas e entregas), na ordem
+  // em que foram salvos. Pontos repetidos (mesmo local salvo mais de uma vez, por
+  // exemplo ao reeditar uma entrega "em rota") são ignorados para não inflar o total.
+  const seen = new Set<string>();
+  const chainPoints = ordered.flatMap(pointsOf).filter((p) => {
+    const key = `${p[0].toFixed(4)},${p[1].toFixed(4)}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  const chainKey = chainPoints.map(([a, b]) => `${a.toFixed(5)},${b.toFixed(5)}`).join("|");
+  const chained = useQuery({
+    queryKey: ["chained-km", chainKey],
+    enabled: chainPoints.length >= 2,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const r = await fetchRouteWithFallback(chainPoints);
+      if (!r) return null;
+      // Sanidade: descarta trechos absurdos (GPS impreciso ou endereço errado),
+      // limitando cada trecho a um máximo plausível vs. a distância em linha reta.
+      const hav = (a: [number, number], b: [number, number]) => {
+        const R = 6371;
+        const dLat = ((b[0] - a[0]) * Math.PI) / 180;
+        const dLng = ((b[1] - a[1]) * Math.PI) / 180;
+        const lat1 = (a[0] * Math.PI) / 180;
+        const lat2 = (b[0] * Math.PI) / 180;
+        const h =
+          Math.sin(dLat / 2) ** 2 + Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
+        return 2 * R * Math.asin(Math.sqrt(h));
+      };
+      if (!r.legs.length) return r.distanceKm;
+      let sum = 0;
+      r.legs.forEach((leg: { distanceKm: number }, i: number) => {
+        const a = chainPoints[i];
+        const b = chainPoints[i + 1];
+        if (!a || !b) return;
+        const straight = hav(a, b);
+        const cap = straight * 2.5 + 2;
+        sum += Math.min(leg.distanceKm, cap);
+      });
+      return Math.round(sum * 100) / 100;
+    },
+  });
+
+  // "Distância total" = somente o deslocamento entre entregas (entre o ponto final
+  // de uma entrega e o ponto inicial da próxima). A soma das distâncias de cada
+  // entrega individual continua disponível no hint como referência.
+  const chainKm = chained.data ?? null;
+  const deadheadKm = chainKm != null ? Math.max(Math.round((chainKm - kmSum) * 100) / 100, 0) : null;
+  const km = deadheadKm ?? 0;
+
 
   const formNav = navigationUrl(stops);
   const filledStops = stops.filter((s) => s.address.trim() || (s.lat != null && s.lng != null));
   const lastStop = filledStops[filledStops.length - 1];
   const hasFinalPoint = filledStops.length >= 2 && !!lastStop && lastStop.kind === "entrega";
 
+
   return (
     <AppShell title="Entregas" subtitle="Registro de corridas, rota no mapa e navegação">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatCard label="Total recebido" value={brl(total)} tone="primary" />
-        <StatCard label="Distância total" value={`${num(km)} km`} />
+        <StatCard
+          label="Distância total"
+          value={`${num(km)} km`}
+          hint={
+            `${num(deadheadKm ?? 0)} km entre entregas` +
+            (today.length ? ` · ${num(kmSum)} km nas ${today.length} entrega${today.length === 1 ? "" : "s"} do dia` : "") +
+            (emRota ? ` · ${emRota} em andamento` : "")
+          }
+        />
+
+
+
+
+
         <StatCard label="Tempo parado" value={minutesLabel(idle)} tone="warning" />
       </div>
+
 
       <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-[380px_minmax(0,1fr)] [&>*]:min-w-0">
         <SectionCard title="Nova entrega" description="Preencha após finalizar a corrida">
@@ -942,14 +1085,33 @@ function Entregas() {
                               size="sm"
                               variant="outline"
                               className="w-full"
-                              onClick={() =>
-                                setFinishing((f) =>
-                                  f ? { ...f, stops: [...f.stops, newStop("entrega")] } : f,
-                                )
-                              }
+                              disabled={updateDelivery.isPending}
+                              onClick={async () => {
+                                try {
+                                  const saved = await persistFinishStops(
+                                    d.id,
+                                    raw,
+                                    finishing.stops,
+                                  );
+                                  setFinishing((f) =>
+                                    f
+                                      ? {
+                                          ...f,
+                                          stops: saved
+                                            ? [newStop("entrega")]
+                                            : [...f.stops, newStop("entrega")],
+                                        }
+                                      : f,
+                                  );
+                                  if (saved) toast.success("Ponto anterior salvo na rota");
+                                } catch {
+                                  toast.error("Erro ao salvar o ponto anterior");
+                                }
+                              }}
                             >
                               <Plus className="mr-1 size-4" /> Adicionar ponto
                             </Button>
+
                             <div className="flex gap-2">
                               <Button
                                 type="button"
@@ -980,6 +1142,10 @@ function Entregas() {
                                       routed = totals.pts as typeof allPts;
                                       extra.distance_km = totals.distanceKm;
                                       extra.duration_min = totals.durationMin;
+                                    } else {
+                                      toast.error(
+                                        "Não foi possível calcular a distância desta entrega — verifique se os pontos têm endereço ou GPS preenchido e tente novamente.",
+                                      );
                                     }
                                     await updateDelivery.mutateAsync({
                                       id: d.id,
@@ -992,7 +1158,13 @@ function Entregas() {
                                     });
 
                                     setFinishing(null);
-                                    toast.success("Rota concluída");
+                                    if (totals?.approximate) {
+                                      toast.message(
+                                        `Rota concluída — distância aproximada (linha reta), o serviço de rota por ruas estava indisponível. ${num(totals.distanceKm)} km`,
+                                      );
+                                    } else {
+                                      toast.success("Rota concluída");
+                                    }
                                   } catch {
                                     toast.error("Erro ao salvar a rota");
                                   }
@@ -1000,6 +1172,33 @@ function Entregas() {
                               >
                                 Concluir
                               </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="secondary"
+                                disabled={
+                                  !finishing.stops.some((s) => s.address.trim()) ||
+                                  updateDelivery.isPending
+                                }
+                                onClick={async () => {
+                                  try {
+                                    const saved = await persistFinishStops(
+                                      d.id,
+                                      raw,
+                                      finishing.stops,
+                                    );
+                                    if (saved) {
+                                      setFinishing({ id: d.id, stops: [newStop("entrega")] });
+                                      toast.success("Pontos salvos — entrega segue em rota");
+                                    }
+                                  } catch {
+                                    toast.error("Erro ao salvar os pontos");
+                                  }
+                                }}
+                              >
+                                Salvar pontos
+                              </Button>
+
                               <Button
                                 type="button"
                                 size="sm"

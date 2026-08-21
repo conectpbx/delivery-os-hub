@@ -120,3 +120,39 @@ export function heatmap(deliveries: Delivery[]) {
   const max = Math.max(...grid.flat(), 1);
   return { grid, max };
 }
+
+export const PERIODS = [
+  { key: "1", label: "Hoje", days: 1 },
+  { key: "7", label: "Semanal", days: 7 },
+  { key: "15", label: "Quinzenal", days: 15 },
+  { key: "30", label: "Mensal", days: 30 },
+  { key: "all", label: "Tudo", days: 0 },
+] as const;
+
+export type Period = (typeof PERIODS)[number];
+
+export function periodRange(period: Period) {
+  const to = endOfDay();
+  const from = period.days
+    ? startOfDay(new Date(Date.now() - (period.days - 1) * 86400000))
+    : new Date(0);
+  return { from, to };
+}
+
+export function filterByPeriod<T>(items: T[], key: (item: T) => string, period: Period) {
+  const { from, to } = periodRange(period);
+  return items.filter((i) => inRange(key(i), from, to));
+}
+
+export function filterByRange<T>(items: T[], key: (item: T) => string, from: Date, to: Date) {
+  return items.filter((i) => inRange(key(i), from, to));
+}
+
+
+export function costsByCategory(expenses: Expense[]) {
+  const map = new Map<string, number>();
+  for (const e of expenses) map.set(e.category, (map.get(e.category) ?? 0) + Number(e.amount));
+  return [...map.entries()]
+    .map(([category, amount]) => ({ category, amount }))
+    .sort((a, b) => b.amount - a.amount);
+}

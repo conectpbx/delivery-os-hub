@@ -1,14 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { Suspense, lazy, useMemo, useState } from "react";
+
+const RevenueAreaChart = lazy(() => import("@/components/charts/RevenueAreaChart"));
 import { Banknote, Fuel, Gauge, Timer, TrendingUp } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
@@ -21,6 +14,7 @@ import {
   useProfile,
 } from "@/lib/data";
 import { brl, dateLabel, dateTimeLabel, minutesLabel, num } from "@/lib/format";
+import { useGoalCelebrations } from "@/lib/celebrate";
 import { byApp, costPerKm, endOfDay, heatmap, inRange, startOfDay, summarize } from "@/lib/metrics";
 
 export const Route = createFileRoute("/dashboard")({
@@ -91,6 +85,16 @@ function Dashboard() {
     cpk,
   ).revenue;
 
+  useGoalCelebrations([
+    {
+      id: `diaria-${new Date().toISOString().slice(0, 10)}-receita`,
+      label: "Meta diária de receita",
+      value: todayRevenue,
+      target: dailyGoal,
+    },
+  ]);
+
+
   return (
     <AppShell
       title="Dashboard"
@@ -158,46 +162,9 @@ function Dashboard() {
         <SectionCard title="Receita x lucro real" description="Evolução diária" className="lg:col-span-2">
           {series.some((d) => d.receita > 0) ? (
             <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={series} margin={{ left: -18, right: 8, top: 8 }}>
-                  <defs>
-                    <linearGradient id="r" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="var(--color-chart-1)" stopOpacity={0.4} />
-                      <stop offset="100%" stopColor="var(--color-chart-1)" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="l" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="var(--color-chart-2)" stopOpacity={0.4} />
-                      <stop offset="100%" stopColor="var(--color-chart-2)" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
-                  <XAxis dataKey="day" tickLine={false} axisLine={false} fontSize={11} />
-                  <YAxis tickLine={false} axisLine={false} fontSize={11} width={56} />
-                  <Tooltip
-                    formatter={(v: number) => brl(v)}
-                    contentStyle={{
-                      background: "var(--color-popover)",
-                      border: "1px solid var(--color-border)",
-                      borderRadius: 12,
-                      fontSize: 12,
-                    }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="receita"
-                    stroke="var(--color-chart-1)"
-                    fill="url(#r)"
-                    strokeWidth={2}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="lucro"
-                    stroke="var(--color-chart-2)"
-                    fill="url(#l)"
-                    strokeWidth={2}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+              <Suspense fallback={<div className="size-full animate-pulse rounded-md bg-muted" />}>
+                <RevenueAreaChart data={series} />
+              </Suspense>
             </div>
           ) : (
             <EmptyState>Registre entregas para ver a evolução.</EmptyState>

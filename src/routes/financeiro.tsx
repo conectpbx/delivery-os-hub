@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Trash2 } from "lucide-react";
+import { LocateFixed, Play, Square, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
@@ -17,8 +17,12 @@ import {
   useRemove,
   useUpsertProfile,
 } from "@/lib/data";
-import { brl, dateLabel, num } from "@/lib/format";
-import { avgFuelPrice, costPerKm, summarize } from "@/lib/metrics";
+import { brl, dateLabel, dec, num } from "@/lib/format";
+import { nearestFuelStation, reverseGeocodeAddress } from "@/lib/geo";
+import { useTripTracker } from "@/lib/trip-tracker";
+import { avgFuelPrice, costPerKm, filterByRange, summarize } from "@/lib/metrics";
+import { PeriodFilter, PeriodSummary, usePeriodSelection } from "@/components/PeriodFilter";
+import { usePersistentState } from "@/lib/persistent-state";
 
 export const Route = createFileRoute("/financeiro")({
   head: () => ({
@@ -53,52 +57,227 @@ function Financeiro() {
   const delFuel = useRemove("fuelings", "fuelings");
   const delExpense = useRemove("expenses", "expenses");
 
-  const [fuel, setFuel] = useState({ liters: "", price_per_liter: "", odometer: "", station: "" });
-  const [exp, setExp] = useState({ category: CATEGORIES[0]!, description: "", amount: "" });
+  const [fuel, setFuel] = usePersistentState("financeiro.fuel", {
+    liters: "",
+    price_per_liter: "",
+    odometer: "",
+    station: "",
+    occurred_at: new Date().toISOString().slice(0, 10),
+  });
+  const [exp, setExp] = usePersistentState("financeiro.expense", {
+    category: CATEGORIES[0]!,
+    description: "",
+    amount: "",
+    occurred_at: new Date().toISOString().slice(0, 10),
+  });
   const [eff, setEff] = useState("");
+  const period = usePeriodSelection(3);
+  const [gps, setGps] = useState(false);
+  const { trip, error: tripError, start, finish, reset, pushGps } = useTripTracker();
 
   const cpk = costPerKm(fuelings.data ?? [], profile.data);
-  const s = summarize(deliveries.data ?? [], expenses.data ?? [], maintenances.data ?? [], cpk);
-  const fuelTotal = (fuelings.data ?? []).reduce((a, f) => a + Number(f.total), 0);
+  const perDeliveries = filterByRange(deliveries.data ?? [], (d) => d.occurred_at, period.fromDate, period.toDate);
+  const perExpenses = filterByRange(expenses.data ?? [], (e) => e.occurred_at, period.fromDate, period.toDate);
+  const perMaint = filterByRange(maintenances.data ?? [], (m) => m.performed_at, period.fromDate, period.toDate);
+  const perFuelings = filterByRange(fuelings.data ?? [], (f) => f.occurred_at, period.fromDate, period.toDate);
+  const s = summarize(perDeliveries, perExpenses, perMaint, cpk);
+  const fuelTotal = perFuelings.reduce((a, f) => a + Number(f.total), 0);
+  const lastOdometer = (fuelings.data ?? []).find((f) => f.odometer != null)?.odometer ?? null;
+  const estimatedOdometer =
+    lastOdometer != null ? Math.round(Number(lastOdometer) + trip.distanceKm) : null;
+
+  async function captureStation() {
+    if (!navigator.geolocation) {
+      toast.error("GPS indisponível");
+      return;
+    }
+
+    setGps(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { latitude: lat, longitude: lng } = pos.coords;
+          const station = await nearestFuelStation(lat, lng);
+          if (station) {
+            setFuel((f) => ({ ...f, station }));
+            toast.success(`Posto: ${station}`);
+          } else {
+            const place = await reverseGeocodeAddress(lat, lng);
+            setFuel((f) => ({ ...f, station: place?.address ?? "" }));
+            toast.message("Posto não identificado", { description: "Usei o endereço atual." });
+          }
+        } catch {
+          toast.error("Não consegui identificar o posto");
+        } finally {
+          setGps(false);
+        }
+      },
+      (err) => {
+        setGps(false);
+        toast.error(err.message);
+      },
+      { enableHighAccuracy: true, timeout: 15000 },
+    );
+  }
+
 
   return (
-    <AppShell title="Financeiro" subtitle="Abastecimento, despesas e lucro real">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Receita total" value={brl(s.revenue)} tone="primary" />
-        <StatCard label="Lucro real" value={brl(s.profit)} tone={s.profit >= 0 ? "success" : "destructive"} />
+    <AppShell
+      title="Financeiro"
+      subtitle={`Abastecimento, despesas e lucro real · ${period.label}`}
+      actions={
+        <PeriodFilter selection={period} />
+      }
+    >
+      <PeriodSummary selection={period} />
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Receita total"
+          value={brl(s.revenue)}
+          hint={`${s.count} entregas no período`}
+          tone="primary"
+        />
+        <StatCard
+          label="Lucro real"
+          value={brl(s.profit)}
+          hint={`Custos ${brl(s.fuelCost + s.otherCost + s.maintenanceCost)}`}
+          tone={s.profit >= 0 ? "success" : "destructive"}
+        />
         <StatCard label="Gasto com combustível" value={brl(fuelTotal)} hint={`Média ${brl(avgFuelPrice(fuelings.data ?? []))}/L`} />
         <StatCard label="Custo por km" value={brl(cpk)} hint={`${num(Number(profile.data?.fuel_efficiency ?? 12))} km/L`} />
       </div>
 
+      <SectionCard
+        className="mt-4"
+        title="Jornada por GPS"
+        description="Inicie no começo do dia e finalize no fim — a quilometragem é somada automaticamente"
+      >
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="min-w-0">
+            <p className="text-2xl font-semibold tabular-nums">{num(trip.distanceKm)} km</p>
+            <p className="truncate text-xs text-muted-foreground">
+              {trip.active
+                ? `Capturando ${trip.source === "external" ? "via app nativo" : "via GPS do navegador"} desde ${dateLabel(trip.startedAt ?? new Date().toISOString())} · ${trip.points} pontos`
+                : trip.endedAt
+                  ? `Jornada finalizada · ${trip.points} pontos`
+                  : "Nenhuma jornada em andamento"}
+            </p>
+          </div>
+          <div className="ml-auto flex flex-wrap gap-2">
+            {trip.active ? (
+              <Button variant="destructive" onClick={finish}>
+                <Square className="mr-2 size-4" /> Finalizar
+              </Button>
+            ) : (
+              <Button onClick={start}>
+                <Play className="mr-2 size-4" /> Iniciar jornada
+              </Button>
+            )}
+            <Button
+              variant="secondary"
+              disabled={trip.distanceKm <= 0}
+              onClick={() => {
+                if (estimatedOdometer == null) {
+                  toast.error("Registre um abastecimento com odômetro para usar como base");
+                  return;
+                }
+                setFuel((f) => ({ ...f, odometer: String(estimatedOdometer) }));
+                toast.success(`Odômetro estimado: ${estimatedOdometer} km`);
+              }}
+            >
+              Preencher odômetro
+            </Button>
+            {trip.distanceKm > 0 && !trip.active ? (
+              <Button variant="ghost" onClick={reset}>
+                Zerar
+              </Button>
+            ) : null}
+          </div>
+        </div>
+        <p className="mt-3 text-xs text-muted-foreground">
+          {lastOdometer != null
+            ? `Base: ${num(Number(lastOdometer))} km do último abastecimento → estimativa ${num(estimatedOdometer ?? 0)} km.`
+            : "Informe o odômetro em um abastecimento para servir de base ao cálculo."}
+          {tripError ? ` · GPS: ${tripError}` : ""}
+        </p>
+
+      </SectionCard>
+
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
+
         <SectionCard title="Novo abastecimento">
           <form
             className="grid grid-cols-2 gap-3"
             onSubmit={async (e) => {
               e.preventDefault();
-              const liters = Number(fuel.liters || 0);
-              const price = Number(fuel.price_per_liter || 0);
-              await addFuel.mutateAsync({
-                liters,
-                price_per_liter: price,
-                total: liters * price,
-                odometer: fuel.odometer ? Number(fuel.odometer) : null,
-                station: fuel.station || null,
-              });
-              setFuel({ liters: "", price_per_liter: "", odometer: "", station: "" });
-              toast.success("Abastecimento registrado");
+              const liters = dec(fuel.liters);
+              const price = dec(fuel.price_per_liter);
+              const odometer = fuel.odometer ? dec(fuel.odometer) : null;
+              if (liters <= 0 || price <= 0) {
+                toast.error("Informe litros e R$/litro maiores que zero");
+                return;
+              }
+              try {
+                await addFuel.mutateAsync({
+                  liters,
+                  price_per_liter: price,
+                  total: Number((liters * price).toFixed(2)),
+                  odometer,
+                  station: fuel.station || null,
+                  occurred_at: new Date(`${fuel.occurred_at || new Date().toISOString().slice(0, 10)}T12:00:00`).toISOString(),
+                });
+                setFuel({
+                  liters: "",
+                  price_per_liter: "",
+                  odometer: "",
+                  station: "",
+                  occurred_at: new Date().toISOString().slice(0, 10),
+                });
+                toast.success("Abastecimento registrado");
+              } catch (err) {
+                toast.error(
+                  err instanceof Error ? err.message : "Não foi possível salvar o abastecimento",
+                );
+              }
             }}
           >
             <Text label="Litros" value={fuel.liters} onChange={(v) => setFuel({ ...fuel, liters: v })} />
             <Text label="R$/litro" value={fuel.price_per_liter} onChange={(v) => setFuel({ ...fuel, price_per_liter: v })} />
             <Text label="Odômetro" value={fuel.odometer} onChange={(v) => setFuel({ ...fuel, odometer: v })} />
-            <Text label="Posto" value={fuel.station} onChange={(v) => setFuel({ ...fuel, station: v })} />
+            <div className="space-y-2">
+              <Label className="text-xs">Data</Label>
+              <Input
+                type="date"
+                value={fuel.occurred_at ?? ""}
+                onChange={(e) => setFuel({ ...fuel, occurred_at: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs">Posto</Label>
+              <div className="flex gap-2">
+                <Input
+                  className="min-w-0"
+                  value={fuel.station}
+                  onChange={(e) => setFuel({ ...fuel, station: e.target.value })}
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  aria-label="Capturar posto por GPS"
+                  disabled={gps}
+                  onClick={() => void captureStation()}
+                >
+                  <LocateFixed className="size-4" />
+                </Button>
+              </div>
+            </div>
             <Button type="submit" className="col-span-2">
               Salvar abastecimento
             </Button>
           </form>
           <ul className="mt-4 divide-y divide-border">
-            {(fuelings.data ?? []).slice(0, 6).map((f) => (
+            {perFuelings.slice(0, 6).map((f) => (
               <li key={f.id} className="flex items-center justify-between gap-2 py-2 text-sm">
                 <span className="text-muted-foreground">
                   {dateLabel(f.occurred_at)} · {num(Number(f.liters))} L · {f.station ?? "posto"}
@@ -112,7 +291,7 @@ function Financeiro() {
               </li>
             ))}
           </ul>
-          {!(fuelings.data ?? []).length ? <EmptyState>Nenhum abastecimento.</EmptyState> : null}
+          {!perFuelings.length ? <EmptyState>Nenhum abastecimento em {period.label.toLowerCase()}.</EmptyState> : null}
         </SectionCard>
 
         <SectionCard title="Nova despesa">
@@ -123,9 +302,15 @@ function Financeiro() {
               await addExpense.mutateAsync({
                 category: exp.category,
                 description: exp.description || null,
-                amount: Number(exp.amount || 0),
+                amount: dec(exp.amount),
+                occurred_at: exp.occurred_at,
               });
-              setExp({ category: CATEGORIES[0]!, description: "", amount: "" });
+              setExp({
+                category: CATEGORIES[0]!,
+                description: "",
+                amount: "",
+                occurred_at: new Date().toISOString().slice(0, 10),
+              });
               toast.success("Despesa registrada");
             }}
           >
@@ -141,6 +326,14 @@ function Financeiro() {
                 ))}
               </select>
             </div>
+            <div className="col-span-2 space-y-2">
+              <Label className="text-xs">Data</Label>
+              <Input
+                type="date"
+                value={exp.occurred_at}
+                onChange={(e) => setExp({ ...exp, occurred_at: e.target.value })}
+              />
+            </div>
             <Text label="Valor (R$)" value={exp.amount} onChange={(v) => setExp({ ...exp, amount: v })} />
             <Text label="Descrição" value={exp.description} onChange={(v) => setExp({ ...exp, description: v })} />
             <Button type="submit" className="col-span-2">
@@ -148,7 +341,7 @@ function Financeiro() {
             </Button>
           </form>
           <ul className="mt-4 divide-y divide-border">
-            {(expenses.data ?? []).slice(0, 6).map((x) => (
+            {perExpenses.slice(0, 6).map((x) => (
               <li key={x.id} className="flex items-center justify-between gap-2 py-2 text-sm">
                 <span className="text-muted-foreground">
                   {dateLabel(x.occurred_at)} · {x.category}
@@ -162,7 +355,7 @@ function Financeiro() {
               </li>
             ))}
           </ul>
-          {!(expenses.data ?? []).length ? <EmptyState>Nenhuma despesa.</EmptyState> : null}
+          {!perExpenses.length ? <EmptyState>Nenhuma despesa em {period.label.toLowerCase()}.</EmptyState> : null}
         </SectionCard>
       </div>
 

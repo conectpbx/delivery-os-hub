@@ -68,6 +68,9 @@ export default defineConfig({
     preset: "node-server",
   },
   vite: {
+    optimizeDeps: {
+      exclude: ["@tanstack/start-client-core"],
+    },
     plugins: [pwaServiceWorkerPlugin()],
   },
 });
