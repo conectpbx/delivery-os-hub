@@ -94,30 +94,80 @@ export async function nearestFuelStation(lat: number, lng: number) {
 /** Rota real por ruas usando o OSRM público (gratuito). */
 export async function fetchRoute(points: [number, number][]): Promise<RouteResult | null> {
   if (points.length < 2) return null;
-  const path = points.map(([lat, lng]) => `${lng},${lat}`).join(";");
-  const res = await fetch(
-    `https://router.project-osrm.org/route/v1/driving/${path}?overview=full&geometries=geojson`,
-  );
-  if (!res.ok) return null;
-  const json = (await res.json()) as {
-    routes?: Array<{
-      distance: number;
-      duration: number;
-      geometry: { coordinates: [number, number][] };
-      legs?: Array<{ distance: number; duration: number }>;
-    }>;
-  };
-  const route = json.routes?.[0];
-  if (!route) return null;
+  try {
+    const path = points.map(([lat, lng]) => `${lng},${lat}`).join(";");
+    const res = await fetch(
+      `https://router.project-osrm.org/route/v1/driving/${path}?overview=full&geometries=geojson`,
+    );
+    if (!res.ok) return null;
+    const json = (await res.json()) as {
+      routes?: Array<{
+        distance: number;
+        duration: number;
+        geometry: { coordinates: [number, number][] };
+        legs?: Array<{ distance: number; duration: number }>;
+      }>;
+    };
+    const route = json.routes?.[0];
+    if (!route) return null;
+    return {
+      distanceKm: Math.round((route.distance / 1000) * 100) / 100,
+      durationMin: Math.round(route.duration / 60),
+      coords: route.geometry.coordinates.map(([lng, lat]) => [lat, lng] as [number, number]),
+      points,
+      legs: (route.legs ?? []).map((l) => ({
+        distanceKm: Math.round((l.distance / 1000) * 100) / 100,
+        durationMin: Math.round(l.duration / 60),
+      })),
+    };
+  } catch {
+    // Servidor de rota público indisponível/instável — quem chamar deve usar o reserva (linha reta).
+    return null;
+  }
+}
+
+/** Distância em linha reta entre dois pontos (Haversine), em km. */
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.asin(Math.sqrt(a));
+}
+
+/**
+ * Rota com reserva: tenta a rota real (OSRM); se o serviço público falhar
+ * (fora do ar, instável, limite de uso), cai para a distância em linha reta
+ * multiplicada por um fator de correção (ruas raramente são retas),
+ * para nunca deixar a entrega salva com 0 km por causa de uma falha externa.
+ */
+export async function fetchRouteWithFallback(
+  points: [number, number][],
+): Promise<(RouteResult & { approximate?: boolean }) | null> {
+  const real = await fetchRoute(points);
+  if (real) return real;
+  if (points.length < 2) return null;
+
+  const STRAIGHT_LINE_CORRECTION = 1.3; // ruas curvam; compensação típica urbana
+  let totalKm = 0;
+  const legs: RouteLeg[] = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const [lat1, lng1] = points[i]!;
+    const [lat2, lng2] = points[i + 1]!;
+    const km = Math.round(haversineKm(lat1, lng1, lat2, lng2) * STRAIGHT_LINE_CORRECTION * 100) / 100;
+    legs.push({ distanceKm: km, durationMin: Math.round((km / 30) * 60) }); // estimativa a 30 km/h
+    totalKm += km;
+  }
   return {
-    distanceKm: Math.round((route.distance / 1000) * 100) / 100,
-    durationMin: Math.round(route.duration / 60),
-    coords: route.geometry.coordinates.map(([lng, lat]) => [lat, lng] as [number, number]),
+    distanceKm: Math.round(totalKm * 100) / 100,
+    durationMin: legs.reduce((s, l) => s + l.durationMin, 0),
+    coords: points,
     points,
-    legs: (route.legs ?? []).map((l) => ({
-      distanceKm: Math.round((l.distance / 1000) * 100) / 100,
-      durationMin: Math.round(l.duration / 60),
-    })),
+    legs,
+    approximate: true,
   };
 }
 

@@ -22,7 +22,7 @@ import {
 import type { Delivery } from "@/lib/data";
 
 import { brl, dateTimeLabel, minutesLabel, num } from "@/lib/format";
-import { fetchRoute, geocodeAddress, navigationUrl, newStop, type RouteResult, type Stop } from "@/lib/geo";
+import { fetchRouteWithFallback, geocodeAddress, navigationUrl, newStop, type RouteResult, type Stop } from "@/lib/geo";
 import { usePersistentState } from "@/lib/persistent-state";
 
 const RouteMap = lazy(() => import("@/components/RouteMap"));
@@ -269,7 +269,7 @@ function Entregas() {
   /** Resolve endereços e devolve distância/tempo totais encadeados (ponto a ponto). */
   async function routeTotals(
     pts: { address: string; lat: number | null; lng: number | null }[],
-  ): Promise<{ distanceKm: number; durationMin: number; pts: typeof pts } | null> {
+  ): Promise<{ distanceKm: number; durationMin: number; pts: typeof pts; approximate: boolean } | null> {
     const resolved: typeof pts = [];
     for (const s of pts) {
       if (s.lat != null && s.lng != null) {
@@ -284,9 +284,14 @@ function Entregas() {
       .filter((s) => s.lat != null && s.lng != null)
       .map((s) => [s.lat!, s.lng!] as [number, number]);
     if (coords.length < 2) return null;
-    const r = await fetchRoute(coords);
+    const r = await fetchRouteWithFallback(coords);
     if (!r) return null;
-    return { distanceKm: r.distanceKm, durationMin: r.durationMin, pts: resolved };
+    return {
+      distanceKm: r.distanceKm,
+      durationMin: r.durationMin,
+      pts: resolved,
+      approximate: !!r.approximate,
+    };
   }
 
   async function previewRoute() {
@@ -312,9 +317,9 @@ function Entregas() {
         patchStop(s.id, hit);
         resolved.push({ ...s, ...hit });
       }
-      const result = await fetchRoute(resolved.map((s) => [s.lat!, s.lng!] as [number, number]));
+      const result = await fetchRouteWithFallback(resolved.map((s) => [s.lat!, s.lng!] as [number, number]));
       if (!result) {
-        toast.error("Não foi possível traçar a rota agora");
+        toast.error("Não foi possível calcular a distância agora — verifique sua conexão e tente de novo.");
         return;
       }
       setRoute(result);
@@ -324,7 +329,11 @@ function Entregas() {
         distance_km: String(result.distanceKm),
         duration_min: String(result.durationMin),
       }));
-      toast.success(`Rota: ${num(result.distanceKm)} km · ${minutesLabel(result.durationMin)}`);
+      if (result.approximate) {
+        toast.message(`Distância aproximada (linha reta): ${num(result.distanceKm)} km · rota por ruas indisponível agora`);
+      } else {
+        toast.success(`Rota: ${num(result.distanceKm)} km · ${minutesLabel(result.durationMin)}`);
+      }
     } catch {
       toast.error("Erro ao calcular a rota");
     } finally {
@@ -480,7 +489,7 @@ function Entregas() {
     enabled: chainPoints.length >= 2,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const r = await fetchRoute(chainPoints);
+      const r = await fetchRouteWithFallback(chainPoints);
       if (!r) return null;
       // Sanidade: descarta trechos absurdos (GPS impreciso ou endereço errado),
       // limitando cada trecho a um máximo plausível vs. a distância em linha reta.
@@ -496,7 +505,7 @@ function Entregas() {
       };
       if (!r.legs.length) return r.distanceKm;
       let sum = 0;
-      r.legs.forEach((leg, i) => {
+      r.legs.forEach((leg: { distanceKm: number }, i: number) => {
         const a = chainPoints[i];
         const b = chainPoints[i + 1];
         if (!a || !b) return;
@@ -1133,6 +1142,10 @@ function Entregas() {
                                       routed = totals.pts as typeof allPts;
                                       extra.distance_km = totals.distanceKm;
                                       extra.duration_min = totals.durationMin;
+                                    } else {
+                                      toast.error(
+                                        "Não foi possível calcular a distância desta entrega — verifique se os pontos têm endereço ou GPS preenchido e tente novamente.",
+                                      );
                                     }
                                     await updateDelivery.mutateAsync({
                                       id: d.id,
@@ -1145,7 +1158,13 @@ function Entregas() {
                                     });
 
                                     setFinishing(null);
-                                    toast.success("Rota concluída");
+                                    if (totals?.approximate) {
+                                      toast.message(
+                                        `Rota concluída — distância aproximada (linha reta), o serviço de rota por ruas estava indisponível. ${num(totals.distanceKm)} km`,
+                                      );
+                                    } else {
+                                      toast.success("Rota concluída");
+                                    }
                                   } catch {
                                     toast.error("Erro ao salvar a rota");
                                   }
