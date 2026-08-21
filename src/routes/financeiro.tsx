@@ -224,7 +224,7 @@ function Financeiro() {
                   total: Number((liters * price).toFixed(2)),
                   odometer,
                   station: fuel.station || null,
-                  occurred_at: new Date(`${fuel.occurred_at}T12:00:00`).toISOString(),
+                  occurred_at: new Date(`${fuel.occurred_at || new Date().toISOString().slice(0, 10)}T12:00:00`).toISOString(),
                 });
                 setFuel({
                   liters: "",
@@ -248,7 +248,7 @@ function Financeiro() {
               <Label className="text-xs">Data</Label>
               <Input
                 type="date"
-                value={fuel.occurred_at}
+                value={fuel.occurred_at ?? ""}
                 onChange={(e) => setFuel({ ...fuel, occurred_at: e.target.value })}
               />
             </div>
