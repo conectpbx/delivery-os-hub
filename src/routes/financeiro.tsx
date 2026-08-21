@@ -62,6 +62,7 @@ function Financeiro() {
     price_per_liter: "",
     odometer: "",
     station: "",
+    occurred_at: new Date().toISOString().slice(0, 10),
   });
   const [exp, setExp] = usePersistentState("financeiro.expense", {
     category: CATEGORIES[0]!,
