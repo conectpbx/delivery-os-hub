@@ -29,6 +29,9 @@ export default defineConfig({
         devOptions: { enabled: false },
         manifest: false,
         workbox: {
+          cleanupOutdatedCaches: true,
+          clientsClaim: true,
+          skipWaiting: true,
           globPatterns: ["**/*.{js,css,html,svg,png,ico,woff2}"],
           navigateFallback: "/dashboard",
           navigateFallbackDenylist: [/^\/~oauth/, /^\/api\//, /^\/_serverFn\//],

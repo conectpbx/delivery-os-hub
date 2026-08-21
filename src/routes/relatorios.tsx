@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Suspense, lazy } from "react";
+
+const MonthsBarChart = lazy(() => import("@/components/charts/MonthsBarChart"));
 import { FileDown, Printer } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
@@ -176,24 +178,9 @@ function Relatorios() {
       <SectionCard className="mt-4" title="Comparação entre meses" description="Receita x lucro real">
         {chart.length ? (
           <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chart} margin={{ left: -18, right: 8, top: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
-                <XAxis dataKey="mes" tickLine={false} axisLine={false} fontSize={11} />
-                <YAxis tickLine={false} axisLine={false} fontSize={11} width={56} />
-                <Tooltip
-                  formatter={(v: number) => brl(v)}
-                  contentStyle={{
-                    background: "var(--color-popover)",
-                    border: "1px solid var(--color-border)",
-                    borderRadius: 12,
-                    fontSize: 12,
-                  }}
-                />
-                <Bar dataKey="receita" fill="var(--color-chart-1)" radius={[6, 6, 0, 0]} />
-                <Bar dataKey="lucro" fill="var(--color-chart-2)" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <Suspense fallback={<div className="size-full animate-pulse rounded-md bg-muted" />}>
+              <MonthsBarChart data={chart} />
+            </Suspense>
           </div>
         ) : (
           <EmptyState>Sem dados suficientes para comparar meses.</EmptyState>

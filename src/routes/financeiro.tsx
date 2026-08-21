@@ -17,7 +17,7 @@ import {
   useRemove,
   useUpsertProfile,
 } from "@/lib/data";
-import { brl, dateLabel, num } from "@/lib/format";
+import { brl, dateLabel, dec, num } from "@/lib/format";
 import { nearestFuelStation, reverseGeocodeAddress } from "@/lib/geo";
 import { useTripTracker } from "@/lib/trip-tracker";
 import { avgFuelPrice, costPerKm, filterByRange, summarize } from "@/lib/metrics";
@@ -62,6 +62,7 @@ function Financeiro() {
     price_per_liter: "",
     odometer: "",
     station: "",
+    occurred_at: new Date().toISOString().slice(0, 10),
   });
   const [exp, setExp] = usePersistentState("financeiro.expense", {
     category: CATEGORIES[0]!,
@@ -209,22 +210,48 @@ function Financeiro() {
             className="grid grid-cols-2 gap-3"
             onSubmit={async (e) => {
               e.preventDefault();
-              const liters = Number(fuel.liters || 0);
-              const price = Number(fuel.price_per_liter || 0);
-              await addFuel.mutateAsync({
-                liters,
-                price_per_liter: price,
-                total: liters * price,
-                odometer: fuel.odometer ? Number(fuel.odometer) : null,
-                station: fuel.station || null,
-              });
-              setFuel({ liters: "", price_per_liter: "", odometer: "", station: "" });
-              toast.success("Abastecimento registrado");
+              const liters = dec(fuel.liters);
+              const price = dec(fuel.price_per_liter);
+              const odometer = fuel.odometer ? dec(fuel.odometer) : null;
+              if (liters <= 0 || price <= 0) {
+                toast.error("Informe litros e R$/litro maiores que zero");
+                return;
+              }
+              try {
+                await addFuel.mutateAsync({
+                  liters,
+                  price_per_liter: price,
+                  total: Number((liters * price).toFixed(2)),
+                  odometer,
+                  station: fuel.station || null,
+                  occurred_at: new Date(`${fuel.occurred_at || new Date().toISOString().slice(0, 10)}T12:00:00`).toISOString(),
+                });
+                setFuel({
+                  liters: "",
+                  price_per_liter: "",
+                  odometer: "",
+                  station: "",
+                  occurred_at: new Date().toISOString().slice(0, 10),
+                });
+                toast.success("Abastecimento registrado");
+              } catch (err) {
+                toast.error(
+                  err instanceof Error ? err.message : "Não foi possível salvar o abastecimento",
+                );
+              }
             }}
           >
             <Text label="Litros" value={fuel.liters} onChange={(v) => setFuel({ ...fuel, liters: v })} />
             <Text label="R$/litro" value={fuel.price_per_liter} onChange={(v) => setFuel({ ...fuel, price_per_liter: v })} />
             <Text label="Odômetro" value={fuel.odometer} onChange={(v) => setFuel({ ...fuel, odometer: v })} />
+            <div className="space-y-2">
+              <Label className="text-xs">Data</Label>
+              <Input
+                type="date"
+                value={fuel.occurred_at ?? ""}
+                onChange={(e) => setFuel({ ...fuel, occurred_at: e.target.value })}
+              />
+            </div>
             <div className="space-y-2">
               <Label className="text-xs">Posto</Label>
               <div className="flex gap-2">
@@ -275,7 +302,7 @@ function Financeiro() {
               await addExpense.mutateAsync({
                 category: exp.category,
                 description: exp.description || null,
-                amount: Number(String(exp.amount).replace(",", ".") || 0),
+                amount: dec(exp.amount),
                 occurred_at: exp.occurred_at,
               });
               setExp({
