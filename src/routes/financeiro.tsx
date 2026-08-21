@@ -17,7 +17,7 @@ import {
   useRemove,
   useUpsertProfile,
 } from "@/lib/data";
-import { brl, dateLabel, num } from "@/lib/format";
+import { brl, dateLabel, dec, num } from "@/lib/format";
 import { nearestFuelStation, reverseGeocodeAddress } from "@/lib/geo";
 import { useTripTracker } from "@/lib/trip-tracker";
 import { avgFuelPrice, costPerKm, filterByRange, summarize } from "@/lib/metrics";
