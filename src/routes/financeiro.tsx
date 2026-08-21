@@ -302,7 +302,7 @@ function Financeiro() {
               await addExpense.mutateAsync({
                 category: exp.category,
                 description: exp.description || null,
-                amount: Number(String(exp.amount).replace(",", ".") || 0),
+                amount: dec(exp.amount),
                 occurred_at: exp.occurred_at,
               });
               setExp({
