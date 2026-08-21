@@ -1142,6 +1142,10 @@ function Entregas() {
                                       routed = totals.pts as typeof allPts;
                                       extra.distance_km = totals.distanceKm;
                                       extra.duration_min = totals.durationMin;
+                                    } else {
+                                      toast.error(
+                                        "Não foi possível calcular a distância desta entrega — verifique se os pontos têm endereço ou GPS preenchido e tente novamente.",
+                                      );
                                     }
                                     await updateDelivery.mutateAsync({
                                       id: d.id,
@@ -1154,7 +1158,13 @@ function Entregas() {
                                     });
 
                                     setFinishing(null);
-                                    toast.success("Rota concluída");
+                                    if (totals?.approximate) {
+                                      toast.message(
+                                        `Rota concluída — distância aproximada (linha reta), o serviço de rota por ruas estava indisponível. ${num(totals.distanceKm)} km`,
+                                      );
+                                    } else {
+                                      toast.success("Rota concluída");
+                                    }
                                   } catch {
                                     toast.error("Erro ao salvar a rota");
                                   }
