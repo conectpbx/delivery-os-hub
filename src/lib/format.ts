@@ -57,10 +57,20 @@ export function downloadCsv(filename: string, rows: (string | number)[][]) {
   URL.revokeObjectURL(url);
 }
 
-/** Converte texto com vírgula decimal (pt-BR) em número. */
+/** Converte texto com vírgula decimal (pt-BR) ou ponto decimal em número. */
 export function dec(v: string | number | null | undefined): number {
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
   if (!v) return 0;
-  const n = Number(String(v).replace(/\s/g, "").replace(/\./g, "").replace(",", "."));
+  let s = String(v).trim().replace(/[^\d.,-]/g, "");
+  if (s.includes(",")) {
+    // vírgula é o separador decimal → pontos são milhar
+    s = s.replace(/\./g, "").replace(",", ".");
+  } else {
+    // sem vírgula: ponto só é milhar se houver grupos de 3 dígitos (ex.: 1.234.567)
+    const isThousands = /^-?\d{1,3}(\.\d{3})+$/.test(s);
+    if (isThousands) s = s.replace(/\./g, "");
+  }
+  const n = Number(s);
   return Number.isFinite(n) ? n : 0;
 }
+
