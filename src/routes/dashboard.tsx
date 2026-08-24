@@ -98,6 +98,14 @@ function Dashboard() {
     },
   ]);
 
+  const smartAlerts = useSmartAlerts({
+    deliveries: deliveries.data ?? [],
+    fuelings: fuelings.data ?? [],
+    maintenances: maintenances.data ?? [],
+    expenses: expenses.data ?? [],
+    goals: goals.data ?? [],
+    profile: profile.data,
+  });
 
   return (
     <AppShell
