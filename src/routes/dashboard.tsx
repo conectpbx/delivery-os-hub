@@ -5,16 +5,19 @@ const RevenueAreaChart = lazy(() => import("@/components/charts/RevenueAreaChart
 import { Banknote, Fuel, Gauge, Timer, TrendingUp } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
+import { SmartAlerts } from "@/components/SmartAlerts";
 import { Button } from "@/components/ui/button";
 import {
   useDeliveries,
   useExpenses,
   useFuelings,
+  useGoals,
   useMaintenances,
   useProfile,
 } from "@/lib/data";
 import { brl, dateLabel, dateTimeLabel, minutesLabel, num } from "@/lib/format";
 import { useGoalCelebrations } from "@/lib/celebrate";
+import { useSmartAlerts } from "@/lib/alerts";
 import { byApp, costPerKm, endOfDay, heatmap, inRange, startOfDay, summarize } from "@/lib/metrics";
 
 export const Route = createFileRoute("/dashboard")({
@@ -51,6 +54,7 @@ function Dashboard() {
   const expenses = useExpenses();
   const maintenances = useMaintenances();
   const profile = useProfile();
+  const goals = useGoals();
 
   const cpk = costPerKm(fuelings.data ?? [], profile.data);
   const to = endOfDay();
@@ -94,6 +98,14 @@ function Dashboard() {
     },
   ]);
 
+  const smartAlerts = useSmartAlerts({
+    deliveries: deliveries.data ?? [],
+    fuelings: fuelings.data ?? [],
+    maintenances: maintenances.data ?? [],
+    expenses: expenses.data ?? [],
+    goals: goals.data ?? [],
+    profile: profile.data,
+  });
 
   return (
     <AppShell
@@ -156,6 +168,10 @@ function Dashboard() {
         <StatCard label="Ticket médio" value={brl(s.count ? s.revenue / s.count : 0)} />
         <StatCard label="Meta de hoje" value={`${num((todayRevenue / dailyGoal) * 100, 0)}%`} hint={brl(todayRevenue)} />
         <StatCard label="Manutenção no período" value={brl(s.maintenanceCost)} />
+      </div>
+
+      <div className="mt-4">
+        <SmartAlerts alerts={smartAlerts} />
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
