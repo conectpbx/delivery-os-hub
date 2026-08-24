@@ -170,6 +170,10 @@ function Dashboard() {
         <StatCard label="Manutenção no período" value={brl(s.maintenanceCost)} />
       </div>
 
+      <div className="mt-4">
+        <SmartAlerts alerts={smartAlerts} />
+      </div>
+
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <SectionCard title="Receita x lucro real" description="Evolução diária" className="lg:col-span-2">
           {series.some((d) => d.receita > 0) ? (
