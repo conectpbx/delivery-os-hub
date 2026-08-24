@@ -54,6 +54,7 @@ function Dashboard() {
   const expenses = useExpenses();
   const maintenances = useMaintenances();
   const profile = useProfile();
+  const goals = useGoals();
 
   const cpk = costPerKm(fuelings.data ?? [], profile.data);
   const to = endOfDay();
