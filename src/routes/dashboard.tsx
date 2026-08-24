@@ -5,16 +5,19 @@ const RevenueAreaChart = lazy(() => import("@/components/charts/RevenueAreaChart
 import { Banknote, Fuel, Gauge, Timer, TrendingUp } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
+import { SmartAlerts } from "@/components/SmartAlerts";
 import { Button } from "@/components/ui/button";
 import {
   useDeliveries,
   useExpenses,
   useFuelings,
+  useGoals,
   useMaintenances,
   useProfile,
 } from "@/lib/data";
 import { brl, dateLabel, dateTimeLabel, minutesLabel, num } from "@/lib/format";
 import { useGoalCelebrations } from "@/lib/celebrate";
+import { useSmartAlerts } from "@/lib/alerts";
 import { byApp, costPerKm, endOfDay, heatmap, inRange, startOfDay, summarize } from "@/lib/metrics";
 
 export const Route = createFileRoute("/dashboard")({
