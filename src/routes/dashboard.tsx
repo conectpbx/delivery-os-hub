@@ -19,6 +19,8 @@ import { brl, dateLabel, dateTimeLabel, minutesLabel, num } from "@/lib/format";
 import { useGoalCelebrations } from "@/lib/celebrate";
 import { useSmartAlerts } from "@/lib/alerts";
 import { byApp, costPerKm, endOfDay, heatmap, inRange, startOfDay, summarize } from "@/lib/metrics";
+import { useChainedDistance } from "@/lib/chained-distance";
+
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -89,7 +91,9 @@ function Dashboard() {
     [periodDeliveries, periodExpenses, periodMaint, cpk],
   );
   const ranking = useMemo(() => byApp(periodDeliveries, cpk), [periodDeliveries, cpk]);
+  const { km: betweenKm } = useChainedDistance(periodDeliveries);
   const { grid, max } = useMemo(() => heatmap(deliveriesData), [deliveriesData]);
+
 
   const series = useMemo(() => {
     const days: { day: string; receita: number; lucro: number }[] = [];
