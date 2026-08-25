@@ -461,70 +461,11 @@ function Entregas() {
     (d) => (d as unknown as { status?: string }).status === "em_rota",
   ).length;
 
-  // Ordem cronológica das entregas do dia.
-  const ordered = [...today].sort(
-    (a, b) => new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime(),
-  );
-  const pointsOf = (d: Delivery): [number, number][] => {
-    const st = ((d as unknown as { stops?: StoredStop[] }).stops ?? []).filter(
-      (s) => s.lat != null && s.lng != null,
-    );
-    if (st.length) return st.map((s) => [s.lat as number, s.lng as number] as [number, number]);
-    if (d.lat != null && d.lng != null) return [[d.lat, d.lng] as [number, number]];
-    return [];
-  };
-
-  // Trajeto acumulado: todos os pontos salvos do dia (coletas e entregas), na ordem
-  // em que foram salvos. Pontos repetidos (mesmo local salvo mais de uma vez, por
-  // exemplo ao reeditar uma entrega "em rota") são ignorados para não inflar o total.
-  const seen = new Set<string>();
-  const chainPoints = ordered.flatMap(pointsOf).filter((p) => {
-    const key = `${p[0].toFixed(4)},${p[1].toFixed(4)}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-
-  const chainKey = chainPoints.map(([a, b]) => `${a.toFixed(5)},${b.toFixed(5)}`).join("|");
-  const chained = useQuery({
-    queryKey: ["chained-km", chainKey],
-    enabled: chainPoints.length >= 2,
-    staleTime: 5 * 60 * 1000,
-    queryFn: async () => {
-      const r = await fetchRouteWithFallback(chainPoints);
-      if (!r) return null;
-      // Sanidade: descarta trechos absurdos (GPS impreciso ou endereço errado),
-      // limitando cada trecho a um máximo plausível vs. a distância em linha reta.
-      const hav = (a: [number, number], b: [number, number]) => {
-        const R = 6371;
-        const dLat = ((b[0] - a[0]) * Math.PI) / 180;
-        const dLng = ((b[1] - a[1]) * Math.PI) / 180;
-        const lat1 = (a[0] * Math.PI) / 180;
-        const lat2 = (b[0] * Math.PI) / 180;
-        const h =
-          Math.sin(dLat / 2) ** 2 + Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
-        return 2 * R * Math.asin(Math.sqrt(h));
-      };
-      if (!r.legs.length) return r.distanceKm;
-      let sum = 0;
-      r.legs.forEach((leg: { distanceKm: number }, i: number) => {
-        const a = chainPoints[i];
-        const b = chainPoints[i + 1];
-        if (!a || !b) return;
-        const straight = hav(a, b);
-        const cap = straight * 2.5 + 2;
-        sum += Math.min(leg.distanceKm, cap);
-      });
-      return Math.round(sum * 100) / 100;
-    },
-  });
-
   // "Distância total" = somente o deslocamento entre entregas (entre o ponto final
   // de uma entrega e o ponto inicial da próxima). A soma das distâncias de cada
   // entrega individual continua disponível no hint como referência.
-  const chainKm = chained.data ?? null;
-  const deadheadKm = chainKm != null ? Math.max(Math.round((chainKm - kmSum) * 100) / 100, 0) : null;
-  const km = deadheadKm ?? 0;
+  const { deadheadKm, km } = useChainedDistance(today);
+
 
 
   const formNav = navigationUrl(stops);
