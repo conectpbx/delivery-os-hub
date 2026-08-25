@@ -36,6 +36,8 @@ export const Route = createFileRoute("/metas")({
         property: "og:description",
         content: "Metas diárias e mensais para o entregador bater seus objetivos.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: Metas,

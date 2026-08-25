@@ -24,6 +24,8 @@ export const Route = createFileRoute("/manutencao")({
         property: "og:description",
         content: "Histórico e lembretes de manutenção da sua moto ou carro de entrega.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: Manutencao,

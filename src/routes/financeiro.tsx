@@ -38,6 +38,8 @@ export const Route = createFileRoute("/financeiro")({
         property: "og:description",
         content: "Abastecimento, despesas e custo por quilômetro do entregador.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: Financeiro,
