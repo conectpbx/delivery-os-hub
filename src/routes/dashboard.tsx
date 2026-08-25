@@ -175,10 +175,17 @@ function Dashboard() {
         />
         <StatCard
           label="Quilometragem"
-          value={`${num(s.distance)} km`}
-          hint={`${brl(s.perKm)} por km rodado`}
+          value={`${num(betweenKm)} km`}
+          hint={
+            `${num(betweenKm)} km entre entregas` +
+            (periodDeliveries.length
+              ? ` · ${num(s.distance)} km nas ${periodDeliveries.length} entrega${periodDeliveries.length === 1 ? "" : "s"}`
+              : "") +
+            ` · ${brl(s.perKm)} por km rodado`
+          }
           icon={<Gauge className="size-4" />}
         />
+
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-3 xl:grid-cols-4">
