@@ -56,16 +56,38 @@ function Dashboard() {
   const profile = useProfile();
   const goals = useGoals();
 
-  const cpk = costPerKm(fuelings.data ?? [], profile.data);
-  const to = endOfDay();
-  const from = startOfDay(new Date(Date.now() - (range.days - 1) * 86400000));
+  const deliveriesData = useMemo(() => deliveries.data ?? [], [deliveries.data]);
+  const expensesData = useMemo(() => expenses.data ?? [], [expenses.data]);
+  const fuelingsData = useMemo(() => fuelings.data ?? [], [fuelings.data]);
+  const maintenancesData = useMemo(() => maintenances.data ?? [], [maintenances.data]);
 
-  const periodDeliveries = (deliveries.data ?? []).filter((d) => inRange(d.occurred_at, from, to));
-  const periodExpenses = (expenses.data ?? []).filter((e) => inRange(e.occurred_at, from, to));
-  const periodMaint = (maintenances.data ?? []).filter((m) => inRange(m.performed_at, from, to));
-  const s = summarize(periodDeliveries, periodExpenses, periodMaint, cpk);
-  const ranking = byApp(periodDeliveries, cpk);
-  const { grid, max } = useMemo(() => heatmap(deliveries.data ?? []), [deliveries.data]);
+  const cpk = useMemo(() => costPerKm(fuelingsData, profile.data), [fuelingsData, profile.data]);
+  const { from, to } = useMemo(() => {
+    const now = Date.now();
+    return {
+      from: startOfDay(new Date(now - (range.days - 1) * 86400000)),
+      to: endOfDay(new Date(now)),
+    };
+  }, [range.days]);
+
+  const periodDeliveries = useMemo(
+    () => deliveriesData.filter((d) => inRange(d.occurred_at, from, to)),
+    [deliveriesData, from, to],
+  );
+  const periodExpenses = useMemo(
+    () => expensesData.filter((e) => inRange(e.occurred_at, from, to)),
+    [expensesData, from, to],
+  );
+  const periodMaint = useMemo(
+    () => maintenancesData.filter((m) => inRange(m.performed_at, from, to)),
+    [maintenancesData, from, to],
+  );
+  const s = useMemo(
+    () => summarize(periodDeliveries, periodExpenses, periodMaint, cpk),
+    [periodDeliveries, periodExpenses, periodMaint, cpk],
+  );
+  const ranking = useMemo(() => byApp(periodDeliveries, cpk), [periodDeliveries, cpk]);
+  const { grid, max } = useMemo(() => heatmap(deliveriesData), [deliveriesData]);
 
   const series = useMemo(() => {
     const days: { day: string; receita: number; lucro: number }[] = [];
@@ -73,17 +95,17 @@ function Dashboard() {
       const d = new Date(Date.now() - i * 86400000);
       const dayFrom = startOfDay(d);
       const dayTo = endOfDay(d);
-      const dd = (deliveries.data ?? []).filter((x) => inRange(x.occurred_at, dayFrom, dayTo));
-      const de = (expenses.data ?? []).filter((x) => inRange(x.occurred_at, dayFrom, dayTo));
+      const dd = deliveriesData.filter((x) => inRange(x.occurred_at, dayFrom, dayTo));
+      const de = expensesData.filter((x) => inRange(x.occurred_at, dayFrom, dayTo));
       const sum = summarize(dd, de, [], cpk);
       days.push({ day: dateLabel(d.toISOString()), receita: sum.revenue, lucro: sum.profit });
     }
     return days;
-  }, [deliveries.data, expenses.data, cpk, range.days]);
+  }, [deliveriesData, expensesData, cpk, range.days]);
 
   const dailyGoal = Number(profile.data?.daily_goal ?? 200);
   const todayRevenue = summarize(
-    (deliveries.data ?? []).filter((d) => inRange(d.occurred_at, startOfDay(), endOfDay())),
+    deliveriesData.filter((d) => inRange(d.occurred_at, startOfDay(), endOfDay())),
     [],
     [],
     cpk,
@@ -99,10 +121,10 @@ function Dashboard() {
   ]);
 
   const smartAlerts = useSmartAlerts({
-    deliveries: deliveries.data ?? [],
-    fuelings: fuelings.data ?? [],
-    maintenances: maintenances.data ?? [],
-    expenses: expenses.data ?? [],
+    deliveries: deliveriesData,
+    fuelings: fuelingsData,
+    maintenances: maintenancesData,
+    expenses: expensesData,
     goals: goals.data ?? [],
     profile: profile.data,
   });
@@ -166,7 +188,11 @@ function Dashboard() {
           icon={<Timer className="size-4" />}
         />
         <StatCard label="Ticket médio" value={brl(s.count ? s.revenue / s.count : 0)} />
-        <StatCard label="Meta de hoje" value={`${num((todayRevenue / dailyGoal) * 100, 0)}%`} hint={brl(todayRevenue)} />
+        <StatCard
+          label="Meta de hoje"
+          value={`${num((todayRevenue / dailyGoal) * 100, 0)}%`}
+          hint={brl(todayRevenue)}
+        />
         <StatCard label="Manutenção no período" value={brl(s.maintenanceCost)} />
       </div>
 
@@ -175,7 +201,11 @@ function Dashboard() {
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
-        <SectionCard title="Receita x lucro real" description="Evolução diária" className="lg:col-span-2">
+        <SectionCard
+          title="Receita x lucro real"
+          description="Evolução diária"
+          className="lg:col-span-2"
+        >
           {series.some((d) => d.receita > 0) ? (
             <div className="h-64">
               <Suspense fallback={<div className="size-full animate-pulse rounded-md bg-muted" />}>
@@ -243,9 +273,9 @@ function Dashboard() {
         </SectionCard>
 
         <SectionCard title="Histórico recente" description="Últimas entregas registradas">
-          {(deliveries.data ?? []).length ? (
+          {deliveriesData.length ? (
             <ul className="divide-y divide-border">
-              {(deliveries.data ?? []).slice(0, 8).map((d) => (
+              {deliveriesData.slice(0, 8).map((d) => (
                 <li key={d.id} className="flex items-center justify-between gap-3 py-2.5">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{d.app_name}</p>
