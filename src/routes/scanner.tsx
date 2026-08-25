@@ -26,6 +26,8 @@ export const Route = createFileRoute("/scanner")({
         property: "og:description",
         content: "Leitura automática de cupons fiscais de combustível para o entregador.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: Scanner,

@@ -41,6 +41,8 @@ export const Route = createFileRoute("/entregas")({
         property: "og:description",
         content: "Prévia da rota no mapa, múltiplas paradas e histórico completo de corridas.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: Entregas,

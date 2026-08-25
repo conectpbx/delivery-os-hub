@@ -34,6 +34,8 @@ export const Route = createFileRoute("/dashboard")({
         property: "og:description",
         content: "Acompanhe lucro real, custos e desempenho das suas entregas em tempo real.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: Dashboard,

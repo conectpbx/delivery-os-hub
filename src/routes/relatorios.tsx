@@ -32,6 +32,8 @@ export const Route = createFileRoute("/relatorios")({
         property: "og:description",
         content: "Comparação entre meses, exportação para Excel e relatório em PDF.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: Relatorios,
