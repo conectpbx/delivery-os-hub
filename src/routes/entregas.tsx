@@ -24,6 +24,8 @@ import type { Delivery } from "@/lib/data";
 import { brl, dateTimeLabel, minutesLabel, num } from "@/lib/format";
 import { fetchRouteWithFallback, geocodeAddress, navigationUrl, newStop, type RouteResult, type Stop } from "@/lib/geo";
 import { usePersistentState } from "@/lib/persistent-state";
+import { useChainedDistance } from "@/lib/chained-distance";
+
 
 const RouteMap = lazy(() => import("@/components/RouteMap"));
 
