@@ -1,7 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Suspense, lazy, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { GripVertical, MapPin, Navigation, Plus, Route as RouteIcon, Trash2, X } from "lucide-react";
+import {
+  GripVertical,
+  MapPin,
+  Navigation,
+  Plus,
+  Route as RouteIcon,
+  Trash2,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { BrandSpinner } from "@/components/BrandLoader";
@@ -22,7 +30,18 @@ import {
 import type { Delivery } from "@/lib/data";
 
 import { brl, dateTimeLabel, minutesLabel, num } from "@/lib/format";
-import { fetchRouteWithFallback, geocodeAddress, navigationUrl, newStop, type RouteResult, type Stop } from "@/lib/geo";
+import {
+  fetchRouteWithFallback,
+  geocodeAddress,
+  geolocationErrorMessage,
+  getCurrentPosition,
+  isGeolocationError,
+  navigationUrl,
+  newStop,
+  reverseGeocodeAddress,
+  type RouteResult,
+  type Stop,
+} from "@/lib/geo";
 import { usePersistentState } from "@/lib/persistent-state";
 import { useChainedDistance } from "@/lib/chained-distance";
 
@@ -93,7 +112,6 @@ function Entregas() {
   const [finishGeo, setFinishGeo] = useState<string | null>(null);
   const [histRange, setHistRange] = useState<"hoje" | "7d" | "30d" | "tudo">("hoje");
 
-
   const [form, setForm] = usePersistentState("entregas.form", {
     app_name: "",
     earnings: "",
@@ -104,7 +122,6 @@ function Entregas() {
     duration_min: "",
     idle_min: "",
   });
-
 
   useEffect(() => setMounted(true), []);
 
@@ -151,66 +168,33 @@ function Entregas() {
     }));
   }
 
-  async function reverseGeocode(lat: number, lng: number) {
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&addressdetails=1&accept-language=pt-BR&lat=${lat}&lon=${lng}`,
-      { headers: { Accept: "application/json" } },
-    );
-    if (!res.ok) throw new Error("geocode");
-    const json = (await res.json()) as {
-      display_name?: string;
-      name?: string;
-      address?: Record<string, string>;
-    };
-    const a = json.address ?? {};
-    const road = a["road"] ?? a["pedestrian"] ?? a["footway"] ?? "";
-    const number = a["house_number"] ?? "";
-    const district = a["suburb"] ?? a["neighbourhood"] ?? a["city_district"] ?? "";
-    const city = a["city"] ?? a["town"] ?? a["village"] ?? a["municipality"] ?? "";
-    const short = [[json.name, road].filter(Boolean).join(" - ") || road, number, district, city]
-      .filter(Boolean)
-      .join(", ");
-    return short || json.display_name || "";
-  }
-
-  function captureGps(stopId: string) {
-    if (!("geolocation" in navigator)) {
-      toast.error("GPS indisponível neste dispositivo");
-      return;
-    }
+  async function captureGps(stopId: string) {
     setGeoTarget(stopId);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        setAccuracy(Math.round(pos.coords.accuracy));
-        patchStop(stopId, { lat, lng });
-        try {
-          const address = await reverseGeocode(lat, lng);
-          if (address) {
-            patchStop(stopId, { address });
-            toast.success("Endereço preenchido pelo GPS");
-          } else {
-            toast.success("Localização capturada");
-          }
-        } catch {
-          toast.message("Localização capturada (endereço indisponível)");
-        } finally {
-          setGeoTarget(null);
+    try {
+      const { lat, lng, accuracy: gpsAccuracy } = await getCurrentPosition();
+      setAccuracy(gpsAccuracy);
+      patchStop(stopId, { lat, lng });
+
+      try {
+        const place = await reverseGeocodeAddress(lat, lng);
+        if (place.address) {
+          patchStop(stopId, { address: place.address });
+          toast.success("Endereço preenchido pelo GPS");
+        } else {
+          toast.success("Localização capturada");
         }
-      },
-      (err) => {
-        setGeoTarget(null);
-        toast.error(
-          err.code === err.PERMISSION_DENIED
-            ? "Permissão de localização negada — libere o GPS nas configurações do navegador"
-            : err.code === err.TIMEOUT
-              ? "O GPS demorou demais para responder. Tente novamente a céu aberto."
-              : "Não foi possível obter a localização",
-        );
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
-    );
+      } catch {
+        toast.message("Localização capturada (endereço indisponível)");
+      }
+    } catch (err) {
+      toast.error(
+        isGeolocationError(err)
+          ? geolocationErrorMessage(err)
+          : "GPS indisponível neste dispositivo",
+      );
+    } finally {
+      setGeoTarget(null);
+    }
   }
 
   const patchFinishStop = (stopId: string, values: Partial<Stop>) =>
@@ -231,49 +215,41 @@ function Entregas() {
     return true;
   }
 
-
-
-  function captureFinishGps(stopId: string) {
-    if (!("geolocation" in navigator)) {
-      toast.error("GPS indisponível neste dispositivo");
-      return;
-    }
+  async function captureFinishGps(stopId: string) {
     setFinishGeo(stopId);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        patchFinishStop(stopId, { lat, lng });
-        try {
-          const address = await reverseGeocode(lat, lng);
-          patchFinishStop(stopId, {
-            address: address || `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
-          });
-          toast.success(address ? "Endereço preenchido pelo GPS" : "Localização capturada");
-        } catch {
-          patchFinishStop(stopId, { address: `${lat.toFixed(5)}, ${lng.toFixed(5)}` });
-          toast.message("Localização capturada (endereço indisponível)");
-        } finally {
-          setFinishGeo(null);
-        }
-      },
-      (err) => {
-        setFinishGeo(null);
-        toast.error(
-          err.code === err.PERMISSION_DENIED
-            ? "Permissão de localização negada — libere o GPS nas configurações do navegador"
-            : "Não foi possível obter a localização",
-        );
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
-    );
+    try {
+      const { lat, lng } = await getCurrentPosition();
+      patchFinishStop(stopId, { lat, lng });
+      try {
+        const place = await reverseGeocodeAddress(lat, lng);
+        patchFinishStop(stopId, {
+          address: place.address || `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+        });
+        toast.success(place.address ? "Endereço preenchido pelo GPS" : "Localização capturada");
+      } catch {
+        patchFinishStop(stopId, { address: `${lat.toFixed(5)}, ${lng.toFixed(5)}` });
+        toast.message("Localização capturada (endereço indisponível)");
+      }
+    } catch (err) {
+      toast.error(
+        isGeolocationError(err)
+          ? geolocationErrorMessage(err)
+          : "GPS indisponível neste dispositivo",
+      );
+    } finally {
+      setFinishGeo(null);
+    }
   }
-
 
   /** Resolve endereços e devolve distância/tempo totais encadeados (ponto a ponto). */
   async function routeTotals(
     pts: { address: string; lat: number | null; lng: number | null }[],
-  ): Promise<{ distanceKm: number; durationMin: number; pts: typeof pts; approximate: boolean } | null> {
+  ): Promise<{
+    distanceKm: number;
+    durationMin: number;
+    pts: typeof pts;
+    approximate: boolean;
+  } | null> {
     const resolved: typeof pts = [];
     for (const s of pts) {
       if (s.lat != null && s.lng != null) {
@@ -321,9 +297,13 @@ function Entregas() {
         patchStop(s.id, hit);
         resolved.push({ ...s, ...hit });
       }
-      const result = await fetchRouteWithFallback(resolved.map((s) => [s.lat!, s.lng!] as [number, number]));
+      const result = await fetchRouteWithFallback(
+        resolved.map((s) => [s.lat!, s.lng!] as [number, number]),
+      );
       if (!result) {
-        toast.error("Não foi possível calcular a distância agora — verifique sua conexão e tente de novo.");
+        toast.error(
+          "Não foi possível calcular a distância agora — verifique sua conexão e tente de novo.",
+        );
         return;
       }
       setRoute(result);
@@ -334,7 +314,9 @@ function Entregas() {
         duration_min: String(result.durationMin),
       }));
       if (result.approximate) {
-        toast.message(`Distância aproximada (linha reta): ${num(result.distanceKm)} km · rota por ruas indisponível agora`);
+        toast.message(
+          `Distância aproximada (linha reta): ${num(result.distanceKm)} km · rota por ruas indisponível agora`,
+        );
       } else {
         toast.success(`Rota: ${num(result.distanceKm)} km · ${minutesLabel(result.durationMin)}`);
       }
@@ -383,7 +365,6 @@ function Entregas() {
     toast.success(`Trecho ${index + 1} aplicado no formulário`);
   }
 
-
   async function save(finalized: boolean) {
     const filled = stops.filter((s) => s.address.trim() || (s.lat != null && s.lng != null));
     const first = filled[0];
@@ -418,7 +399,9 @@ function Entregas() {
           lng: s.lng,
         })),
       });
-      toast.success(finalized ? "Entrega registrada" : "Entrega salva em rota — defina o ponto final depois");
+      toast.success(
+        finalized ? "Entrega registrada" : "Entrega salva em rota — defina o ponto final depois",
+      );
       setForm((f) => ({
         ...f,
         earnings: "",
@@ -469,12 +452,10 @@ function Entregas() {
   const { deadheadKm, km } = useChainedDistance(today);
 
 
-
   const formNav = navigationUrl(stops);
   const filledStops = stops.filter((s) => s.address.trim() || (s.lat != null && s.lng != null));
   const lastStop = filledStops[filledStops.length - 1];
   const hasFinalPoint = filledStops.length >= 2 && !!lastStop && lastStop.kind === "entrega";
-
 
   return (
     <AppShell title="Entregas" subtitle="Registro de corridas, rota no mapa e navegação">
@@ -485,18 +466,15 @@ function Entregas() {
           value={`${num(km)} km`}
           hint={
             `${num(deadheadKm ?? 0)} km entre entregas` +
-            (today.length ? ` · ${num(kmSum)} km nas ${today.length} entrega${today.length === 1 ? "" : "s"} do dia` : "") +
+            (today.length
+              ? ` · ${num(kmSum)} km nas ${today.length} entrega${today.length === 1 ? "" : "s"} do dia`
+              : "") +
             (emRota ? ` · ${emRota} em andamento` : "")
           }
         />
 
-
-
-
-
         <StatCard label="Tempo parado" value={minutesLabel(idle)} tone="warning" />
       </div>
-
 
       <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-[380px_minmax(0,1fr)] [&>*]:min-w-0">
         <SectionCard title="Nova entrega" description="Preencha após finalizar a corrida">
@@ -668,83 +646,89 @@ function Entregas() {
               </div>
               {showRoute ? (
                 <>
-              {stops.map((s, i) => (
-                <div key={s.id} className="space-y-1 rounded-md border border-border p-2">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <GripVertical className="size-3.5" />
-                    <span className="font-medium text-foreground">{i + 1}.</span>
-                    <select
-                      value={s.kind}
-                      onChange={(e) => patchStop(s.id, { kind: e.target.value as Stop["kind"] })}
-                      className="h-7 rounded border border-input bg-background px-2 text-xs"
-                      aria-label={`Tipo do ponto ${i + 1}`}
-                    >
-                      <option value="coleta">Coleta</option>
-                      <option value="entrega">Entrega</option>
-                    </select>
-                    {stops.length > 2 ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="ml-auto size-7"
-                        aria-label={`Remover ponto ${i + 1}`}
-                        onClick={() => setStops((list2) => list2.filter((x) => x.id !== s.id))}
-                      >
-                        <X className="size-3.5" />
-                      </Button>
-                    ) : null}
-                  </div>
+                  {stops.map((s, i) => (
+                    <div key={s.id} className="space-y-1 rounded-md border border-border p-2">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <GripVertical className="size-3.5" />
+                        <span className="font-medium text-foreground">{i + 1}.</span>
+                        <select
+                          value={s.kind}
+                          onChange={(e) =>
+                            patchStop(s.id, { kind: e.target.value as Stop["kind"] })
+                          }
+                          className="h-7 rounded border border-input bg-background px-2 text-xs"
+                          aria-label={`Tipo do ponto ${i + 1}`}
+                        >
+                          <option value="coleta">Coleta</option>
+                          <option value="entrega">Entrega</option>
+                        </select>
+                        {stops.length > 2 ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="ml-auto size-7"
+                            aria-label={`Remover ponto ${i + 1}`}
+                            onClick={() => setStops((list2) => list2.filter((x) => x.id !== s.id))}
+                          >
+                            <X className="size-3.5" />
+                          </Button>
+                        ) : null}
+                      </div>
+                      <div className="flex min-w-0 gap-2">
+                        <Input
+                          value={s.address}
+                          onChange={(e) =>
+                            patchStop(s.id, { address: e.target.value, lat: null, lng: null })
+                          }
+                          placeholder={
+                            s.kind === "coleta" ? "Restaurante / loja" : "Endereço do cliente"
+                          }
+                          className="min-w-0 flex-1"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          aria-label={`Usar GPS no ponto ${i + 1}`}
+                          onClick={() => captureGps(s.id)}
+                          disabled={geoTarget !== null}
+                        >
+                          <MapPin className="size-4" />
+                        </Button>
+                      </div>
+                      {geoTarget === s.id ? (
+                        <p className="text-xs text-muted-foreground">Buscando localização…</p>
+                      ) : s.lat != null && s.lng != null ? (
+                        <p className="text-xs text-muted-foreground">
+                          {s.lat.toFixed(4)}, {s.lng.toFixed(4)}
+                          {accuracy ? ` · precisão ~${accuracy} m` : ""}
+                        </p>
+                      ) : null}
+                    </div>
+                  ))}
                   <div className="flex min-w-0 gap-2">
-                    <Input
-                      value={s.address}
-                      onChange={(e) => patchStop(s.id, { address: e.target.value, lat: null, lng: null })}
-                      placeholder={s.kind === "coleta" ? "Restaurante / loja" : "Endereço do cliente"}
-                      className="min-w-0 flex-1"
-                    />
                     <Button
                       type="button"
                       variant="outline"
-                      size="icon"
-                      aria-label={`Usar GPS no ponto ${i + 1}`}
-                      onClick={() => captureGps(s.id)}
-                      disabled={geoTarget !== null}
+                      size="sm"
+                      className="min-w-0 flex-1"
+                      onClick={() => setStops((s) => [...s, newStop("entrega")])}
                     >
-                      <MapPin className="size-4" />
+                      <Plus className="mr-1 size-4" /> Adicionar ponto
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="min-w-0 flex-1"
+                      onClick={() => void previewRoute()}
+                      disabled={routing}
+                    >
+                      <RouteIcon className="mr-1 size-4" />
+                      {routing ? "Calculando…" : "Ver rota"}
                     </Button>
                   </div>
-                  {geoTarget === s.id ? (
-                    <p className="text-xs text-muted-foreground">Buscando localização…</p>
-                  ) : s.lat != null && s.lng != null ? (
-                    <p className="text-xs text-muted-foreground">
-                      {s.lat.toFixed(4)}, {s.lng.toFixed(4)}
-                      {accuracy ? ` · precisão ~${accuracy} m` : ""}
-                    </p>
-                  ) : null}
-                </div>
-              ))}
-              <div className="flex min-w-0 gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="min-w-0 flex-1"
-                  onClick={() => setStops((s) => [...s, newStop("entrega")])}
-                >
-                  <Plus className="mr-1 size-4" /> Adicionar ponto
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="min-w-0 flex-1"
-                  onClick={() => void previewRoute()}
-                  disabled={routing}
-                >
-                  <RouteIcon className="mr-1 size-4" />
-                  {routing ? "Calculando…" : "Ver rota"}
-                </Button>
-              </div>
                 </>
               ) : null}
             </div>
@@ -774,7 +758,6 @@ function Entregas() {
                     </div>
                   }
                 >
-
                   <RouteMap
                     coords={route?.coords ?? []}
                     points={
@@ -844,7 +827,6 @@ function Entregas() {
                     Toque em “Ver rota” para traçar o trajeto entre os pontos.
                   </p>
                 ) : null}
-
               </div>
             ) : (
               <EmptyState>
@@ -858,12 +840,14 @@ function Entregas() {
             description={`${data.length} corridas no período`}
           >
             <div className="mb-3 flex flex-wrap gap-1">
-              {([
-                ["hoje", "Hoje"],
-                ["7d", "7 dias"],
-                ["30d", "30 dias"],
-                ["tudo", "Tudo"],
-              ] as const).map(([k, label]) => (
+              {(
+                [
+                  ["hoje", "Hoje"],
+                  ["7d", "7 dias"],
+                  ["30d", "30 dias"],
+                  ["tudo", "Tudo"],
+                ] as const
+              ).map(([k, label]) => (
                 <Button
                   key={k}
                   type="button"
@@ -876,7 +860,6 @@ function Entregas() {
               ))}
             </div>
             {data.length ? (
-
               <ul className="divide-y divide-border">
                 {data.map((d) => {
                   const raw = (d as unknown as { stops?: StoredStop[] }).stops ?? [];
@@ -916,14 +899,16 @@ function Entregas() {
                           ) : null}
                           {raw.length > 1 ? (
                             <p className="text-xs text-muted-foreground">
-                              {raw.map((s) => s.address).filter(Boolean).join(" → ")}
+                              {raw
+                                .map((s) => s.address)
+                                .filter(Boolean)
+                                .join(" → ")}
                             </p>
                           ) : d.dropoff_address ? (
                             <p className="truncate text-xs text-muted-foreground">
                               → {d.dropoff_address}
                             </p>
                           ) : null}
-
                         </div>
                         {nav ? (
                           <Button asChild variant="ghost" size="icon" aria-label="Navegar">
@@ -997,9 +982,7 @@ function Entregas() {
                                       })
                                     }
                                     placeholder={
-                                      s.kind === "coleta"
-                                        ? "Nova coleta"
-                                        : "Endereço de entrega"
+                                      s.kind === "coleta" ? "Nova coleta" : "Endereço de entrega"
                                     }
                                     className="min-w-0 flex-1"
                                   />
@@ -1160,15 +1143,12 @@ function Entregas() {
                             size="sm"
                             variant="outline"
                             className="mt-2"
-                            onClick={() =>
-                              setFinishing({ id: d.id, stops: [newStop("entrega")] })
-                            }
+                            onClick={() => setFinishing({ id: d.id, stops: [newStop("entrega")] })}
                           >
                             <MapPin className="mr-1 size-4" /> Definir ponto final
                           </Button>
                         )
                       ) : null}
-
                     </li>
                   );
                 })}
