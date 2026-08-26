@@ -19,6 +19,62 @@ export type RouteResult = {
   legs: RouteLeg[]; // trecho a trecho: ponto 1→2, 2→3, ...
 };
 
+export type CurrentPosition = {
+  lat: number;
+  lng: number;
+  accuracy: number;
+};
+
+const POSITION_OPTIONS: PositionOptions = {
+  enableHighAccuracy: true,
+  timeout: 12000,
+  maximumAge: 15000,
+};
+
+const reverseGeocodeCache = new Map<string, { name: string; address: string }>();
+
+function coordsCacheKey(lat: number, lng: number) {
+  return `${lat.toFixed(5)},${lng.toFixed(5)}`;
+}
+
+export function geolocationErrorMessage(error: GeolocationPositionError) {
+  if (error.code === error.PERMISSION_DENIED) {
+    return "Permissão de localização negada — libere o GPS nas configurações do navegador";
+  }
+  if (error.code === error.TIMEOUT) {
+    return "O GPS demorou demais para responder. Tente novamente a céu aberto.";
+  }
+  return "Não foi possível obter a localização";
+}
+
+export function isGeolocationError(error: unknown): error is GeolocationPositionError {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof (error as { code?: unknown }).code === "number"
+  );
+}
+
+export function getCurrentPosition(options: PositionOptions = POSITION_OPTIONS) {
+  return new Promise<CurrentPosition>((resolve, reject) => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      reject(new Error("GPS indisponível neste dispositivo"));
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) =>
+        resolve({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: Math.round(pos.coords.accuracy ?? 0),
+        }),
+      reject,
+      options,
+    );
+  });
+}
 
 export function newStop(kind: Stop["kind"] = "entrega"): Stop {
   return {
@@ -47,6 +103,10 @@ export async function geocodeAddress(address: string) {
 
 /** Geocodificação reversa: coordenadas → endereço legível. */
 export async function reverseGeocodeAddress(lat: number, lng: number) {
+  const cacheKey = coordsCacheKey(lat, lng);
+  const cached = reverseGeocodeCache.get(cacheKey);
+  if (cached) return cached;
+
   const res = await fetch(
     `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&addressdetails=1&accept-language=pt-BR&lat=${lat}&lon=${lng}`,
     { headers: { Accept: "application/json" } },
@@ -61,7 +121,9 @@ export async function reverseGeocodeAddress(lat: number, lng: number) {
   const road = a["road"] ?? a["pedestrian"] ?? "";
   const city = a["city"] ?? a["town"] ?? a["village"] ?? a["municipality"] ?? "";
   const short = [json.name || road, a["house_number"], city].filter(Boolean).join(", ");
-  return { name: json.name ?? "", address: short || json.display_name || "" };
+  const result = { name: json.name ?? "", address: short || json.display_name || "" };
+  reverseGeocodeCache.set(cacheKey, result);
+  return result;
 }
 
 /** Busca o posto de combustível mais próximo (Overpass / OpenStreetMap). */
@@ -157,7 +219,8 @@ export async function fetchRouteWithFallback(
   for (let i = 0; i < points.length - 1; i++) {
     const [lat1, lng1] = points[i]!;
     const [lat2, lng2] = points[i + 1]!;
-    const km = Math.round(haversineKm(lat1, lng1, lat2, lng2) * STRAIGHT_LINE_CORRECTION * 100) / 100;
+    const km =
+      Math.round(haversineKm(lat1, lng1, lat2, lng2) * STRAIGHT_LINE_CORRECTION * 100) / 100;
     legs.push({ distanceKm: km, durationMin: Math.round((km / 30) * 60) }); // estimativa a 30 km/h
     totalKm += km;
   }
@@ -171,8 +234,9 @@ export async function fetchRouteWithFallback(
   };
 }
 
-
-export function navigationUrl(stops: { address: string; lat: number | null; lng: number | null }[]) {
+export function navigationUrl(
+  stops: { address: string; lat: number | null; lng: number | null }[],
+) {
   const usable = stops.filter((s) => s.address || (s.lat != null && s.lng != null));
   if (!usable.length) return null;
   const value = (s: (typeof usable)[number]) =>

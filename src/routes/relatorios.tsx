@@ -1,22 +1,22 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useMemo } from "react";
 
 const MonthsBarChart = lazy(() => import("@/components/charts/MonthsBarChart"));
 import { FileDown, Printer } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
 import { Button } from "@/components/ui/button";
-import {
-  useDeliveries,
-  useExpenses,
-  useFuelings,
-  useMaintenances,
-  useProfile,
-} from "@/lib/data";
+import { useDeliveries, useExpenses, useFuelings, useMaintenances, useProfile } from "@/lib/data";
 import { brl, dateTimeLabel, downloadCsv, monthLabel, num } from "@/lib/format";
-import { byApp, costPerKm, byMonth, costsByCategory, filterByRange, summarize } from "@/lib/metrics";
+import {
+  byApp,
+  costPerKm,
+  byMonth,
+  costsByCategory,
+  filterByRange,
+  summarize,
+} from "@/lib/metrics";
 import { PeriodFilter, PeriodSummary, usePeriodSelection } from "@/components/PeriodFilter";
-
 
 export const Route = createFileRoute("/relatorios")({
   head: () => ({
@@ -45,34 +45,80 @@ function Relatorios() {
   const profile = useProfile();
   const period = usePeriodSelection(3);
 
-  const cpk = costPerKm(fuelings.data ?? [], profile.data);
-  const perDeliveries = filterByRange(deliveries.data ?? [], (d) => d.occurred_at, period.fromDate, period.toDate);
-  const perExpenses = filterByRange(expenses.data ?? [], (e) => e.occurred_at, period.fromDate, period.toDate);
-  const perMaint = filterByRange(maintenances.data ?? [], (m) => m.performed_at, period.fromDate, period.toDate);
-  const perFuelings = filterByRange(fuelings.data ?? [], (f) => f.occurred_at, period.fromDate, period.toDate);
+  const deliveriesData = useMemo(() => deliveries.data ?? [], [deliveries.data]);
+  const expensesData = useMemo(() => expenses.data ?? [], [expenses.data]);
+  const fuelingsData = useMemo(() => fuelings.data ?? [], [fuelings.data]);
+  const maintenancesData = useMemo(() => maintenances.data ?? [], [maintenances.data]);
 
-  const months = byMonth(deliveries.data ?? [], expenses.data ?? [], cpk).slice(-12);
-  const total = summarize(perDeliveries, perExpenses, perMaint, cpk);
-  const ranking = byApp(perDeliveries, cpk);
-  const categories = costsByCategory(perExpenses);
-  const fuelPaid = perFuelings.reduce((a, f) => a + Number(f.total), 0);
+  const cpk = useMemo(() => costPerKm(fuelingsData, profile.data), [fuelingsData, profile.data]);
+  const perDeliveries = useMemo(
+    () => filterByRange(deliveriesData, (d) => d.occurred_at, period.fromDate, period.toDate),
+    [deliveriesData, period.fromDate, period.toDate],
+  );
+  const perExpenses = useMemo(
+    () => filterByRange(expensesData, (e) => e.occurred_at, period.fromDate, period.toDate),
+    [expensesData, period.fromDate, period.toDate],
+  );
+  const perMaint = useMemo(
+    () => filterByRange(maintenancesData, (m) => m.performed_at, period.fromDate, period.toDate),
+    [maintenancesData, period.fromDate, period.toDate],
+  );
+  const perFuelings = useMemo(
+    () => filterByRange(fuelingsData, (f) => f.occurred_at, period.fromDate, period.toDate),
+    [fuelingsData, period.fromDate, period.toDate],
+  );
+
+  const months = useMemo(
+    () => byMonth(deliveriesData, expensesData, cpk).slice(-12),
+    [deliveriesData, expensesData, cpk],
+  );
+  const total = useMemo(
+    () => summarize(perDeliveries, perExpenses, perMaint, cpk),
+    [perDeliveries, perExpenses, perMaint, cpk],
+  );
+  const ranking = useMemo(() => byApp(perDeliveries, cpk), [perDeliveries, cpk]);
+  const categories = useMemo(() => costsByCategory(perExpenses), [perExpenses]);
+  const fuelPaid = useMemo(
+    () => perFuelings.reduce((a, f) => a + Number(f.total), 0),
+    [perFuelings],
+  );
   const totalCost = total.fuelCost + total.otherCost + total.maintenanceCost;
   const last = months[months.length - 1];
   const prev = months[months.length - 2];
-  const delta = last && prev && prev.profit ? ((last.profit - prev.profit) / Math.abs(prev.profit)) * 100 : 0;
+  const delta =
+    last && prev && prev.profit ? ((last.profit - prev.profit) / Math.abs(prev.profit)) * 100 : 0;
 
-  const chart = months.map((m) => ({
-    mes: monthLabel(m.month),
-    receita: m.revenue,
-    lucro: m.profit,
-  }));
+  const chart = useMemo(
+    () => months.map((m) => ({ mes: monthLabel(m.month), receita: m.revenue, lucro: m.profit })),
+    [months],
+  );
 
-  const costRows: { label: string; value: number; hint?: string }[] = [
-    { label: "Combustível (estimado por km)", value: total.fuelCost, hint: `${num(total.distance)} km × ${brl(cpk)}/km` },
-    { label: "Abastecimentos pagos", value: fuelPaid, hint: `${perFuelings.length} abastecimento(s)` },
-    { label: "Manutenção", value: total.maintenanceCost, hint: `${perMaint.length} serviço(s)` },
-    ...categories.map((c) => ({ label: `Despesa · ${c.category}`, value: c.amount })),
-  ];
+  const costRows: { label: string; value: number; hint?: string }[] = useMemo(
+    () => [
+      {
+        label: "Combustível (estimado por km)",
+        value: total.fuelCost,
+        hint: `${num(total.distance)} km × ${brl(cpk)}/km`,
+      },
+      {
+        label: "Abastecimentos pagos",
+        value: fuelPaid,
+        hint: `${perFuelings.length} abastecimento(s)`,
+      },
+      { label: "Manutenção", value: total.maintenanceCost, hint: `${perMaint.length} serviço(s)` },
+      ...categories.map((c) => ({ label: `Despesa · ${c.category}`, value: c.amount })),
+    ],
+    [
+      categories,
+      cpk,
+      fuelPaid,
+      perFuelings.length,
+      perMaint.length,
+      total.distance,
+      total.fuelCost,
+      total.maintenanceCost,
+    ],
+  );
 
   function exportDeliveries() {
     downloadCsv("entregas-delivery-os.csv", [
@@ -140,16 +186,29 @@ function Relatorios() {
           hint={`Margem ${num(total.revenue ? (total.profit / total.revenue) * 100 : 0)}%`}
           tone={total.profit >= 0 ? "success" : "destructive"}
         />
-        <StatCard label="Custos no período" value={brl(totalCost)} tone="destructive" hint={`${brl(total.fuelCost)} combustível`} />
+        <StatCard
+          label="Custos no período"
+          value={brl(totalCost)}
+          tone="destructive"
+          hint={`${brl(total.fuelCost)} combustível`}
+        />
         <StatCard
           label="Variação vs mês anterior"
           value={`${delta >= 0 ? "+" : ""}${num(delta, 0)}%`}
           tone={delta >= 0 ? "success" : "destructive"}
-          hint={prev ? `${monthLabel(prev.month)} → ${last ? monthLabel(last.month) : ""}` : "sem histórico"}
+          hint={
+            prev
+              ? `${monthLabel(prev.month)} → ${last ? monthLabel(last.month) : ""}`
+              : "sem histórico"
+          }
         />
       </div>
 
-      <SectionCard className="mt-4" title="Detalhamento dos custos" description={`Período: ${period.label}`}>
+      <SectionCard
+        className="mt-4"
+        title="Detalhamento dos custos"
+        description={`Período: ${period.label}`}
+      >
         {totalCost > 0 || fuelPaid > 0 ? (
           <ul className="divide-y divide-border">
             {costRows
@@ -158,14 +217,18 @@ function Relatorios() {
                 <li key={r.label} className="flex items-center justify-between gap-3 py-2.5">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{r.label}</p>
-                    {r.hint ? <p className="truncate text-xs text-muted-foreground">{r.hint}</p> : null}
+                    {r.hint ? (
+                      <p className="truncate text-xs text-muted-foreground">{r.hint}</p>
+                    ) : null}
                   </div>
                   <span className="text-sm font-semibold tabular-nums">{brl(r.value)}</span>
                 </li>
               ))}
             <li className="flex items-center justify-between gap-3 py-2.5">
               <p className="text-sm font-semibold">Total considerado no lucro</p>
-              <span className="text-sm font-semibold tabular-nums text-destructive">{brl(totalCost)}</span>
+              <span className="text-sm font-semibold tabular-nums text-destructive">
+                {brl(totalCost)}
+              </span>
             </li>
           </ul>
         ) : (
@@ -173,9 +236,11 @@ function Relatorios() {
         )}
       </SectionCard>
 
-
-
-      <SectionCard className="mt-4" title="Comparação entre meses" description="Receita x lucro real">
+      <SectionCard
+        className="mt-4"
+        title="Comparação entre meses"
+        description="Receita x lucro real"
+      >
         {chart.length ? (
           <div className="h-72">
             <Suspense fallback={<div className="size-full animate-pulse rounded-md bg-muted" />}>
