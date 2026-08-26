@@ -19,6 +19,8 @@ import { brl, dateLabel, dateTimeLabel, minutesLabel, num } from "@/lib/format";
 import { useGoalCelebrations } from "@/lib/celebrate";
 import { useSmartAlerts } from "@/lib/alerts";
 import { byApp, costPerKm, endOfDay, heatmap, inRange, startOfDay, summarize } from "@/lib/metrics";
+import { useChainedDistance } from "@/lib/chained-distance";
+
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -34,6 +36,8 @@ export const Route = createFileRoute("/dashboard")({
         property: "og:description",
         content: "Acompanhe lucro real, custos e desempenho das suas entregas em tempo real.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: Dashboard,
@@ -87,7 +91,9 @@ function Dashboard() {
     [periodDeliveries, periodExpenses, periodMaint, cpk],
   );
   const ranking = useMemo(() => byApp(periodDeliveries, cpk), [periodDeliveries, cpk]);
+  const { km: betweenKm } = useChainedDistance(periodDeliveries);
   const { grid, max } = useMemo(() => heatmap(deliveriesData), [deliveriesData]);
+
 
   const series = useMemo(() => {
     const days: { day: string; receita: number; lucro: number }[] = [];
@@ -173,10 +179,17 @@ function Dashboard() {
         />
         <StatCard
           label="Quilometragem"
-          value={`${num(s.distance)} km`}
-          hint={`${brl(s.perKm)} por km rodado`}
+          value={`${num(betweenKm)} km`}
+          hint={
+            `${num(betweenKm)} km entre entregas` +
+            (periodDeliveries.length
+              ? ` · ${num(s.distance)} km nas ${periodDeliveries.length} entrega${periodDeliveries.length === 1 ? "" : "s"}`
+              : "") +
+            ` · ${brl(s.perKm)} por km rodado`
+          }
           icon={<Gauge className="size-4" />}
         />
+
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-3 xl:grid-cols-4">
