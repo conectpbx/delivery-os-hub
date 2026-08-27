@@ -18,9 +18,17 @@ import {
 import { brl, dateLabel, dateTimeLabel, minutesLabel, num } from "@/lib/format";
 import { useGoalCelebrations } from "@/lib/celebrate";
 import { useSmartAlerts } from "@/lib/alerts";
-import { byApp, costPerKm, endOfDay, heatmap, inRange, startOfDay, summarize } from "@/lib/metrics";
+import {
+  adaptiveDailyRevenueGoal,
+  byApp,
+  costPerKm,
+  endOfDay,
+  heatmap,
+  inRange,
+  startOfDay,
+  summarize,
+} from "@/lib/metrics";
 import { useChainedDistance } from "@/lib/chained-distance";
-
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -94,7 +102,6 @@ function Dashboard() {
   const { km: betweenKm } = useChainedDistance(periodDeliveries);
   const { grid, max } = useMemo(() => heatmap(deliveriesData), [deliveriesData]);
 
-
   const series = useMemo(() => {
     const days: { day: string; receita: number; lucro: number }[] = [];
     for (let i = range.days - 1; i >= 0; i--) {
@@ -109,7 +116,12 @@ function Dashboard() {
     return days;
   }, [deliveriesData, expensesData, cpk, range.days]);
 
-  const dailyGoal = Number(profile.data?.daily_goal ?? 200);
+  const dailyGoalPlan = adaptiveDailyRevenueGoal({
+    deliveries: deliveriesData,
+    goals: goals.data ?? [],
+    profile: profile.data,
+  });
+  const dailyGoal = dailyGoalPlan.target || Number(profile.data?.daily_goal ?? 200);
   const todayRevenue = summarize(
     deliveriesData.filter((d) => inRange(d.occurred_at, startOfDay(), endOfDay())),
     [],
@@ -138,7 +150,7 @@ function Dashboard() {
   return (
     <AppShell
       title="Dashboard"
-      subtitle={`Custo estimado de ${brl(cpk)}/km · meta diária ${brl(dailyGoal)}`}
+      subtitle={`Custo estimado de ${brl(cpk)}/km · meta diária ${brl(dailyGoal)}${dailyGoalPlan.isAdjusted ? " (ajustada)" : ""}`}
       actions={
         <div className="flex gap-1 rounded-lg bg-muted p-1">
           {RANGES.map((r) => (
@@ -189,7 +201,6 @@ function Dashboard() {
           }
           icon={<Gauge className="size-4" />}
         />
-
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-3 xl:grid-cols-4">
@@ -204,7 +215,7 @@ function Dashboard() {
         <StatCard
           label="Meta de hoje"
           value={`${num((todayRevenue / dailyGoal) * 100, 0)}%`}
-          hint={brl(todayRevenue)}
+          hint={`${brl(todayRevenue)} hoje${dailyGoalPlan.monthTarget > 0 ? ` · ${dailyGoalPlan.remainingDaysIncludingToday} dias para ${brl(dailyGoalPlan.monthTarget)}` : ""}`}
         />
         <StatCard label="Manutenção no período" value={brl(s.maintenanceCost)} />
       </div>

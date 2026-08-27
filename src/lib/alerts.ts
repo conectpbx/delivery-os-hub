@@ -2,7 +2,14 @@ import { useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import type { Delivery, Expense, Fueling, Goal, Maintenance, Profile } from "./data";
 import { brl, num } from "./format";
-import { costPerKm, endOfDay, inRange, startOfDay, summarize } from "./metrics";
+import {
+  adaptiveDailyRevenueGoal,
+  costPerKm,
+  endOfDay,
+  inRange,
+  startOfDay,
+  summarize,
+} from "./metrics";
 
 export type SmartAlert = {
   id: string;
@@ -72,7 +79,8 @@ export function buildAlerts(input: {
   );
 
   // ---- Metas ----
-  const dailyGoal = Number(profile?.daily_goal ?? 0);
+  const dailyGoalPlan = adaptiveDailyRevenueGoal({ deliveries, goals, profile, date: now });
+  const dailyGoal = dailyGoalPlan.target;
   if (dailyGoal > 0) {
     const pct = (sToday.revenue / dailyGoal) * 100;
     const hour = now.getHours();
@@ -91,7 +99,9 @@ export function buildAlerts(input: {
         kind: "motivacional",
         severity: "info",
         title: `Reta final: ${num(pct, 0)}% da meta`,
-        message: `Faltam ${brl(dailyGoal - sToday.revenue)} para fechar o dia no alvo. Você consegue!`,
+        message: `Faltam ${brl(dailyGoal - sToday.revenue)} para fechar o dia no alvo${
+          dailyGoalPlan.isAdjusted ? " mensal reajustado" : ""
+        }. Você consegue!`,
         toast: true,
       });
     } else if (hour >= 18 && pct < 50) {
@@ -100,7 +110,11 @@ export function buildAlerts(input: {
         kind: "aviso",
         severity: "warning",
         title: "Ritmo abaixo da meta",
-        message: `Só ${num(pct, 0)}% da meta até agora. Considere migrar para uma região de maior demanda.`,
+        message: `Só ${num(pct, 0)}% da meta até agora. ${
+          dailyGoalPlan.isAdjusted
+            ? `A meta inteligente de hoje está em ${brl(dailyGoal)} para compensar o mês.`
+            : "Considere migrar para uma região de maior demanda."
+        }`,
       });
     }
   }
@@ -108,12 +122,8 @@ export function buildAlerts(input: {
   // ---- Meta mensal ----
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const monthDeliveries = deliveries.filter((d) => new Date(d.occurred_at) >= monthStart);
-  const monthRevenue = monthDeliveries.reduce(
-    (s, d) => s + Number(d.earnings) + Number(d.tip),
-    0,
-  );
-  const monthTarget =
-    Number(goals[0]?.revenue_target ?? 0) || Number(profile?.monthly_goal ?? 0);
+  const monthRevenue = monthDeliveries.reduce((s, d) => s + Number(d.earnings) + Number(d.tip), 0);
+  const monthTarget = dailyGoalPlan.monthTarget;
   if (monthTarget > 0) {
     const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     const expected = (monthTarget / daysInMonth) * now.getDate();

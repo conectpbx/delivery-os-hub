@@ -1,4 +1,4 @@
-import type { Delivery, Expense, Fueling, Maintenance, Profile } from "./data";
+import type { Delivery, Expense, Fueling, Goal, Maintenance, Profile } from "./data";
 import { monthKey } from "./format";
 
 export function avgFuelPrice(fuelings: Fueling[]) {
@@ -73,6 +73,61 @@ export function summarize(
   };
 }
 
+export function currentRevenueTarget(
+  goals: Goal[],
+  profile: Profile | null | undefined,
+  date = new Date(),
+) {
+  const key = monthKey(date);
+  const monthlyGoal = goals.find((g) => g.month.slice(0, 7) === key);
+  return Number(monthlyGoal?.revenue_target ?? 0) || Number(profile?.monthly_goal ?? 0);
+}
+
+export function adaptiveDailyRevenueGoal(input: {
+  deliveries: Delivery[];
+  goals: Goal[];
+  profile: Profile | null | undefined;
+  date?: Date;
+}) {
+  const { deliveries, goals, profile } = input;
+  const date = input.date ?? new Date();
+  const monthTarget = currentRevenueTarget(goals, profile, date);
+  const manualDailyGoal = Number(profile?.daily_goal ?? 0);
+
+  if (monthTarget <= 0) {
+    return {
+      target: manualDailyGoal,
+      monthTarget: 0,
+      revenueBeforeToday: 0,
+      remainingBeforeToday: 0,
+      remainingDaysIncludingToday: 0,
+      isAdjusted: false,
+    };
+  }
+
+  const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
+  const todayStart = startOfDay(date);
+  const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  const remainingDaysIncludingToday = Math.max(1, daysInMonth - date.getDate() + 1);
+  const revenueBeforeToday = deliveries
+    .filter((d) => {
+      const occurred = new Date(d.occurred_at);
+      return occurred >= monthStart && occurred < todayStart;
+    })
+    .reduce((sum, d) => sum + Number(d.earnings) + Number(d.tip), 0);
+  const remainingBeforeToday = Math.max(0, monthTarget - revenueBeforeToday);
+  const adjustedTarget = remainingBeforeToday / remainingDaysIncludingToday;
+
+  return {
+    target: adjustedTarget,
+    monthTarget,
+    revenueBeforeToday,
+    remainingBeforeToday,
+    remainingDaysIncludingToday,
+    isAdjusted: manualDailyGoal > 0 ? Math.abs(adjustedTarget - manualDailyGoal) >= 0.01 : true,
+  };
+}
+
 export function byApp(deliveries: Delivery[], cpk: number) {
   const map = new Map<string, { app: string; revenue: number; km: number; count: number }>();
   for (const d of deliveries) {
@@ -88,7 +143,10 @@ export function byApp(deliveries: Delivery[], cpk: number) {
 }
 
 export function byMonth(deliveries: Delivery[], expenses: Expense[], cpk: number) {
-  const map = new Map<string, { month: string; revenue: number; km: number; cost: number; count: number }>();
+  const map = new Map<
+    string,
+    { month: string; revenue: number; km: number; cost: number; count: number }
+  >();
   const ensure = (key: string) => {
     const cur = map.get(key) ?? { month: key, revenue: 0, km: 0, cost: 0, count: 0 };
     map.set(key, cur);
@@ -115,7 +173,6 @@ export function heatmap(deliveries: Delivery[]) {
     const date = new Date(d.occurred_at);
     grid[date.getDay()]![date.getHours()] =
       (grid[date.getDay()]![date.getHours()] ?? 0) + Number(d.earnings) + Number(d.tip);
-
   }
   const max = Math.max(...grid.flat(), 1);
   return { grid, max };
@@ -147,7 +204,6 @@ export function filterByPeriod<T>(items: T[], key: (item: T) => string, period: 
 export function filterByRange<T>(items: T[], key: (item: T) => string, from: Date, to: Date) {
   return items.filter((i) => inRange(key(i), from, to));
 }
-
 
 export function costsByCategory(expenses: Expense[]) {
   const map = new Map<string, number>();
