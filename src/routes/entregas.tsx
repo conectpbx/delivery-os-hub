@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Suspense, lazy, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
+  Brain,
   GripVertical,
   MapPin,
   Navigation,
@@ -22,7 +23,9 @@ import {
   useApps,
   useDeliveries,
   useInsert,
+  useGoals,
   useInsertApp,
+  useProfile,
   useRemove,
   useUpdate,
   useUpdateApp,
@@ -30,6 +33,7 @@ import {
 import type { Delivery } from "@/lib/data";
 
 import { brl, dateTimeLabel, minutesLabel, num } from "@/lib/format";
+import { adaptiveDailyRevenueGoal } from "@/lib/metrics";
 import {
   fetchRouteWithFallback,
   geocodeAddress,
@@ -44,7 +48,6 @@ import {
 } from "@/lib/geo";
 import { usePersistentState } from "@/lib/persistent-state";
 import { useChainedDistance } from "@/lib/chained-distance";
-
 
 const RouteMap = lazy(() => import("@/components/RouteMap"));
 
@@ -71,6 +74,12 @@ export const Route = createFileRoute("/entregas")({
 
 type StoredStop = { kind: string; address: string; lat: number | null; lng: number | null };
 
+type DeliveryInsight = {
+  title: string;
+  description: string;
+  action: string;
+};
+
 /** Aceita vírgula decimal (pt-BR) e separador de milhar. */
 function dec(v: string | number | null | undefined): number {
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
@@ -87,6 +96,8 @@ function dec(v: string | number | null | undefined): number {
 function Entregas() {
   const list = useDeliveries();
   const apps = useApps();
+  const goals = useGoals();
+  const profile = useProfile();
   const insert = useInsert("deliveries", "deliveries");
   const insertApp = useInsertApp();
   const updateApp = useUpdateApp();
@@ -441,6 +452,18 @@ function Entregas() {
   const total = today.reduce((s, d) => s + Number(d.earnings) + Number(d.tip), 0);
   const kmSum = today.reduce((s, d) => s + Number(d.distance_km), 0);
   const idle = today.reduce((s, d) => s + Number(d.idle_min), 0);
+  const dailyGoal = adaptiveDailyRevenueGoal({
+    deliveries: all,
+    goals: goals.data ?? [],
+    profile: profile.data,
+  }).target;
+  const goalRemaining = Math.max(0, dailyGoal - total);
+  const deliveryIntel = buildDeliveryInsights({
+    all,
+    today,
+    goalRemaining,
+    dailyGoal,
+  });
 
   const emRota = today.filter(
     (d) => (d as unknown as { status?: string }).status === "em_rota",
@@ -450,7 +473,6 @@ function Entregas() {
   // de uma entrega e o ponto inicial da próxima). A soma das distâncias de cada
   // entrega individual continua disponível no hint como referência.
   const { deadheadKm, km } = useChainedDistance(today);
-
 
   const formNav = navigationUrl(stops);
   const filledStops = stops.filter((s) => s.address.trim() || (s.lat != null && s.lng != null));
@@ -475,6 +497,36 @@ function Entregas() {
 
         <StatCard label="Tempo parado" value={minutesLabel(idle)} tone="warning" />
       </div>
+
+      {deliveryIntel ? (
+        <SectionCard
+          title="Inteligência de entregas"
+          description="Sugestões automáticas após a primeira entrega do dia"
+          className="mt-4"
+        >
+          {today.length ? (
+            <div className="grid gap-3 md:grid-cols-3">
+              {deliveryIntel.map((insight) => (
+                <div
+                  key={insight.title}
+                  className="rounded-md border border-border bg-muted/30 p-3"
+                >
+                  <div className="mb-2 flex items-center gap-2 text-sm font-medium">
+                    <Brain className="size-4 text-primary" />
+                    {insight.title}
+                  </div>
+                  <p className="text-xs text-muted-foreground">{insight.description}</p>
+                  <p className="mt-2 text-xs font-medium text-foreground">{insight.action}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState>
+              Conclua a primeira entrega do dia para ativar recomendações baseadas no histórico.
+            </EmptyState>
+          )}
+        </SectionCard>
+      ) : null}
 
       <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-[380px_minmax(0,1fr)] [&>*]:min-w-0">
         <SectionCard title="Nova entrega" description="Preencha após finalizar a corrida">
@@ -1161,6 +1213,127 @@ function Entregas() {
       </div>
     </AppShell>
   );
+}
+
+function buildDeliveryInsights({
+  all,
+  today,
+  goalRemaining,
+  dailyGoal,
+}: {
+  all: Delivery[];
+  today: Delivery[];
+  goalRemaining: number;
+  dailyGoal: number;
+}): DeliveryInsight[] | null {
+  if (!today.length) return [];
+
+  const completedHistory = all.filter(
+    (d) => ((d as unknown as { status?: string }).status ?? "concluida") === "concluida",
+  );
+  const currentHour = new Date().getHours();
+  const currentWeekday = new Date().getDay();
+  const revenueToday = today.reduce((sum, d) => sum + Number(d.earnings) + Number(d.tip), 0);
+  const avgTicket = average(
+    completedHistory
+      .filter((d) => Number(d.earnings) + Number(d.tip) > 0)
+      .map((d) => Number(d.earnings) + Number(d.tip)),
+  );
+  const bestApp = rankByApp(completedHistory)[0];
+  const bestHour = rankByHour(completedHistory, currentWeekday).find((h) => h.hour >= currentHour);
+  const recent = completedHistory.filter(
+    (d) => new Date(d.occurred_at).getTime() >= Date.now() - 30 * 86400000,
+  );
+  const minPerKm = percentile(
+    recent
+      .filter((d) => Number(d.distance_km) > 0)
+      .map((d) => (Number(d.earnings) + Number(d.tip)) / Number(d.distance_km)),
+    0.6,
+  );
+  const suggestedRuns = avgTicket > 0 ? Math.ceil(goalRemaining / avgTicket) : 0;
+
+  const insights: DeliveryInsight[] = [];
+
+  if (dailyGoal > 0) {
+    insights.push({
+      title: goalRemaining > 0 ? "Meta em foco" : "Meta batida",
+      description:
+        goalRemaining > 0
+          ? `Você já fez ${brl(revenueToday)}. Faltam ${brl(goalRemaining)} para a meta de hoje.`
+          : `Você já superou a meta diária de ${brl(dailyGoal)}.`,
+      action:
+        goalRemaining > 0 && suggestedRuns > 0
+          ? `Busque cerca de ${suggestedRuns} entrega${suggestedRuns === 1 ? "" : "s"} no ticket médio de ${brl(avgTicket)}.`
+          : "Priorize corridas com maior R$/km para proteger o lucro.",
+    });
+  }
+
+  if (bestApp) {
+    insights.push({
+      title: "App mais forte",
+      description: `${bestApp.app} lidera seu histórico com ${brl(bestApp.avgRevenue)} por entrega e ${brl(bestApp.perKm)}/km.`,
+      action: `Quando houver escolha, dê prioridade a ${bestApp.app} enquanto a demanda estiver boa.`,
+    });
+  }
+
+  insights.push({
+    title: bestHour ? "Próxima janela boa" : "Filtro de aceite",
+    description: bestHour
+      ? `Hoje, a partir de ${String(bestHour.hour).padStart(2, "0")}h, seu histórico rende em média ${brl(bestHour.avgRevenue)} por entrega.`
+      : "Ainda não há padrão de horário suficiente para hoje.",
+    action:
+      minPerKm > 0
+        ? `Evite ofertas abaixo de ${brl(minPerKm)}/km, salvo se ajudarem a voltar para uma área quente.`
+        : "Registre distância e tempo nas próximas corridas para calibrar o filtro automaticamente.",
+  });
+
+  return insights.slice(0, 3);
+}
+
+function average(values: number[]) {
+  return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+}
+
+function percentile(values: number[], p: number) {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.max(0, Math.floor((sorted.length - 1) * p)))] ?? 0;
+}
+
+function rankByApp(deliveries: Delivery[]) {
+  const map = new Map<string, { app: string; revenue: number; km: number; count: number }>();
+  for (const d of deliveries) {
+    const cur = map.get(d.app_name) ?? { app: d.app_name, revenue: 0, km: 0, count: 0 };
+    cur.revenue += Number(d.earnings) + Number(d.tip);
+    cur.km += Number(d.distance_km);
+    cur.count += 1;
+    map.set(d.app_name, cur);
+  }
+  return [...map.values()]
+    .filter((item) => item.count >= 2)
+    .map((item) => ({
+      ...item,
+      avgRevenue: item.revenue / item.count,
+      perKm: item.km > 0 ? item.revenue / item.km : 0,
+    }))
+    .sort((a, b) => b.perKm - a.perKm || b.avgRevenue - a.avgRevenue);
+}
+
+function rankByHour(deliveries: Delivery[], weekday: number) {
+  const map = new Map<number, { hour: number; revenue: number; count: number }>();
+  for (const d of deliveries) {
+    const date = new Date(d.occurred_at);
+    if (date.getDay() !== weekday) continue;
+    const hour = date.getHours();
+    const cur = map.get(hour) ?? { hour, revenue: 0, count: 0 };
+    cur.revenue += Number(d.earnings) + Number(d.tip);
+    cur.count += 1;
+    map.set(hour, cur);
+  }
+  return [...map.values()]
+    .filter((item) => item.count >= 2)
+    .map((item) => ({ ...item, avgRevenue: item.revenue / item.count }))
+    .sort((a, b) => b.avgRevenue - a.avgRevenue);
 }
 
 function Field({
