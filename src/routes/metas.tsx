@@ -20,7 +20,7 @@ import {
 } from "@/lib/data";
 import { brl, monthKey, monthLabel, num } from "@/lib/format";
 import { useGoalCelebrations } from "@/lib/celebrate";
-import { byMonth, costPerKm } from "@/lib/metrics";
+import { adaptiveDailyRevenueGoal, byMonth, costPerKm } from "@/lib/metrics";
 
 export const Route = createFileRoute("/metas")({
   head: () => ({
@@ -58,6 +58,11 @@ function Metas() {
   const months = byMonth(deliveries.data ?? [], expenses.data ?? [], cpk);
   const current = monthKey(new Date());
   const currentSummary = months.find((m) => m.month === current);
+  const dailyGoalPlan = adaptiveDailyRevenueGoal({
+    deliveries: deliveries.data ?? [],
+    goals: goals.data ?? [],
+    profile: profile.data,
+  });
 
   const [form, setForm] = useState({
     month: current,
@@ -122,15 +127,25 @@ function Metas() {
           >
             <div className="space-y-2">
               <Label className="text-xs">Mês</Label>
-              <Input type="month" value={form.month} onChange={(e) => setForm({ ...form, month: e.target.value })} />
+              <Input
+                type="month"
+                value={form.month}
+                onChange={(e) => setForm({ ...form, month: e.target.value })}
+              />
             </div>
             <div className="space-y-2">
               <Label className="text-xs">Meta de receita (R$)</Label>
-              <Input value={form.revenue_target} onChange={(e) => setForm({ ...form, revenue_target: e.target.value })} />
+              <Input
+                value={form.revenue_target}
+                onChange={(e) => setForm({ ...form, revenue_target: e.target.value })}
+              />
             </div>
             <div className="space-y-2">
               <Label className="text-xs">Meta de lucro (R$)</Label>
-              <Input value={form.profit_target} onChange={(e) => setForm({ ...form, profit_target: e.target.value })} />
+              <Input
+                value={form.profit_target}
+                onChange={(e) => setForm({ ...form, profit_target: e.target.value })}
+              />
             </div>
             <div className="space-y-2">
               <Label className="text-xs">Meta de entregas</Label>
@@ -164,6 +179,30 @@ function Metas() {
               </Button>
             </div>
           </form>
+
+          {dailyGoalPlan.monthTarget > 0 ? (
+            <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm">
+              <p className="font-semibold text-foreground">Meta diária inteligente</p>
+              <p className="mt-1 text-muted-foreground">
+                Para compensar dias abaixo da meta e ainda bater {brl(dailyGoalPlan.monthTarget)} no
+                mês, mire em
+                <span className="font-semibold text-foreground">
+                  {" "}
+                  {brl(dailyGoalPlan.target)}
+                </span>{" "}
+                por dia nos próximos
+                <span className="font-semibold text-foreground">
+                  {" "}
+                  {dailyGoalPlan.remainingDaysIncludingToday}
+                </span>{" "}
+                dias.
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                O cálculo considera {brl(dailyGoalPlan.revenueBeforeToday)} já feitos antes de hoje
+                e redistribui o faltante automaticamente.
+              </p>
+            </div>
+          ) : null}
         </SectionCard>
 
         <SectionCard title="Progresso das metas">
@@ -173,9 +212,24 @@ function Metas() {
                 const key = g.month.slice(0, 7);
                 const m = months.find((x) => x.month === key);
                 const rows = [
-                  { label: "Receita", value: m?.revenue ?? 0, target: Number(g.revenue_target), money: true },
-                  { label: "Lucro", value: m?.profit ?? 0, target: Number(g.profit_target), money: true },
-                  { label: "Entregas", value: m?.count ?? 0, target: Number(g.deliveries_target), money: false },
+                  {
+                    label: "Receita",
+                    value: m?.revenue ?? 0,
+                    target: Number(g.revenue_target),
+                    money: true,
+                  },
+                  {
+                    label: "Lucro",
+                    value: m?.profit ?? 0,
+                    target: Number(g.profit_target),
+                    money: true,
+                  },
+                  {
+                    label: "Entregas",
+                    value: m?.count ?? 0,
+                    target: Number(g.deliveries_target),
+                    money: false,
+                  },
                 ];
                 return (
                   <li key={g.id} className="rounded-xl border border-border p-4">
