@@ -72,7 +72,21 @@ export const Route = createFileRoute("/entregas")({
   component: Entregas,
 });
 
-type StoredStop = { kind: string; address: string; lat: number | null; lng: number | null };
+type StoredStop = {
+  kind: string;
+  address: string;
+  lat: number | null;
+  lng: number | null;
+  recorded_at?: string;
+};
+
+function recordedStops(stops: Omit<StoredStop, "recorded_at">[]): StoredStop[] {
+  const now = Date.now();
+  return stops.map((stop, index) => ({
+    ...stop,
+    recorded_at: new Date(now + index).toISOString(),
+  }));
+}
 
 type DeliveryInsight = {
   title: string;
@@ -215,9 +229,11 @@ function Entregas() {
 
   /** Grava os pontos já informados na entrega em rota (sem concluir). */
   async function persistFinishStops(id: string, raw: StoredStop[], list2: Stop[]) {
-    const filled = list2
-      .filter((s) => s.address.trim() || (s.lat != null && s.lng != null))
-      .map((s) => ({ kind: s.kind, address: s.address.trim(), lat: s.lat, lng: s.lng }));
+    const filled = recordedStops(
+      list2
+        .filter((s) => s.address.trim() || (s.lat != null && s.lng != null))
+        .map((s) => ({ kind: s.kind, address: s.address.trim(), lat: s.lat, lng: s.lng })),
+    );
     if (!filled.length) return false;
     await updateDelivery.mutateAsync({
       id,
@@ -403,12 +419,14 @@ function Entregas() {
         lat: first?.lat ?? null,
         lng: first?.lng ?? null,
         status: finalized ? "concluida" : "em_rota",
-        stops: filled.map((s) => ({
-          kind: s.kind,
-          address: s.address,
-          lat: s.lat,
-          lng: s.lng,
-        })),
+        stops: recordedStops(
+          filled.map((s) => ({
+            kind: s.kind,
+            address: s.address,
+            lat: s.lat,
+            lng: s.lng,
+          })),
+        ),
       });
       toast.success(
         finalized ? "Entrega registrada" : "Entrega salva em rota — defina o ponto final depois",
@@ -450,7 +468,7 @@ function Entregas() {
   const data = all.filter((d) => new Date(d.occurred_at).getTime() >= rangeStart);
 
   const total = today.reduce((s, d) => s + Number(d.earnings) + Number(d.tip), 0);
-  const kmSum = today.reduce((s, d) => s + Number(d.distance_km), 0);
+  const deliveryKmSum = today.reduce((s, d) => s + Number(d.distance_km), 0);
   const idle = today.reduce((s, d) => s + Number(d.idle_min), 0);
   const dailyGoal = adaptiveDailyRevenueGoal({
     deliveries: all,
@@ -469,10 +487,9 @@ function Entregas() {
     (d) => (d as unknown as { status?: string }).status === "em_rota",
   ).length;
 
-  // "Distância total" = somente o deslocamento entre entregas (entre o ponto final
-  // de uma entrega e o ponto inicial da próxima). A soma das distâncias de cada
-  // entrega individual continua disponível no hint como referência.
-  const { deadheadKm, km } = useChainedDistance(today);
+  // "Distância total" = trajeto encadeado do dia: primeira coleta confirmada/salva
+  // até o último ponto informado, incluindo coletas, destinos finais e adicionais.
+  const { chainKm, km } = useChainedDistance(today);
 
   const formNav = navigationUrl(stops);
   const filledStops = stops.filter((s) => s.address.trim() || (s.lat != null && s.lng != null));
@@ -484,15 +501,18 @@ function Entregas() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatCard label="Total recebido" value={brl(total)} tone="primary" />
         <StatCard
-          label="Distância total"
+          label="Pontos encadeados"
           value={`${num(km)} km`}
           hint={
-            `${num(deadheadKm ?? 0)} km entre entregas` +
+            (chainKm != null
+              ? "Distância total do trajeto encadeado no dia"
+              : "Distância total pela soma das entregas do dia") +
             (today.length
-              ? ` · ${num(kmSum)} km nas ${today.length} entrega${today.length === 1 ? "" : "s"} do dia`
+              ? ` · ${num(deliveryKmSum)} km registrados em ${today.length} entrega${today.length === 1 ? "" : "s"}`
               : "") +
             (emRota ? ` · ${emRota} em andamento` : "")
           }
+          tone="primary"
         />
 
         <StatCard label="Tempo parado" value={minutesLabel(idle)} tone="warning" />
@@ -1101,14 +1121,16 @@ function Entregas() {
                                   updateDelivery.isPending
                                 }
                                 onClick={async () => {
-                                  const filled = finishing.stops
-                                    .filter((s) => s.address.trim())
-                                    .map((s) => ({
-                                      kind: s.kind,
-                                      address: s.address.trim(),
-                                      lat: s.lat,
-                                      lng: s.lng,
-                                    }));
+                                  const filled = recordedStops(
+                                    finishing.stops
+                                      .filter((s) => s.address.trim())
+                                      .map((s) => ({
+                                        kind: s.kind,
+                                        address: s.address.trim(),
+                                        lat: s.lat,
+                                        lng: s.lng,
+                                      })),
+                                  );
                                   const last = filled[filled.length - 1];
                                   try {
                                     const allPts = [...raw, ...filled];

@@ -2,7 +2,13 @@ import { useQuery } from "@tanstack/react-query";
 import type { Delivery } from "@/lib/data";
 import { fetchRouteWithFallback } from "@/lib/geo";
 
-export type StoredStop = { kind: string; address: string; lat: number | null; lng: number | null };
+export type StoredStop = {
+  kind: string;
+  address: string;
+  lat: number | null;
+  lng: number | null;
+  recorded_at?: string;
+};
 
 export function pointsOfDelivery(d: Delivery): [number, number][] {
   const st = ((d as unknown as { stops?: StoredStop[] }).stops ?? []).filter(
@@ -11,6 +17,44 @@ export function pointsOfDelivery(d: Delivery): [number, number][] {
   if (st.length) return st.map((s) => [s.lat as number, s.lng as number] as [number, number]);
   if (d.lat != null && d.lng != null) return [[d.lat, d.lng] as [number, number]];
   return [];
+}
+
+type RoutePoint = { coordinates: [number, number]; recordedAt: number; sequence: number };
+
+/** Intercala pontos de entregas simultâneas pela hora em que cada ponto foi salvo. */
+export function orderedRoutePoints(deliveries: Delivery[]): [number, number][] {
+  const points: RoutePoint[] = deliveries.flatMap((delivery, deliveryIndex) => {
+    const stops = ((delivery as unknown as { stops?: StoredStop[] }).stops ?? []).filter(
+      (stop) => stop.lat != null && stop.lng != null,
+    );
+    const deliveryTime = new Date(delivery.occurred_at).getTime();
+
+    if (!stops.length && delivery.lat != null && delivery.lng != null) {
+      return [
+        {
+          coordinates: [delivery.lat, delivery.lng],
+          recordedAt: deliveryTime,
+          sequence: deliveryIndex,
+        },
+      ];
+    }
+
+    return stops.map((stop, stopIndex) => ({
+      coordinates: [stop.lat as number, stop.lng as number] as [number, number],
+      recordedAt: stop.recorded_at ? new Date(stop.recorded_at).getTime() : deliveryTime,
+      sequence: deliveryIndex * 1000 + stopIndex,
+    }));
+  });
+
+  points.sort((a, b) => a.recordedAt - b.recordedAt || a.sequence - b.sequence);
+
+  // Remove somente repetições consecutivas. Voltar ao mesmo local mais tarde conta no trajeto.
+  return points
+    .map((point) => point.coordinates)
+    .filter((point, index, all) => {
+      const previous = all[index - 1];
+      return !previous || point[0] !== previous[0] || point[1] !== previous[1];
+    });
 }
 
 function haversine(a: [number, number], b: [number, number]) {
@@ -24,10 +68,10 @@ function haversine(a: [number, number], b: [number, number]) {
 }
 
 /**
- * Replica o cálculo de "Distância total" da tela de Entregas:
- * encadeia cronologicamente todos os pontos salvos (coletas e entregas),
- * ignora pontos repetidos, limita trechos absurdos e devolve o deslocamento
- * entre entregas (trajeto encadeado menos a soma das distâncias individuais).
+ * Calcula a quilometragem total do período encadeando, em ordem cronológica,
+ * todos os pontos salvos das entregas (coletas, destinos finais e pontos
+ * adicionais). O resultado representa o trajeto do dia desde a primeira coleta
+ * confirmada/salva até o último ponto informado.
  */
 export function useChainedDistance(deliveries: Delivery[]) {
   const ordered = [...deliveries].sort(
@@ -35,13 +79,7 @@ export function useChainedDistance(deliveries: Delivery[]) {
   );
   const kmSum = ordered.reduce((s, d) => s + Number(d.distance_km), 0);
 
-  const seen = new Set<string>();
-  const chainPoints = ordered.flatMap(pointsOfDelivery).filter((p) => {
-    const key = `${p[0].toFixed(4)},${p[1].toFixed(4)}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  const chainPoints = orderedRoutePoints(ordered);
 
   const chainKey = chainPoints.map(([a, b]) => `${a.toFixed(5)},${b.toFixed(5)}`).join("|");
   const chained = useQuery({
@@ -65,8 +103,7 @@ export function useChainedDistance(deliveries: Delivery[]) {
   });
 
   const chainKm = chained.data ?? null;
-  const deadheadKm =
-    chainKm != null ? Math.max(Math.round((chainKm - kmSum) * 100) / 100, 0) : null;
+  const totalKm = chainKm ?? kmSum;
 
-  return { kmSum, chainKm, deadheadKm, km: deadheadKm ?? 0, isLoading: chained.isLoading };
+  return { kmSum, chainKm, totalKm, km: totalKm, isLoading: chained.isLoading };
 }

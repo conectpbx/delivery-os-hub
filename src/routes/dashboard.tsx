@@ -99,7 +99,7 @@ function Dashboard() {
     [periodDeliveries, periodExpenses, periodMaint, cpk],
   );
   const ranking = useMemo(() => byApp(periodDeliveries, cpk), [periodDeliveries, cpk]);
-  const { km: betweenKm } = useChainedDistance(periodDeliveries);
+  const { chainKm, km: periodKm } = useChainedDistance(periodDeliveries);
   const { grid, max } = useMemo(() => heatmap(deliveriesData), [deliveriesData]);
 
   const series = useMemo(() => {
@@ -190,15 +190,18 @@ function Dashboard() {
           icon={<Fuel className="size-4" />}
         />
         <StatCard
-          label="Quilometragem"
-          value={`${num(betweenKm)} km`}
+          label="Pontos encadeados"
+          value={`${num(periodKm)} km`}
           hint={
-            `${num(betweenKm)} km entre entregas` +
+            (chainKm != null
+              ? "Distância total do trajeto encadeado no período"
+              : "Distância total pela soma das entregas do período") +
             (periodDeliveries.length
-              ? ` · ${num(s.distance)} km nas ${periodDeliveries.length} entrega${periodDeliveries.length === 1 ? "" : "s"}`
+              ? ` · ${num(s.distance)} km registrados em ${periodDeliveries.length} entrega${periodDeliveries.length === 1 ? "" : "s"}`
               : "") +
             ` · ${brl(s.perKm)} por km rodado`
           }
+          tone="primary"
           icon={<Gauge className="size-4" />}
         />
       </div>
