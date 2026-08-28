@@ -202,7 +202,7 @@ function Entregas() {
 
       try {
         const place = await reverseGeocodeAddress(lat, lng);
-        if (place.address) {
+        if (place?.address) {
           patchStop(stopId, { address: place.address });
           toast.success("Endereço preenchido pelo GPS");
         } else {
@@ -250,9 +250,9 @@ function Entregas() {
       try {
         const place = await reverseGeocodeAddress(lat, lng);
         patchFinishStop(stopId, {
-          address: place.address || `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+          address: place?.address || `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
         });
-        toast.success(place.address ? "Endereço preenchido pelo GPS" : "Localização capturada");
+        toast.success(place?.address ? "Endereço preenchido pelo GPS" : "Localização capturada");
       } catch {
         patchFinishStop(stopId, { address: `${lat.toFixed(5)}, ${lng.toFixed(5)}` });
         toast.message("Localização capturada (endereço indisponível)");
