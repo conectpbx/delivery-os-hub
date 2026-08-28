@@ -501,7 +501,7 @@ function Entregas() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatCard label="Total recebido" value={brl(total)} tone="primary" />
         <StatCard
-          label="Distância total"
+          label="Pontos encadeados"
           value={`${num(km)} km`}
           hint={
             (chainKm != null ? "Pontos do dia encadeados" : "Soma das entregas do dia") +
@@ -510,6 +510,7 @@ function Entregas() {
               : "") +
             (emRota ? ` · ${emRota} em andamento` : "")
           }
+          tone="primary"
         />
 
         <StatCard label="Tempo parado" value={minutesLabel(idle)} tone="warning" />

@@ -199,6 +199,7 @@ function Dashboard() {
               : "") +
             ` · ${brl(s.perKm)} por km rodado`
           }
+          tone="primary"
           icon={<Gauge className="size-4" />}
         />
       </div>
