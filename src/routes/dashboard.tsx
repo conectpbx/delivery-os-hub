@@ -190,12 +190,10 @@ function Dashboard() {
           icon={<Fuel className="size-4" />}
         />
         <StatCard
-          label="Pontos encadeados"
+          label="Quilometragem"
           value={`${num(periodKm)} km`}
           hint={
-            (chainKm != null
-              ? "Distância total do trajeto encadeado no período"
-              : "Distância total pela soma das entregas do período") +
+            (chainKm != null ? "Pontos do período encadeados" : "Soma das entregas do período") +
             (periodDeliveries.length
               ? ` · ${num(s.distance)} km registrados em ${periodDeliveries.length} entrega${periodDeliveries.length === 1 ? "" : "s"}`
               : "") +
