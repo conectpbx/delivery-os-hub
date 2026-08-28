@@ -504,9 +504,7 @@ function Entregas() {
           label="Pontos encadeados"
           value={`${num(km)} km`}
           hint={
-            (chainKm != null
-              ? "Distância total do trajeto encadeado no dia"
-              : "Distância total pela soma das entregas do dia") +
+            (chainKm != null ? "Pontos do dia encadeados" : "Soma das entregas do dia") +
             (today.length
               ? ` · ${num(deliveryKmSum)} km registrados em ${today.length} entrega${today.length === 1 ? "" : "s"}`
               : "") +
