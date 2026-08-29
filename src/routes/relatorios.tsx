@@ -10,11 +10,11 @@ import { useDeliveries, useExpenses, useFuelings, useMaintenances, useProfile } 
 import { brl, dateTimeLabel, downloadCsv, monthLabel, num } from "@/lib/format";
 import {
   byApp,
+  byMonthRecordedCosts,
   costPerKm,
-  byMonth,
   costsByCategory,
   filterByRange,
-  summarize,
+  summarizeRecordedCosts,
 } from "@/lib/metrics";
 import { PeriodFilter, PeriodSummary, usePeriodSelection } from "@/components/PeriodFilter";
 
@@ -71,19 +71,16 @@ function Relatorios() {
   );
 
   const months = useMemo(
-    () => byMonth(deliveriesData, expensesData, cpk).slice(-12),
-    [deliveriesData, expensesData, cpk],
+    () =>
+      byMonthRecordedCosts(deliveriesData, expensesData, fuelingsData, maintenancesData).slice(-12),
+    [deliveriesData, expensesData, fuelingsData, maintenancesData],
   );
   const total = useMemo(
-    () => summarize(perDeliveries, perExpenses, perMaint, cpk),
-    [perDeliveries, perExpenses, perMaint, cpk],
+    () => summarizeRecordedCosts(perDeliveries, perExpenses, perMaint, perFuelings),
+    [perDeliveries, perExpenses, perFuelings, perMaint],
   );
   const ranking = useMemo(() => byApp(perDeliveries, cpk), [perDeliveries, cpk]);
   const categories = useMemo(() => costsByCategory(perExpenses), [perExpenses]);
-  const fuelPaid = useMemo(
-    () => perFuelings.reduce((a, f) => a + Number(f.total), 0),
-    [perFuelings],
-  );
   const totalCost = total.fuelCost + total.otherCost + total.maintenanceCost;
   const last = months[months.length - 1];
   const prev = months[months.length - 2];
@@ -98,28 +95,14 @@ function Relatorios() {
   const costRows: { label: string; value: number; hint?: string }[] = useMemo(
     () => [
       {
-        label: "Combustível (estimado por km)",
+        label: "Combustível abastecido",
         value: total.fuelCost,
-        hint: `${num(total.distance)} km × ${brl(cpk)}/km`,
-      },
-      {
-        label: "Abastecimentos pagos",
-        value: fuelPaid,
         hint: `${perFuelings.length} abastecimento(s)`,
       },
       { label: "Manutenção", value: total.maintenanceCost, hint: `${perMaint.length} serviço(s)` },
       ...categories.map((c) => ({ label: `Despesa · ${c.category}`, value: c.amount })),
     ],
-    [
-      categories,
-      cpk,
-      fuelPaid,
-      perFuelings.length,
-      perMaint.length,
-      total.distance,
-      total.fuelCost,
-      total.maintenanceCost,
-    ],
+    [categories, perFuelings.length, perMaint.length, total.fuelCost, total.maintenanceCost],
   );
 
   function exportDeliveries() {
@@ -211,7 +194,7 @@ function Relatorios() {
         title="Detalhamento dos custos"
         description={`Período: ${period.label}`}
       >
-        {totalCost > 0 || fuelPaid > 0 ? (
+        {totalCost > 0 ? (
           <ul className="divide-y divide-border">
             {costRows
               .filter((r) => r.value > 0)
@@ -272,7 +255,7 @@ function Relatorios() {
                     <tr key={m.month} className="border-b border-border/60">
                       <td className="py-2">{monthLabel(m.month)}</td>
                       <td className="py-2 text-right tabular-nums">{brl(m.revenue)}</td>
-                      <td className="py-2 text-right tabular-nums">{brl(m.cost + m.km * cpk)}</td>
+                      <td className="py-2 text-right tabular-nums">{brl(m.cost)}</td>
                       <td className="py-2 text-right font-medium tabular-nums">{brl(m.profit)}</td>
                     </tr>
                   ))}

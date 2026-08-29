@@ -73,6 +73,29 @@ export function summarize(
   };
 }
 
+/**
+ * Builds the financial summary from the costs the user actually recorded.
+ *
+ * `summarize` intentionally estimates fuel consumption from the driven distance
+ * for operational projections. Reports, however, must reconcile with the cash
+ * entries in Financeiro, so fuel is the sum of the recorded fueling totals.
+ */
+export function summarizeRecordedCosts(
+  deliveries: Delivery[],
+  expenses: Expense[],
+  maintenances: Maintenance[],
+  fuelings: Fueling[],
+): Summary {
+  const summary = summarize(deliveries, expenses, maintenances, 0);
+  const fuelCost = fuelings.reduce((sum, fueling) => sum + Number(fueling.total), 0);
+
+  return {
+    ...summary,
+    fuelCost,
+    profit: summary.revenue - fuelCost - summary.otherCost - summary.maintenanceCost,
+  };
+}
+
 export function currentRevenueTarget(
   goals: Goal[],
   profile: Profile | null | undefined,
@@ -164,6 +187,43 @@ export function byMonth(deliveries: Delivery[], expenses: Expense[], cpk: number
   }
   return [...map.values()]
     .map((m) => ({ ...m, profit: m.revenue - m.km * cpk - m.cost }))
+    .sort((a, b) => a.month.localeCompare(b.month));
+}
+
+export function byMonthRecordedCosts(
+  deliveries: Delivery[],
+  expenses: Expense[],
+  fuelings: Fueling[],
+  maintenances: Maintenance[],
+) {
+  const map = new Map<
+    string,
+    { month: string; revenue: number; km: number; cost: number; count: number }
+  >();
+  const ensure = (key: string) => {
+    const current = map.get(key) ?? { month: key, revenue: 0, km: 0, cost: 0, count: 0 };
+    map.set(key, current);
+    return current;
+  };
+
+  for (const delivery of deliveries) {
+    const current = ensure(monthKey(new Date(delivery.occurred_at)));
+    current.revenue += Number(delivery.earnings) + Number(delivery.tip);
+    current.km += Number(delivery.distance_km);
+    current.count += 1;
+  }
+  for (const expense of expenses) {
+    ensure(monthKey(new Date(expense.occurred_at))).cost += Number(expense.amount);
+  }
+  for (const fueling of fuelings) {
+    ensure(monthKey(new Date(fueling.occurred_at))).cost += Number(fueling.total);
+  }
+  for (const maintenance of maintenances) {
+    ensure(monthKey(new Date(maintenance.performed_at))).cost += Number(maintenance.cost);
+  }
+
+  return [...map.values()]
+    .map((month) => ({ ...month, profit: month.revenue - month.cost }))
     .sort((a, b) => a.month.localeCompare(b.month));
 }
 
