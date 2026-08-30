@@ -7,7 +7,7 @@ import { AppShell } from "@/components/AppShell";
 import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
 import { Button } from "@/components/ui/button";
 import { useDeliveries, useExpenses, useFuelings, useMaintenances, useProfile } from "@/lib/data";
-import { brl, dateTimeLabel, downloadCsv, monthLabel, num } from "@/lib/format";
+import { brl, dateTimeLabel, downloadCsv, monthLabel, num, paymentMethodLabel } from "@/lib/format";
 import {
   byApp,
   byMonthRecordedCosts,
@@ -107,10 +107,21 @@ function Relatorios() {
 
   function exportDeliveries() {
     downloadCsv("entregas-delivery-os.csv", [
-      ["Data", "Aplicativo", "Ganho", "Gorjeta", "KM", "Duração (min)", "Parado (min)", "Destino"],
+      [
+        "Data",
+        "Aplicativo",
+        "Forma de recebimento",
+        "Ganho",
+        "Gorjeta",
+        "KM",
+        "Duração (min)",
+        "Parado (min)",
+        "Destino",
+      ],
       ...perDeliveries.map((d) => [
         dateTimeLabel(d.occurred_at),
         d.app_name,
+        paymentMethodLabel(d.payment_method),
         Number(d.earnings),
         Number(d.tip),
         Number(d.distance_km),

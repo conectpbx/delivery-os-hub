@@ -15,7 +15,7 @@ import {
   useMaintenances,
   useProfile,
 } from "@/lib/data";
-import { brl, dateLabel, dateTimeLabel, minutesLabel, num } from "@/lib/format";
+import { brl, dateLabel, dateTimeLabel, minutesLabel, num, paymentMethodLabel } from "@/lib/format";
 import { useGoalCelebrations } from "@/lib/celebrate";
 import { useSmartAlerts } from "@/lib/alerts";
 import {
@@ -305,8 +305,8 @@ function Dashboard() {
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{d.app_name}</p>
                     <p className="truncate text-xs text-muted-foreground">
-                      {dateTimeLabel(d.occurred_at)} · {num(Number(d.distance_km))} km ·{" "}
-                      {d.dropoff_address ?? "sem endereço"}
+                      {dateTimeLabel(d.occurred_at)} · {paymentMethodLabel(d.payment_method)} ·{" "}
+                      {num(Number(d.distance_km))} km · {d.dropoff_address ?? "sem endereço"}
                     </p>
                   </div>
                   <span className="text-sm font-semibold tabular-nums text-success">
