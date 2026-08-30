@@ -30,9 +30,9 @@ import {
   useUpdate,
   useUpdateApp,
 } from "@/lib/data";
-import type { Delivery } from "@/lib/data";
+import type { Delivery, PaymentMethod } from "@/lib/data";
 
-import { brl, dateTimeLabel, minutesLabel, num } from "@/lib/format";
+import { brl, dateTimeLabel, minutesLabel, num, paymentMethodLabel } from "@/lib/format";
 import { adaptiveDailyRevenueGoal } from "@/lib/metrics";
 import {
   fetchRouteWithFallback,
@@ -143,6 +143,7 @@ function Entregas() {
     fee_percent: "",
     fee_amount: "",
     tip: "",
+    payment_method: "credito" as PaymentMethod,
     distance_km: "",
     duration_min: "",
     idle_min: "",
@@ -150,7 +151,8 @@ function Entregas() {
 
   useEffect(() => setMounted(true), []);
 
-  const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
+    setForm((f) => ({ ...f, [k]: v }));
   const patchStop = (id: string, values: Partial<Stop>) =>
     setStops((s) => s.map((st) => (st.id === id ? { ...st, ...values } : st)));
 
@@ -411,6 +413,7 @@ function Entregas() {
         fee_percent: feePct,
         earnings: Number(net.toFixed(2)),
         tip: dec(form.tip),
+        payment_method: form.payment_method ?? "credito",
         distance_km: dec(form.distance_km),
         duration_min: Math.round(dec(form.duration_min)),
         idle_min: Math.round(dec(form.idle_min)),
@@ -436,6 +439,7 @@ function Entregas() {
         earnings: "",
         fee_amount: "",
         tip: "",
+        payment_method: "credito",
         distance_km: "",
         duration_min: "",
         idle_min: "",
@@ -646,6 +650,19 @@ function Entregas() {
               <Field label="Taxa do app (R$)" value={form.fee_amount} onChange={setFeeAmount} />
               <Field label="Taxa do app (%)" value={form.fee_percent} onChange={setFeePercent} />
               <Field label="Gorjeta (R$)" value={form.tip} onChange={(v) => set("tip", v)} />
+              <div className="col-span-2 space-y-2">
+                <Label htmlFor="payment-method">Forma de recebimento</Label>
+                <select
+                  id="payment-method"
+                  value={form.payment_method ?? "credito"}
+                  onChange={(e) => set("payment_method", e.target.value as PaymentMethod)}
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="credito">Crédito</option>
+                  <option value="pix">Pix</option>
+                  <option value="dinheiro">Dinheiro</option>
+                </select>
+              </div>
               <Field
                 label="Distância (km)"
                 value={form.distance_km}
@@ -656,6 +673,9 @@ function Entregas() {
                 value={form.duration_min}
                 onChange={(v) => set("duration_min", v)}
               />
+              <p className="col-span-2 text-xs text-muted-foreground">
+                Distância e duração são preenchidas automaticamente ao capturar os pontos pelo GPS.
+              </p>
               <Field
                 label="Tempo parado (min)"
                 value={form.idle_min}
@@ -958,7 +978,8 @@ function Entregas() {
                             ) : null}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {dateTimeLabel(d.occurred_at)} · {num(Number(d.distance_km))} km ·{" "}
+                            {dateTimeLabel(d.occurred_at)} · {paymentMethodLabel(d.payment_method)}{" "}
+                            · {num(Number(d.distance_km))} km ·{" "}
                             {minutesLabel(Number(d.duration_min))} rodando ·{" "}
                             {minutesLabel(Number(d.idle_min))} parado
                           </p>

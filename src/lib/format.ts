@@ -37,6 +37,12 @@ export const minutesLabel = (min: number) => {
   return h > 0 ? `${h}h ${m}min` : `${m}min`;
 };
 
+export const paymentMethodLabel = (method: string | null | undefined) => {
+  if (method === "pix") return "Pix";
+  if (method === "dinheiro") return "Dinheiro";
+  return "Crédito";
+};
+
 export function downloadCsv(filename: string, rows: (string | number)[][]) {
   const csv = rows
     .map((r) =>
@@ -61,7 +67,9 @@ export function downloadCsv(filename: string, rows: (string | number)[][]) {
 export function dec(v: string | number | null | undefined): number {
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
   if (!v) return 0;
-  let s = String(v).trim().replace(/[^\d.,-]/g, "");
+  let s = String(v)
+    .trim()
+    .replace(/[^\d.,-]/g, "");
   if (s.includes(",")) {
     // vírgula é o separador decimal → pontos são milhar
     s = s.replace(/\./g, "").replace(",", ".");
@@ -73,4 +81,3 @@ export function dec(v: string | number | null | undefined): number {
   const n = Number(s);
   return Number.isFinite(n) ? n : 0;
 }
-

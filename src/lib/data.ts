@@ -3,7 +3,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { enqueueInsert, isOffline } from "@/lib/offline-queue";
 
-
 // Cliente sem tipagem de schema para tabelas acessadas de forma dinâmica.
 const db = supabase as unknown as SupabaseClient;
 
@@ -14,6 +13,7 @@ export type Delivery = {
   tip: number;
   distance_km: number;
   duration_min: number;
+  payment_method: PaymentMethod;
   idle_min: number;
   pickup_address: string | null;
   dropoff_address: string | null;
@@ -21,6 +21,8 @@ export type Delivery = {
   lng: number | null;
   occurred_at: string;
 };
+
+export type PaymentMethod = "credito" | "pix" | "dinheiro";
 
 export type Fueling = {
   id: string;
@@ -105,7 +107,10 @@ export function useUpdate<T extends Record<string, unknown>>(table: string, key:
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, values }: { id: string; values: T }) => {
-      const { error } = await db.from(table).update(values as never).eq("id", id);
+      const { error } = await db
+        .from(table)
+        .update(values as never)
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -151,7 +156,6 @@ export function useInsert<T extends Record<string, unknown>>(table: string, key:
     },
   });
 }
-
 
 export function useRemove(table: string, key: string) {
   const qc = useQueryClient();
