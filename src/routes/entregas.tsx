@@ -30,7 +30,7 @@ import {
   useUpdate,
   useUpdateApp,
 } from "@/lib/data";
-import type { Delivery, PaymentMethod } from "@/lib/data";
+import type { Delivery, DeliveryStop, PaymentMethod } from "@/lib/data";
 
 import { brl, dateTimeLabel, minutesLabel, num, paymentMethodLabel } from "@/lib/format";
 import { adaptiveDailyRevenueGoal } from "@/lib/metrics";
@@ -72,13 +72,7 @@ export const Route = createFileRoute("/entregas")({
   component: Entregas,
 });
 
-type StoredStop = {
-  kind: string;
-  address: string;
-  lat: number | null;
-  lng: number | null;
-  recorded_at?: string;
-};
+type StoredStop = DeliveryStop;
 
 function recordedStops(stops: Omit<StoredStop, "recorded_at">[]): StoredStop[] {
   const now = Date.now();
@@ -86,6 +80,39 @@ function recordedStops(stops: Omit<StoredStop, "recorded_at">[]): StoredStop[] {
     ...stop,
     recorded_at: new Date(now + index).toISOString(),
   }));
+}
+
+/** Mantém registros antigos visíveis mesmo quando foram salvos antes do histórico de paradas. */
+function historyStops(delivery: Delivery): StoredStop[] {
+  if (Array.isArray(delivery.stops) && delivery.stops.length) return delivery.stops;
+
+  const legacy: StoredStop[] = [];
+  if (delivery.pickup_address || (delivery.lat != null && delivery.lng != null)) {
+    legacy.push({
+      kind: "coleta",
+      address: delivery.pickup_address ?? "",
+      lat: delivery.lat != null ? Number(delivery.lat) : null,
+      lng: delivery.lng != null ? Number(delivery.lng) : null,
+      recorded_at: delivery.occurred_at,
+    });
+  }
+  if (delivery.dropoff_address) {
+    legacy.push({
+      kind: "entrega",
+      address: delivery.dropoff_address,
+      lat: null,
+      lng: null,
+    });
+  }
+  return legacy;
+}
+
+function stopLocation(stop: StoredStop) {
+  if (stop.address?.trim()) return stop.address.trim();
+  if (stop.lat != null && stop.lng != null) {
+    return `${Number(stop.lat).toFixed(5)}, ${Number(stop.lng).toFixed(5)}`;
+  }
+  return "Local não informado";
 }
 
 type DeliveryInsight = {
@@ -952,8 +979,10 @@ function Entregas() {
             {data.length ? (
               <ul className="divide-y divide-border">
                 {data.map((d) => {
-                  const raw = (d as unknown as { stops?: StoredStop[] }).stops ?? [];
-                  const status = (d as unknown as { status?: string }).status ?? "concluida";
+                  const raw = historyStops(d);
+                  const status = d.status ?? "concluida";
+                  const pickupCount = raw.filter((stop) => stop.kind === "coleta").length;
+                  const deliveryCount = raw.filter((stop) => stop.kind === "entrega").length;
                   const nav = navigationUrl(
                     raw.length
                       ? raw
@@ -983,23 +1012,6 @@ function Entregas() {
                             {minutesLabel(Number(d.duration_min))} rodando ·{" "}
                             {minutesLabel(Number(d.idle_min))} parado
                           </p>
-                          {d.pickup_address ? (
-                            <p className="truncate text-xs text-muted-foreground">
-                              Coleta: {d.pickup_address}
-                            </p>
-                          ) : null}
-                          {raw.length > 1 ? (
-                            <p className="text-xs text-muted-foreground">
-                              {raw
-                                .map((s) => s.address)
-                                .filter(Boolean)
-                                .join(" → ")}
-                            </p>
-                          ) : d.dropoff_address ? (
-                            <p className="truncate text-xs text-muted-foreground">
-                              → {d.dropoff_address}
-                            </p>
-                          ) : null}
                         </div>
                         {nav ? (
                           <Button asChild variant="ghost" size="icon" aria-label="Navegar">
@@ -1016,6 +1028,59 @@ function Entregas() {
                         >
                           <Trash2 className="size-4 text-destructive" />
                         </Button>
+                      </div>
+
+                      <div className="mt-3 rounded-md border border-border bg-muted/20 p-3">
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-xs font-semibold text-foreground">
+                            Percurso completo · {raw.length} ponto{raw.length === 1 ? "" : "s"}
+                          </p>
+                          {raw.length ? (
+                            <p className="text-[11px] text-muted-foreground">
+                              {pickupCount} coleta{pickupCount === 1 ? "" : "s"} · {deliveryCount}{" "}
+                              entrega{deliveryCount === 1 ? "" : "s"}
+                            </p>
+                          ) : null}
+                        </div>
+                        {raw.length ? (
+                          <ol className="space-y-0">
+                            {raw.map((stop, index) => (
+                              <li
+                                key={`${d.id}-${index}-${stop.recorded_at ?? stop.address}`}
+                                className="relative flex gap-3 pb-3 last:pb-0"
+                              >
+                                {index < raw.length - 1 ? (
+                                  <span
+                                    aria-hidden="true"
+                                    className="absolute left-[11px] top-6 h-[calc(100%-1.25rem)] w-px bg-border"
+                                  />
+                                ) : null}
+                                <span className="relative z-10 flex size-6 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-background text-[10px] font-semibold text-primary">
+                                  {index + 1}
+                                </span>
+                                <div className="min-w-0 flex-1 pt-0.5">
+                                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                                    <span className="text-xs font-semibold capitalize text-foreground">
+                                      {stop.kind === "coleta" ? "Coleta" : "Entrega"}
+                                    </span>
+                                    {stop.recorded_at ? (
+                                      <span className="text-[11px] text-muted-foreground">
+                                        {dateTimeLabel(stop.recorded_at)}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                  <p className="break-words text-xs text-muted-foreground">
+                                    {stopLocation(stop)}
+                                  </p>
+                                </div>
+                              </li>
+                            ))}
+                          </ol>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">
+                            Os pontos não foram informados neste registro.
+                          </p>
+                        )}
                       </div>
 
                       {status === "em_rota" ? (

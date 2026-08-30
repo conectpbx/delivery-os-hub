@@ -20,6 +20,16 @@ export type Delivery = {
   lat: number | null;
   lng: number | null;
   occurred_at: string;
+  status?: "em_rota" | "concluida";
+  stops?: DeliveryStop[];
+};
+
+export type DeliveryStop = {
+  kind: "coleta" | "entrega";
+  address: string;
+  lat: number | null;
+  lng: number | null;
+  recorded_at?: string;
 };
 
 export type PaymentMethod = "credito" | "pix" | "dinheiro";
