@@ -56,6 +56,7 @@ export type Database = {
           lat: number | null
           lng: number | null
           occurred_at: string
+          payment_method: string
           pickup_address: string | null
           status: string
           stops: Json
@@ -76,6 +77,7 @@ export type Database = {
           lat?: number | null
           lng?: number | null
           occurred_at?: string
+          payment_method?: string
           pickup_address?: string | null
           status?: string
           stops?: Json
@@ -96,6 +98,7 @@ export type Database = {
           lat?: number | null
           lng?: number | null
           occurred_at?: string
+          payment_method?: string
           pickup_address?: string | null
           status?: string
           stops?: Json
