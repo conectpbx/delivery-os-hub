@@ -5,12 +5,14 @@ import { toast } from "sonner";
 import { WifiOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { flushQueue, readQueue } from "@/lib/offline-queue";
+import { useAuth } from "@/hooks/useAuth";
 
 const db = supabase as unknown as SupabaseClient;
 
 /** Sincroniza registros feitos offline e mostra um aviso quando não há conexão. */
 export function OfflineSync() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   const [offline, setOffline] = useState(false);
 
   useEffect(() => {
@@ -18,11 +20,15 @@ export function OfflineSync() {
     update();
 
     const sync = async () => {
-      if (!navigator.onLine || !readQueue().length) return;
-      const keys = await flushQueue(db);
-      if (!keys.length) return;
-      keys.forEach((key) => void qc.invalidateQueries({ queryKey: [key] }));
-      toast.success("Registros offline sincronizados");
+      if (!user || !navigator.onLine || !readQueue(user.id).length) return;
+      try {
+        const keys = await flushQueue(db, user.id);
+        if (!keys.length) return;
+        keys.forEach((key) => void qc.invalidateQueries({ queryKey: [key] }));
+        toast.success("Registros offline sincronizados");
+      } catch {
+        toast.error("Não foi possível sincronizar os registros offline");
+      }
     };
 
     const onOnline = () => {
@@ -38,7 +44,7 @@ export function OfflineSync() {
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", update);
     };
-  }, [qc]);
+  }, [qc, user]);
 
   if (!offline) return null;
 

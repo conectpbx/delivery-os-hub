@@ -147,10 +147,11 @@ export function useInsert<T extends Record<string, unknown>>(table: string, key:
   return useMutation({
     mutationFn: async (values: T) => {
       const { data: auth } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
-      const payload = { ...values, user_id: auth.user?.id };
+      if (!auth.user) throw new Error("Sessão expirada. Entre novamente para salvar.");
+      const payload = { ...values, user_id: auth.user.id };
 
       if (isOffline()) {
-        const queued = enqueueInsert(table, key, payload);
+        const queued = enqueueInsert(table, key, payload, auth.user.id);
         qc.setQueryData([key], (old: unknown) => [
           { id: queued.id, occurred_at: queued.createdAt, ...payload },
           ...((old as unknown[]) ?? []),
