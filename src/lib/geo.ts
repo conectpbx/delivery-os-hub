@@ -31,12 +31,6 @@ const POSITION_OPTIONS: PositionOptions = {
   maximumAge: 15000,
 };
 
-const reverseGeocodeCache = new Map<string, { name: string; address: string }>();
-
-function coordsCacheKey(lat: number, lng: number) {
-  return `${lat.toFixed(5)},${lng.toFixed(5)}`;
-}
-
 export function geolocationErrorMessage(error: GeolocationPositionError) {
   if (error.code === error.PERMISSION_DENIED) {
     return "Permissão de localização negada — libere o GPS nas configurações do navegador";
@@ -90,67 +84,83 @@ export function newStop(kind: Stop["kind"] = "entrega"): Stop {
 export async function geocodeAddress(address: string) {
   const q = address.trim();
   if (!q) return null;
-  const res = await fetch(
-    `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language=pt-BR&countrycodes=br&q=${encodeURIComponent(q)}`,
-    { headers: { Accept: "application/json" } },
-  );
-  if (!res.ok) return null;
-  const json = (await res.json()) as Array<{ lat: string; lon: string }>;
-  const hit = json[0];
-  if (!hit) return null;
-  return { lat: Number(hit.lat), lng: Number(hit.lon) };
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language=pt-BR&countrycodes=br&q=${encodeURIComponent(q)}`,
+      { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(12000) },
+    );
+    if (!res.ok) return null;
+    const json = (await res.json()) as Array<{ lat: string; lon: string }>;
+    const hit = json[0];
+    if (!hit) return null;
+    const lat = Number(hit.lat);
+    const lng = Number(hit.lon);
+    return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Geocodificação reversa: coordenadas → endereço legível. */
 export async function reverseGeocodeAddress(lat: number, lng: number) {
-  const cacheKey = coordsCacheKey(lat, lng);
-  const cached = reverseGeocodeCache.get(cacheKey);
-  if (cached) return cached;
-
-  const res = await fetch(
-    `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&addressdetails=1&accept-language=pt-BR&lat=${lat}&lon=${lng}`,
-    { headers: { Accept: "application/json" } },
-  );
-  if (!res.ok) return null;
-  const json = (await res.json()) as {
-    display_name?: string;
-    name?: string;
-    address?: Record<string, string>;
-  };
-  const a = json.address ?? {};
-  const road = a["road"] ?? a["pedestrian"] ?? "";
-  const city = a["city"] ?? a["town"] ?? a["village"] ?? a["municipality"] ?? "";
-  const short = [json.name || road, a["house_number"], city].filter(Boolean).join(", ");
-  const result = { name: json.name ?? "", address: short || json.display_name || "" };
-  reverseGeocodeCache.set(cacheKey, result);
-  return result;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&addressdetails=1&accept-language=pt-BR&lat=${lat}&lon=${lng}`,
+      { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(12000) },
+    );
+    if (!res.ok) return null;
+    const json = (await res.json()) as {
+      display_name?: string;
+      name?: string;
+      address?: Record<string, string>;
+    };
+    const a = json.address ?? {};
+    const road = a["road"] ?? a["pedestrian"] ?? "";
+    const city = a["city"] ?? a["town"] ?? a["village"] ?? a["municipality"] ?? "";
+    const short = [json.name || road, a["house_number"], city].filter(Boolean).join(", ");
+    return { name: json.name ?? "", address: short || json.display_name || "" };
+  } catch {
+    return null;
+  }
 }
 
 /** Busca o posto de combustível mais próximo (Overpass / OpenStreetMap). */
 export async function nearestFuelStation(lat: number, lng: number) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
   const query = `[out:json][timeout:15];node(around:400,${lat},${lng})[amenity=fuel];out body 5;`;
-  const res = await fetch("https://overpass-api.de/api/interpreter", {
-    method: "POST",
-    body: `data=${encodeURIComponent(query)}`,
-  });
-  if (!res.ok) return null;
-  const json = (await res.json()) as {
-    elements?: Array<{ lat: number; lon: number; tags?: Record<string, string> }>;
-  };
-  const list = json.elements ?? [];
-  if (!list.length) return null;
-  let best = list[0]!;
-  let bestD = Infinity;
-  for (const el of list) {
-    const d = (el.lat - lat) ** 2 + (el.lon - lng) ** 2;
-    if (d < bestD) {
-      bestD = d;
-      best = el;
-    }
+  let res: Response;
+  try {
+    res = await fetch("https://overpass-api.de/api/interpreter", {
+      method: "POST",
+      body: `data=${encodeURIComponent(query)}`,
+      signal: AbortSignal.timeout(16000),
+    });
+  } catch {
+    return null;
   }
-  const t = best.tags ?? {};
-  const name = t["name"] ?? t["brand"] ?? t["operator"] ?? "";
-  return name || null;
+  if (!res.ok) return null;
+  try {
+    const json = (await res.json()) as {
+      elements?: Array<{ lat: number; lon: number; tags?: Record<string, string> }>;
+    };
+    const list = json.elements ?? [];
+    if (!list.length) return null;
+    let best = list[0]!;
+    let bestD = Infinity;
+    for (const el of list) {
+      const d = (el.lat - lat) ** 2 + (el.lon - lng) ** 2;
+      if (d < bestD) {
+        bestD = d;
+        best = el;
+      }
+    }
+    const t = best.tags ?? {};
+    const name = t["name"] ?? t["brand"] ?? t["operator"] ?? "";
+    return name || null;
+  } catch {
+    return null;
+  }
 }
 
 /** Rota real por ruas usando o OSRM público (gratuito). */

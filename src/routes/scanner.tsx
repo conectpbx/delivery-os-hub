@@ -43,6 +43,14 @@ function Scanner() {
   const [form, setForm] = useState({ liters: "", price_per_liter: "", total: "", station: "" });
 
   async function handleFile(file: File) {
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      toast.error("Formato não aceito. Envie uma imagem JPG, PNG ou WebP.");
+      return;
+    }
+    if (file.size > 6_000_000) {
+      toast.error("A imagem deve ter no máximo 6 MB.");
+      return;
+    }
     const reader = new FileReader();
     reader.onload = async () => {
       const dataUrl = String(reader.result);
@@ -66,17 +74,24 @@ function Scanner() {
         setLoading(false);
       }
     };
+    reader.onerror = () => {
+      setLoading(false);
+      toast.error("Não foi possível abrir esta imagem.");
+    };
     reader.readAsDataURL(file);
   }
 
   return (
     <AppShell title="Scanner IA" subtitle="Leitura automática de cupons de abastecimento">
       <div className="grid gap-4 lg:grid-cols-2">
-        <SectionCard title="Enviar cupom" description="Tire a foto ou selecione uma imagem do cupom fiscal">
+        <SectionCard
+          title="Enviar cupom"
+          description="Tire a foto ou selecione uma imagem do cupom fiscal"
+        >
           <input
             ref={fileRef}
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/png,image/webp"
             capture="environment"
             className="hidden"
             onChange={(e) => {
@@ -99,7 +114,9 @@ function Scanner() {
             <p className="text-sm font-medium">
               {loading ? "Analisando o cupom..." : "Toque para enviar o cupom"}
             </p>
-            <p className="text-xs text-muted-foreground">JPG ou PNG · a IA extrai litros, preço e total</p>
+            <p className="text-xs text-muted-foreground">
+              JPG ou PNG · a IA extrai litros, preço e total
+            </p>
           </div>
 
           {preview ? (
@@ -133,7 +150,10 @@ function Scanner() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label className="text-xs">Litros</Label>
-                  <Input value={form.liters} onChange={(e) => setForm({ ...form, liters: e.target.value })} />
+                  <Input
+                    value={form.liters}
+                    onChange={(e) => setForm({ ...form, liters: e.target.value })}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label className="text-xs">R$/litro</Label>
@@ -144,11 +164,17 @@ function Scanner() {
                 </div>
                 <div className="space-y-2">
                   <Label className="text-xs">Total (R$)</Label>
-                  <Input value={form.total} onChange={(e) => setForm({ ...form, total: e.target.value })} />
+                  <Input
+                    value={form.total}
+                    onChange={(e) => setForm({ ...form, total: e.target.value })}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label className="text-xs">Posto</Label>
-                  <Input value={form.station} onChange={(e) => setForm({ ...form, station: e.target.value })} />
+                  <Input
+                    value={form.station}
+                    onChange={(e) => setForm({ ...form, station: e.target.value })}
+                  />
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">

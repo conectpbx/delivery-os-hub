@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
 
 const PREFIX = "delivery-os-draft:";
 
@@ -7,14 +8,19 @@ const PREFIX = "delivery-os-draft:";
  * Salva no localStorage (com hidratação segura para SSR) e restaura ao voltar.
  */
 export function usePersistentState<T>(key: string, initial: T) {
+  const { user, loading } = useAuth();
   const [value, setValue] = useState<T>(initial);
   const [restored, setRestored] = useState(false);
-  const storageKey = PREFIX + key;
+  const storageKey = user ? `${PREFIX}${user.id}:${key}` : null;
+  const initialValue = useRef(initial);
   const latest = useRef(value);
   latest.current = value;
 
   // Restaura o rascunho depois da hidratação.
   useEffect(() => {
+    if (loading || !storageKey) return;
+    setRestored(false);
+    setValue(initialValue.current);
     try {
       const raw = window.localStorage.getItem(storageKey);
       if (raw) setValue(JSON.parse(raw) as T);
@@ -22,11 +28,11 @@ export function usePersistentState<T>(key: string, initial: T) {
       /* rascunho inválido — ignora */
     }
     setRestored(true);
-  }, [storageKey]);
+  }, [loading, storageKey]);
 
   // Persiste a cada alteração e também ao sair/ocultar a aba.
   useEffect(() => {
-    if (!restored) return;
+    if (!restored || !storageKey) return;
     const save = () => {
       try {
         window.localStorage.setItem(storageKey, JSON.stringify(latest.current));
@@ -48,7 +54,7 @@ export function usePersistentState<T>(key: string, initial: T) {
 
   const clear = () => {
     try {
-      window.localStorage.removeItem(storageKey);
+      if (storageKey) window.localStorage.removeItem(storageKey);
     } catch {
       /* ignora */
     }
