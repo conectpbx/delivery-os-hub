@@ -78,13 +78,10 @@ function Dashboard() {
   const cpk = useMemo(() => costPerKm(fuelingsData, profile.data), [fuelingsData, profile.data]);
   const { from, to } = useMemo(() => {
     return {
-      from:
-        range.key === "month"
-          ? new Date(now.getFullYear(), now.getMonth(), 1)
-          : startOfDay(new Date(now.getTime() - (range.days - 1) * 86400000)),
+      from: startOfDay(new Date(now.getTime() - (range.days - 1) * 86400000)),
       to: endOfDay(now),
     };
-  }, [now, range]);
+  }, [now, range.days]);
 
   const periodDeliveries = useMemo(
     () => deliveriesData.filter((d) => inRange(d.occurred_at, from, to)),
@@ -108,8 +105,7 @@ function Dashboard() {
 
   const series = useMemo(() => {
     const days: { day: string; receita: number; lucro: number }[] = [];
-    const daysToShow = range.key === "month" ? now.getDate() : range.days;
-    for (let i = daysToShow - 1; i >= 0; i--) {
+    for (let i = range.days - 1; i >= 0; i--) {
       const d = new Date(now.getTime() - i * 86400000);
       const dayFrom = startOfDay(d);
       const dayTo = endOfDay(d);
@@ -119,7 +115,7 @@ function Dashboard() {
       days.push({ day: dateLabel(d.toISOString()), receita: sum.revenue, lucro: sum.profit });
     }
     return days;
-  }, [deliveriesData, expensesData, cpk, now, range]);
+  }, [deliveriesData, expensesData, cpk, now, range.days]);
 
   const dailyGoalPlan = adaptiveDailyRevenueGoal({
     deliveries: deliveriesData,
