@@ -37,12 +37,15 @@ function Scanner() {
   const scan = useServerFn(scanFuelReceipt);
   const addFuel = useInsert("fuelings", "fuelings");
   const fileRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [pending, setPending] = useState<{ base64: string; mimeType: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [remaining, setRemaining] = useState<number | null>(null);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [form, setForm] = useState({ liters: "", price_per_liter: "", total: "", station: "" });
 
-  async function handleFile(file: File) {
+  function selectFile(file: File) {
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
       toast.error("Formato não aceito. Envie uma imagem JPG, PNG ou WebP.");
       return;
@@ -52,33 +55,40 @@ function Scanner() {
       return;
     }
     const reader = new FileReader();
-    reader.onload = async () => {
+    reader.onload = () => {
       const dataUrl = String(reader.result);
       setPreview(dataUrl);
-      setLoading(true);
-      try {
-        const res = await scan({
-          data: { imageBase64: dataUrl.split(",")[1] ?? "", mimeType: file.type || "image/jpeg" },
-        });
-        setResult(res);
-        setForm({
-          liters: res.liters ? String(res.liters) : "",
-          price_per_liter: res.pricePerLiter ? String(res.pricePerLiter) : "",
-          total: res.total ? String(res.total) : "",
-          station: res.station ?? "",
-        });
-        toast.success("Cupom lido pela IA");
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Falha ao ler o cupom");
-      } finally {
-        setLoading(false);
-      }
+      setResult(null);
+      setPending({
+        base64: dataUrl.split(",")[1] ?? "",
+        mimeType: file.type || "image/jpeg",
+      });
     };
-    reader.onerror = () => {
-      setLoading(false);
-      toast.error("Não foi possível abrir esta imagem.");
-    };
+    reader.onerror = () => toast.error("Não foi possível abrir esta imagem.");
     reader.readAsDataURL(file);
+  }
+
+  async function runScan() {
+    if (!pending || loading) return;
+    setLoading(true);
+    try {
+      const res = await scan({
+        data: { imageBase64: pending.base64, mimeType: pending.mimeType },
+      });
+      setResult(res);
+      setRemaining(res.remaining);
+      setForm({
+        liters: res.liters ? String(res.liters) : "",
+        price_per_liter: res.pricePerLiter ? String(res.pricePerLiter) : "",
+        total: res.total ? String(res.total) : "",
+        station: res.station ?? "",
+      });
+      toast.success(`Cupom lido pela IA · ${res.remaining} leituras restantes hoje`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Falha ao ler o cupom");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -86,38 +96,55 @@ function Scanner() {
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionCard
           title="Enviar cupom"
-          description="Tire a foto ou selecione uma imagem do cupom fiscal"
+          description="Você escolhe a imagem e só depois confirma o envio para a IA"
         >
           <input
             ref={fileRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) selectFile(f);
+              e.target.value = "";
+            }}
+          />
+          <input
+            ref={cameraRef}
             type="file"
             accept="image/jpeg,image/png,image/webp"
             capture="environment"
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) void handleFile(f);
+              if (f) selectFile(f);
+              e.target.value = "";
             }}
           />
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={() => fileRef.current?.click()}
-            onKeyDown={(e) => e.key === "Enter" && fileRef.current?.click()}
-            className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-border p-10 text-center transition-colors hover:border-primary/50 hover:bg-accent/40"
-          >
-            {loading ? (
-              <Loader2 className="size-8 animate-spin text-primary" />
-            ) : (
-              <Upload className="size-8 text-muted-foreground" />
-            )}
-            <p className="text-sm font-medium">
-              {loading ? "Analisando o cupom..." : "Toque para enviar o cupom"}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              JPG ou PNG · a IA extrai litros, preço e total
-            </p>
+
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1 gap-2"
+              onClick={() => cameraRef.current?.click()}
+            >
+              <Camera className="size-4" /> Tirar foto
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1 gap-2"
+              onClick={() => fileRef.current?.click()}
+            >
+              <Upload className="size-4" /> Escolher imagem
+            </Button>
           </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            A câmera só é aberta quando você toca em “Tirar foto”. Nenhuma leitura de IA acontece
+            sem sua confirmação. Limite de {DAILY_SCAN_LIMIT} leituras por dia
+            {remaining !== null ? ` · ${remaining} restantes hoje` : ""}.
+          </p>
 
           {preview ? (
             <img
@@ -126,7 +153,33 @@ function Scanner() {
               className="mt-4 max-h-64 w-full rounded-xl object-contain"
             />
           ) : null}
+
+          {pending ? (
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+              <Button type="button" className="flex-1 gap-2" disabled={loading} onClick={runScan}>
+                {loading ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <ScanLine className="size-4" />
+                )}
+                {loading ? "Analisando..." : "Analisar com IA"}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={loading}
+                onClick={() => {
+                  setPending(null);
+                  setPreview(null);
+                  setResult(null);
+                }}
+              >
+                Descartar
+              </Button>
+            </div>
+          ) : null}
         </SectionCard>
+
 
         <SectionCard title="Dados extraídos" description="Confira e salve no financeiro">
           {result ? (
