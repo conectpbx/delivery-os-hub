@@ -52,8 +52,8 @@ export const scanFuelReceipt = createServerFn({ method: "POST" })
         },
         body: JSON.stringify({
           model: AI_MODEL,
-          max_tokens: 300,
-
+          max_tokens: 220,
+          temperature: 0,
           messages: [
             {
               role: "system",

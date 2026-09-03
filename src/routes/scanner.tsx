@@ -77,6 +77,7 @@ function Scanner() {
         data: { imageBase64: pending.base64, mimeType: pending.mimeType },
       });
       setResult(res);
+      setPending(null);
       setRemaining(res.remaining);
       setForm({
         liters: res.liters ? String(res.liters) : "",
