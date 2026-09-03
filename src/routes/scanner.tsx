@@ -1,14 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useRef, useState } from "react";
-import { Loader2, ScanLine, Upload } from "lucide-react";
+import { Camera, Loader2, ScanLine, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, SectionCard } from "@/components/ui-kit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { scanFuelReceipt, type ScanResult } from "@/lib/ai.functions";
+import { DAILY_SCAN_LIMIT, scanFuelReceipt, type ScanResult } from "@/lib/ai.functions";
+
 import { useInsert } from "@/lib/data";
 import { brl } from "@/lib/format";
 
