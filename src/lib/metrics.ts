@@ -242,17 +242,20 @@ export const PERIODS = [
   { key: "1", label: "Hoje", days: 1 },
   { key: "7", label: "Semanal", days: 7 },
   { key: "15", label: "Quinzenal", days: 15 },
-  { key: "30", label: "Mensal", days: 30 },
+  { key: "30", label: "Mês atual", days: 30 },
   { key: "all", label: "Tudo", days: 0 },
 ] as const;
 
 export type Period = (typeof PERIODS)[number];
 
-export function periodRange(period: Period) {
-  const to = endOfDay();
-  const from = period.days
-    ? startOfDay(new Date(Date.now() - (period.days - 1) * 86400000))
-    : new Date(0);
+export function periodRange(period: Period, now = new Date()) {
+  const to = endOfDay(now);
+  const from =
+    period.key === "30"
+      ? new Date(now.getFullYear(), now.getMonth(), 1)
+      : period.days
+        ? startOfDay(new Date(now.getTime() - (period.days - 1) * 86400000))
+        : new Date(0);
   return { from, to };
 }
 

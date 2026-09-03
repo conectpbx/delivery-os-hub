@@ -3,6 +3,7 @@ import { CalendarRange } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PERIODS, periodRange, type Period } from "@/lib/metrics";
+import { useCalendarNow } from "@/hooks/useCalendarNow";
 
 const iso = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -26,8 +27,8 @@ const endOf = (s: string) => {
 
 const prettyDate = (s: string) => parse(s).toLocaleDateString("pt-BR");
 
-function presetDates(p: Period) {
-  const { from, to } = periodRange(p);
+function presetDates(p: Period, now = new Date()) {
+  const { from, to } = periodRange(p, now);
   const start = p.days ? from : new Date(2020, 0, 1);
   return { from: iso(start), to: iso(to) };
 }
@@ -46,26 +47,40 @@ export type PeriodSelection = {
 
 export function usePeriodSelection(defaultIndex = 3): PeriodSelection {
   const initial = PERIODS[defaultIndex] ?? PERIODS[3]!;
-  const [state, setState] = useState(() => ({ key: initial.key as string, ...presetDates(initial) }));
+  const now = useCalendarNow();
+  const [state, setState] = useState(() => ({
+    key: initial.key as string,
+    customDates: presetDates(initial),
+  }));
 
   return useMemo(() => {
     const preset = PERIODS.find((p) => p.key === state.key);
+    const dates = preset ? presetDates(preset, now) : state.customDates;
     const label =
       preset && state.key !== "custom"
         ? preset.label
-        : `${prettyDate(state.from)} — ${prettyDate(state.to)}`;
+        : `${prettyDate(dates.from)} — ${prettyDate(dates.to)}`;
     return {
       key: state.key,
       label,
-      from: state.from,
-      to: state.to,
-      fromDate: startOf(state.from),
-      toDate: endOf(state.to),
-      setPreset: (p: Period) => setState({ key: p.key, ...presetDates(p) }),
-      setFrom: (v: string) => setState((s) => ({ ...s, key: "custom", from: v || s.from })),
-      setTo: (v: string) => setState((s) => ({ ...s, key: "custom", to: v || s.to })),
+      from: dates.from,
+      to: dates.to,
+      fromDate: startOf(dates.from),
+      toDate: endOf(dates.to),
+      setPreset: (p: Period) =>
+        setState((s) => ({ ...s, key: p.key, customDates: presetDates(p) })),
+      setFrom: (v: string) =>
+        setState((s) => ({
+          key: "custom",
+          customDates: { ...dates, from: v || dates.from },
+        })),
+      setTo: (v: string) =>
+        setState((s) => ({
+          key: "custom",
+          customDates: { ...dates, to: v || dates.to },
+        })),
     };
-  }, [state]);
+  }, [now, state]);
 }
 
 export function PeriodFilter({ selection }: { selection: PeriodSelection }) {
