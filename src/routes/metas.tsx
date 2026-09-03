@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { CalendarClock, CheckCircle2, Sparkles, Target, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
@@ -22,6 +22,7 @@ import {
 import { brl, dec, monthKey, monthLabel, num } from "@/lib/format";
 import { useGoalCelebrations } from "@/lib/celebrate";
 import { adaptiveDailyRevenueGoal, byMonth, costPerKm } from "@/lib/metrics";
+import { useCalendarNow } from "@/hooks/useCalendarNow";
 
 export const Route = createFileRoute("/metas")({
   head: () => ({
@@ -47,6 +48,7 @@ export const Route = createFileRoute("/metas")({
 const REVENUE_PRESETS = [3000, 5000, 7500, 10000];
 
 function Metas() {
+  const now = useCalendarNow();
   const goals = useGoals();
   const add = useInsert("goals", "goals");
   const update = useUpdate<Record<string, unknown>>("goals", "goals");
@@ -59,12 +61,13 @@ function Metas() {
 
   const cpk = costPerKm(fuelings.data ?? [], profile.data);
   const months = byMonth(deliveries.data ?? [], expenses.data ?? [], cpk);
-  const current = monthKey(new Date());
+  const current = monthKey(now);
   const currentSummary = months.find((m) => m.month === current);
   const dailyGoalPlan = adaptiveDailyRevenueGoal({
     deliveries: deliveries.data ?? [],
     goals: goals.data ?? [],
     profile: profile.data,
+    date: now,
   });
 
   const [form, setForm] = useState({
@@ -75,6 +78,15 @@ function Metas() {
   });
   const [daily, setDaily] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const previousCurrent = useRef(current);
+
+  useEffect(() => {
+    const previous = previousCurrent.current;
+    if (previous !== current) {
+      setForm((value) => (value.month === previous ? { ...value, month: current } : value));
+      previousCurrent.current = current;
+    }
+  }, [current]);
 
   const existingGoal = (goals.data ?? []).find((g) => g.month.slice(0, 7) === form.month);
 
@@ -101,8 +113,7 @@ function Metas() {
 
   function applyRevenue(value: number) {
     const margin = history?.margin ?? 0.7;
-    const ticket =
-      history && history.count > 0 ? history.revenue / history.count : 12;
+    const ticket = history && history.count > 0 ? history.revenue / history.count : 12;
     setForm((f) => ({
       ...f,
       revenue_target: String(Math.round(value)),
@@ -309,7 +320,10 @@ function Metas() {
               <p className="mt-1 text-muted-foreground">
                 Para compensar dias abaixo da meta e ainda bater {brl(dailyGoalPlan.monthTarget)} no
                 mês, mire em
-                <span className="font-semibold text-foreground"> {brl(dailyGoalPlan.target)}</span>{" "}
+                <span className="font-semibold text-foreground">
+                  {" "}
+                  {brl(dailyGoalPlan.target)}
+                </span>{" "}
                 por dia nos próximos
                 <span className="font-semibold text-foreground">
                   {" "}
