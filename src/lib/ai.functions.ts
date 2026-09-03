@@ -14,14 +14,33 @@ export type ScanResult = {
   station: string | null;
   date: string | null;
   raw: string;
+  remaining: number;
 };
+
+/** Limite diário de leituras por usuário (controle de consumo de IA). */
+export const DAILY_SCAN_LIMIT = 15;
+
+/** Modelo econômico/gratuito do gateway — menor custo por leitura. */
+const AI_MODEL = "google/gemini-3.6-flash-lite";
 
 export const scanFuelReceipt = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) => Input.parse(input))
-  .handler(async ({ data }): Promise<ScanResult> => {
+  .handler(async ({ data, context }): Promise<ScanResult> => {
     const key = process.env["LOVABLE_API_KEY"];
     if (!key) throw new Error("IA indisponível no momento.");
+
+    // Consome a cota ANTES de chamar a IA (atômico no banco, por usuário/dia).
+    const { data: used, error: quotaError } = await context.supabase.rpc(
+      "consume_ai_scan_quota",
+      { _limit: DAILY_SCAN_LIMIT },
+    );
+    if (quotaError) throw new Error("Não foi possível validar seu limite de leituras.");
+    if (typeof used !== "number" || used < 0)
+      throw new Error(
+        `Você atingiu o limite de ${DAILY_SCAN_LIMIT} leituras de IA hoje. Preencha manualmente ou tente amanhã.`,
+      );
+    const remaining = Math.max(0, DAILY_SCAN_LIMIT - used);
 
     let response: Response;
     try {
@@ -32,7 +51,9 @@ export const scanFuelReceipt = createServerFn({ method: "POST" })
           Authorization: `Bearer ${key}`,
         },
         body: JSON.stringify({
-          model: "google/gemini-3.6-flash",
+          model: AI_MODEL,
+          max_tokens: 300,
+
           messages: [
             {
               role: "system",
