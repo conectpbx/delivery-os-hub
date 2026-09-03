@@ -164,7 +164,7 @@ function Entregas() {
     stops: Stop[];
   } | null>("entregas.finishing", null);
   const [finishGeo, setFinishGeo] = useState<string | null>(null);
-  const [histRange, setHistRange] = useState<"hoje" | "7d" | "30d" | "tudo">("hoje");
+  const [histRange, setHistRange] = useState<"hoje" | "7d" | "mes" | "tudo">("hoje");
 
   const [form, setForm] = usePersistentState("entregas.form", {
     app_name: "",
@@ -490,8 +490,8 @@ function Entregas() {
       ? todayStart.getTime()
       : histRange === "7d"
         ? todayEnd.getTime() - 7 * 86400000
-        : histRange === "30d"
-          ? todayEnd.getTime() - 30 * 86400000
+        : histRange === "mes"
+          ? new Date(now.getFullYear(), now.getMonth(), 1).getTime()
           : 0;
   const all = list.data ?? [];
   const today = all.filter((d) => {
@@ -964,7 +964,7 @@ function Entregas() {
                 [
                   ["hoje", "Hoje"],
                   ["7d", "7 dias"],
-                  ["30d", "30 dias"],
+                  ["mes", "Mês atual"],
                   ["tudo", "Tudo"],
                 ] as const
               ).map(([k, label]) => (

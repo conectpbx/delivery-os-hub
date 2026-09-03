@@ -63,6 +63,7 @@ function Metas() {
   const months = byMonth(deliveries.data ?? [], expenses.data ?? [], cpk);
   const current = monthKey(now);
   const currentSummary = months.find((m) => m.month === current);
+  const currentGoals = (goals.data ?? []).filter((goal) => goal.month.slice(0, 7) === current);
   const dailyGoalPlan = adaptiveDailyRevenueGoal({
     deliveries: deliveries.data ?? [],
     goals: goals.data ?? [],
@@ -123,7 +124,7 @@ function Metas() {
   }
 
   useGoalCelebrations(
-    (goals.data ?? []).flatMap((g) => {
+    currentGoals.flatMap((g) => {
       const key = g.month.slice(0, 7);
       const m = months.find((x) => x.month === key);
       return [
@@ -340,9 +341,9 @@ function Metas() {
         </SectionCard>
 
         <SectionCard title="Progresso das metas">
-          {(goals.data ?? []).length ? (
+          {currentGoals.length ? (
             <ul className="space-y-5">
-              {(goals.data ?? []).map((g) => {
+              {currentGoals.map((g) => {
                 const key = g.month.slice(0, 7);
                 const m = months.find((x) => x.month === key);
                 const rows = [
@@ -445,7 +446,7 @@ function Metas() {
               })}
             </ul>
           ) : (
-            <EmptyState>Nenhuma meta cadastrada.</EmptyState>
+            <EmptyState>Nenhuma meta cadastrada para o mês atual.</EmptyState>
           )}
         </SectionCard>
       </div>

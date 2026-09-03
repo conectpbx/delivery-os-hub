@@ -242,7 +242,7 @@ export const PERIODS = [
   { key: "1", label: "Hoje", days: 1 },
   { key: "7", label: "Semanal", days: 7 },
   { key: "15", label: "Quinzenal", days: 15 },
-  { key: "30", label: "Mensal", days: 30 },
+  { key: "30", label: "Mês atual", days: 30 },
   { key: "all", label: "Tudo", days: 0 },
 ] as const;
 
