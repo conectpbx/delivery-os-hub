@@ -38,7 +38,18 @@ export async function registerServiceWorker() {
   }
 
   try {
-    await navigator.serviceWorker.register(SW_URL, { scope: "/" });
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (refreshing) return;
+      refreshing = true;
+      window.location.reload();
+    });
+
+    const registration = await navigator.serviceWorker.register(SW_URL, {
+      scope: "/",
+      updateViaCache: "none",
+    });
+    await registration.update();
   } catch (error) {
     console.error("[pwa] service worker registration failed", error);
   }

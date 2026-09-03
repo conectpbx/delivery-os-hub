@@ -239,20 +239,23 @@ export function heatmap(deliveries: Delivery[]) {
 }
 
 export const PERIODS = [
-  { key: "1", label: "Hoje", days: 1 },
-  { key: "7", label: "Semanal", days: 7 },
-  { key: "15", label: "Quinzenal", days: 15 },
-  { key: "30", label: "Mensal", days: 30 },
-  { key: "all", label: "Tudo", days: 0 },
+  { key: "1", label: "Hoje", mode: "days", days: 1 },
+  { key: "7", label: "Semanal", mode: "days", days: 7 },
+  { key: "15", label: "Quinzenal", mode: "days", days: 15 },
+  { key: "month", label: "Mês atual", mode: "month" },
+  { key: "all", label: "Tudo", mode: "all" },
 ] as const;
 
 export type Period = (typeof PERIODS)[number];
 
-export function periodRange(period: Period) {
-  const to = endOfDay();
-  const from = period.days
-    ? startOfDay(new Date(Date.now() - (period.days - 1) * 86400000))
-    : new Date(0);
+export function periodRange(period: Period, now = new Date()) {
+  const to = endOfDay(now);
+  const from =
+    period.mode === "month"
+      ? new Date(now.getFullYear(), now.getMonth(), 1)
+      : period.mode === "days"
+        ? startOfDay(new Date(now.getTime() - (period.days - 1) * 86400000))
+        : new Date(0);
   return { from, to };
 }
 
