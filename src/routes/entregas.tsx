@@ -48,6 +48,7 @@ import {
 } from "@/lib/geo";
 import { usePersistentState } from "@/lib/persistent-state";
 import { useChainedDistance } from "@/lib/chained-distance";
+import { useCalendarNow } from "@/hooks/useCalendarNow";
 
 const RouteMap = lazy(() => import("@/components/RouteMap"));
 
@@ -135,6 +136,7 @@ function dec(v: string | number | null | undefined): number {
 }
 
 function Entregas() {
+  const now = useCalendarNow();
   const list = useDeliveries();
   const apps = useApps();
   const goals = useGoals();
@@ -479,9 +481,9 @@ function Entregas() {
     }
   }
 
-  const todayStart = new Date();
+  const todayStart = new Date(now);
   todayStart.setHours(0, 0, 0, 0);
-  const todayEnd = new Date();
+  const todayEnd = new Date(now);
   todayEnd.setHours(23, 59, 59, 999);
   const rangeStart =
     histRange === "hoje"
@@ -505,6 +507,7 @@ function Entregas() {
     deliveries: all,
     goals: goals.data ?? [],
     profile: profile.data,
+    date: now,
   }).target;
   const goalRemaining = Math.max(0, dailyGoal - total);
   const deliveryIntel = buildDeliveryInsights({

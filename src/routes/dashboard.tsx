@@ -29,6 +29,7 @@ import {
   summarize,
 } from "@/lib/metrics";
 import { useChainedDistance } from "@/lib/chained-distance";
+import { useCalendarNow } from "@/hooks/useCalendarNow";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -60,6 +61,7 @@ const RANGES = [
 const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
 function Dashboard() {
+  const now = useCalendarNow();
   const [range, setRange] = useState<(typeof RANGES)[number]>(RANGES[0]);
   const deliveries = useDeliveries();
   const fuelings = useFuelings();
@@ -75,12 +77,11 @@ function Dashboard() {
 
   const cpk = useMemo(() => costPerKm(fuelingsData, profile.data), [fuelingsData, profile.data]);
   const { from, to } = useMemo(() => {
-    const now = Date.now();
     return {
-      from: startOfDay(new Date(now - (range.days - 1) * 86400000)),
-      to: endOfDay(new Date(now)),
+      from: startOfDay(new Date(now.getTime() - (range.days - 1) * 86400000)),
+      to: endOfDay(now),
     };
-  }, [range.days]);
+  }, [now, range.days]);
 
   const periodDeliveries = useMemo(
     () => deliveriesData.filter((d) => inRange(d.occurred_at, from, to)),
@@ -105,7 +106,7 @@ function Dashboard() {
   const series = useMemo(() => {
     const days: { day: string; receita: number; lucro: number }[] = [];
     for (let i = range.days - 1; i >= 0; i--) {
-      const d = new Date(Date.now() - i * 86400000);
+      const d = new Date(now.getTime() - i * 86400000);
       const dayFrom = startOfDay(d);
       const dayTo = endOfDay(d);
       const dd = deliveriesData.filter((x) => inRange(x.occurred_at, dayFrom, dayTo));
@@ -114,16 +115,17 @@ function Dashboard() {
       days.push({ day: dateLabel(d.toISOString()), receita: sum.revenue, lucro: sum.profit });
     }
     return days;
-  }, [deliveriesData, expensesData, cpk, range.days]);
+  }, [deliveriesData, expensesData, cpk, now, range.days]);
 
   const dailyGoalPlan = adaptiveDailyRevenueGoal({
     deliveries: deliveriesData,
     goals: goals.data ?? [],
     profile: profile.data,
+    date: now,
   });
   const dailyGoal = dailyGoalPlan.target || Number(profile.data?.daily_goal ?? 200);
   const todayRevenue = summarize(
-    deliveriesData.filter((d) => inRange(d.occurred_at, startOfDay(), endOfDay())),
+    deliveriesData.filter((d) => inRange(d.occurred_at, startOfDay(now), endOfDay(now))),
     [],
     [],
     cpk,
@@ -131,7 +133,7 @@ function Dashboard() {
 
   useGoalCelebrations([
     {
-      id: `diaria-${new Date().toISOString().slice(0, 10)}-receita`,
+      id: `diaria-${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}-receita`,
       label: "Meta diária de receita",
       value: todayRevenue,
       target: dailyGoal,
@@ -145,6 +147,7 @@ function Dashboard() {
     expenses: expensesData,
     goals: goals.data ?? [],
     profile: profile.data,
+    date: now,
   });
 
   return (

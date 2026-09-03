@@ -248,10 +248,10 @@ export const PERIODS = [
 
 export type Period = (typeof PERIODS)[number];
 
-export function periodRange(period: Period) {
-  const to = endOfDay();
+export function periodRange(period: Period, now = new Date()) {
+  const to = endOfDay(now);
   const from = period.days
-    ? startOfDay(new Date(Date.now() - (period.days - 1) * 86400000))
+    ? startOfDay(new Date(now.getTime() - (period.days - 1) * 86400000))
     : new Date(0);
   return { from, to };
 }

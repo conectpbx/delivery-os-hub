@@ -64,16 +64,17 @@ export function buildAlerts(input: {
   expenses: Expense[];
   goals: Goal[];
   profile: Profile | null | undefined;
+  date?: Date;
 }): SmartAlert[] {
   const { deliveries, fuelings, maintenances, expenses, goals, profile } = input;
   const alerts: SmartAlert[] = [];
-  const now = new Date();
+  const now = input.date ?? new Date();
   const cpk = costPerKm(fuelings, profile);
 
-  const today = deliveries.filter((d) => inRange(d.occurred_at, startOfDay(), endOfDay()));
+  const today = deliveries.filter((d) => inRange(d.occurred_at, startOfDay(now), endOfDay(now)));
   const sToday = summarize(
     today,
-    expenses.filter((e) => inRange(e.occurred_at, startOfDay(), endOfDay())),
+    expenses.filter((e) => inRange(e.occurred_at, startOfDay(now), endOfDay(now))),
     [],
     cpk,
   );
@@ -281,7 +282,7 @@ export function buildAlerts(input: {
   }
 
   // ---- Motivacional do dia ----
-  const idx = new Date().getDate() % MOTIVATION.length;
+  const idx = now.getDate() % MOTIVATION.length;
   alerts.push({
     id: "motivacional-dia",
     kind: "motivacional",
@@ -306,6 +307,7 @@ export function useSmartAlerts(input: Parameters<typeof buildAlerts>[0]) {
       input.expenses,
       input.goals,
       input.profile,
+      input.date,
     ],
   );
 
