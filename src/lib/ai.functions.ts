@@ -108,7 +108,9 @@ export const scanFuelReceipt = createServerFn({ method: "POST" })
       station: typeof parsed.station === "string" ? parsed.station : null,
       date: typeof parsed.date === "string" ? parsed.date : null,
       raw,
+      remaining,
     };
+
   });
 
 function numberOrNull(v: unknown) {
