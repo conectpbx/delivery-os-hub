@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_scan_usage: {
+        Row: {
+          count: number
+          created_at: string
+          id: string
+          updated_at: string
+          usage_date: string
+          user_id: string
+        }
+        Insert: {
+          count?: number
+          created_at?: string
+          id?: string
+          updated_at?: string
+          usage_date?: string
+          user_id: string
+        }
+        Update: {
+          count?: number
+          created_at?: string
+          id?: string
+          updated_at?: string
+          usage_date?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       apps: {
         Row: {
           color: string | null
@@ -283,7 +310,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      consume_ai_scan_quota: { Args: { _limit: number }; Returns: number }
     }
     Enums: {
       [_ in never]: never
