@@ -80,11 +80,15 @@ function Dashboard() {
 
   const cpk = useMemo(() => costPerKm(fuelingsData, profile.data), [fuelingsData, profile.data]);
   const { from, to } = useMemo(() => {
+    if (range.monthOffset !== null) {
+      const { from: mFrom, to: mTo } = monthRange(range.monthOffset, now);
+      return { from: mFrom, to: range.monthOffset === 0 ? endOfDay(now) : mTo };
+    }
     return {
       from: startOfDay(new Date(now.getTime() - (range.days - 1) * 86400000)),
       to: endOfDay(now),
     };
-  }, [now, range.days]);
+  }, [now, range.days, range.monthOffset]);
 
   const periodDeliveries = useMemo(
     () => deliveriesData.filter((d) => inRange(d.occurred_at, from, to)),
