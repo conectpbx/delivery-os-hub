@@ -29,6 +29,27 @@ export function endOfDay(d = new Date()) {
   return x;
 }
 
+export function startOfWeek(d = new Date()) {
+  const start = startOfDay(d);
+  const daysSinceMonday = (start.getDay() + 6) % 7;
+  start.setDate(start.getDate() - daysSinceMonday);
+  return start;
+}
+
+export function endOfWeek(d = new Date()) {
+  const end = startOfWeek(d);
+  end.setDate(end.getDate() + 6);
+  return endOfDay(end);
+}
+
+export function startOfMonth(d = new Date()) {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+export function endOfMonth(d = new Date()) {
+  return endOfDay(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+}
+
 export type Summary = {
   revenue: number;
   fuelCost: number;

@@ -33,7 +33,13 @@ import {
 import type { Delivery, DeliveryStop, PaymentMethod } from "@/lib/data";
 
 import { brl, dateTimeLabel, minutesLabel, num, paymentMethodLabel } from "@/lib/format";
-import { adaptiveDailyRevenueGoal } from "@/lib/metrics";
+import {
+  adaptiveDailyRevenueGoal,
+  endOfMonth,
+  endOfWeek,
+  startOfMonth,
+  startOfWeek,
+} from "@/lib/metrics";
 import {
   fetchRouteWithFallback,
   geocodeAddress,
@@ -493,12 +499,21 @@ function Entregas() {
         : histRange === "mes"
           ? new Date(now.getFullYear(), now.getMonth(), 1).getTime()
           : 0;
+  const rangeEnd =
+    histRange === "semana"
+      ? endOfWeek(now).getTime()
+      : histRange === "mes"
+        ? endOfMonth(now).getTime()
+        : todayEnd.getTime();
   const all = list.data ?? [];
   const today = all.filter((d) => {
     const t = new Date(d.occurred_at).getTime();
     return t >= todayStart.getTime() && t <= todayEnd.getTime();
   });
-  const data = all.filter((d) => new Date(d.occurred_at).getTime() >= rangeStart);
+  const data = all.filter((d) => {
+    const time = new Date(d.occurred_at).getTime();
+    return time >= rangeStart && (histRange === "tudo" || time <= rangeEnd);
+  });
 
   const total = today.reduce((s, d) => s + Number(d.earnings) + Number(d.tip), 0);
   const deliveryKmSum = today.reduce((s, d) => s + Number(d.distance_km), 0);
