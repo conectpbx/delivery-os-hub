@@ -25,6 +25,7 @@ import {
   endOfDay,
   heatmap,
   inRange,
+  monthRange,
   PERIODS,
   periodRange,
   startOfDay,
@@ -55,9 +56,10 @@ export const Route = createFileRoute("/dashboard")({
 });
 
 const RANGES = [
-  { key: "1", label: "Hoje", days: 1 },
-  { key: "7", label: "7 dias", days: 7 },
-  { key: "month", label: "Mês atual", days: 0 },
+  { key: "1", label: "Hoje", days: 1, monthOffset: null },
+  { key: "7", label: "7 dias", days: 7, monthOffset: null },
+  { key: "month", label: "Mês atual", days: 0, monthOffset: 0 },
+  { key: "prev-month", label: "Mês anterior", days: 0, monthOffset: -1 },
 ] as const;
 
 const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -79,11 +81,15 @@ function Dashboard() {
 
   const cpk = useMemo(() => costPerKm(fuelingsData, profile.data), [fuelingsData, profile.data]);
   const { from, to } = useMemo(() => {
+    if (range.monthOffset !== null) {
+      const { from: mFrom, to: mTo } = monthRange(range.monthOffset, now);
+      return { from: mFrom, to: range.monthOffset === 0 ? endOfDay(now) : mTo };
+    }
     return {
       from: startOfDay(new Date(now.getTime() - (range.days - 1) * 86400000)),
       to: endOfDay(now),
     };
-  }, [now, range.days]);
+  }, [now, range.days, range.monthOffset]);
 
   const periodDeliveries = useMemo(
     () => deliveriesData.filter((d) => inRange(d.occurred_at, from, to)),
@@ -107,17 +113,23 @@ function Dashboard() {
 
   const series = useMemo(() => {
     const days: { day: string; receita: number; lucro: number }[] = [];
-    for (let i = range.days - 1; i >= 0; i--) {
-      const d = new Date(now.getTime() - i * 86400000);
-      const dayFrom = startOfDay(d);
-      const dayTo = endOfDay(d);
+    const cursor = startOfDay(from);
+    const last = startOfDay(to);
+    while (cursor.getTime() <= last.getTime()) {
+      const dayFrom = startOfDay(cursor);
+      const dayTo = endOfDay(cursor);
       const dd = deliveriesData.filter((x) => inRange(x.occurred_at, dayFrom, dayTo));
       const de = expensesData.filter((x) => inRange(x.occurred_at, dayFrom, dayTo));
       const sum = summarize(dd, de, [], cpk);
-      days.push({ day: dateLabel(d.toISOString()), receita: sum.revenue, lucro: sum.profit });
+      days.push({
+        day: dateLabel(dayFrom.toISOString()),
+        receita: sum.revenue,
+        lucro: sum.profit,
+      });
+      cursor.setDate(cursor.getDate() + 1);
     }
     return days;
-  }, [deliveriesData, expensesData, cpk, now, range.days]);
+  }, [deliveriesData, expensesData, cpk, from, to]);
 
   const dailyGoalPlan = adaptiveDailyRevenueGoal({
     deliveries: deliveriesData,

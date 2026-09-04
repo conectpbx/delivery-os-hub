@@ -29,7 +29,8 @@ const prettyDate = (s: string) => parse(s).toLocaleDateString("pt-BR");
 
 function presetDates(p: Period, now = new Date()) {
   const { from, to } = periodRange(p, now);
-  const start = p.days ? from : new Date(2020, 0, 1);
+  const isAll = !p.days && p.monthOffset === null;
+  const start = isAll ? new Date(2020, 0, 1) : from;
   return { from: iso(start), to: iso(to) };
 }
 
