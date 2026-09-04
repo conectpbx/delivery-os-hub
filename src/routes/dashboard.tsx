@@ -55,9 +55,10 @@ export const Route = createFileRoute("/dashboard")({
 });
 
 const RANGES = [
-  { key: "1", label: "Hoje", days: 1 },
-  { key: "7", label: "7 dias", days: 7 },
-  { key: "month", label: "Mês atual", days: 0 },
+  { key: "1", label: "Hoje", days: 1, monthOffset: null },
+  { key: "7", label: "7 dias", days: 7, monthOffset: null },
+  { key: "month", label: "Mês atual", days: 0, monthOffset: 0 },
+  { key: "prev-month", label: "Mês anterior", days: 0, monthOffset: -1 },
 ] as const;
 
 const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
