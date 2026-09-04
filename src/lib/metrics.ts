@@ -260,16 +260,28 @@ export function heatmap(deliveries: Delivery[]) {
 }
 
 export const PERIODS = [
-  { key: "1", label: "Hoje", days: 1 },
-  { key: "7", label: "Semanal", days: 7 },
-  { key: "15", label: "Quinzenal", days: 15 },
-  { key: "30", label: "Mês atual", days: 30 },
-  { key: "all", label: "Tudo", days: 0 },
+  { key: "1", label: "Hoje", days: 1, monthOffset: null },
+  { key: "7", label: "Semanal", days: 7, monthOffset: null },
+  { key: "15", label: "Quinzenal", days: 15, monthOffset: null },
+  { key: "month", label: "Mês atual", days: 0, monthOffset: 0 },
+  { key: "prev-month", label: "Mês anterior", days: 0, monthOffset: -1 },
+  { key: "all", label: "Tudo", days: 0, monthOffset: null },
 ] as const;
 
 export type Period = (typeof PERIODS)[number];
 
+/** Mês civil completo (1º dia até o último dia), com deslocamento em meses. */
+export function monthRange(offset = 0, now = new Date()) {
+  const ref = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+  return { from: startOfMonth(ref), to: endOfMonth(ref) };
+}
+
 export function periodRange(period: Period, now = new Date()) {
+  if (period.monthOffset !== null) {
+    const { from, to } = monthRange(period.monthOffset, now);
+    // Mês atual não deve projetar datas futuras no filtro.
+    return { from, to: period.monthOffset === 0 ? endOfDay(now) : to };
+  }
   const to = endOfDay(now);
   const from = period.days
     ? startOfDay(new Date(now.getTime() - (period.days - 1) * 86400000))
