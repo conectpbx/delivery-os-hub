@@ -499,12 +499,7 @@ function Entregas() {
         : histRange === "mes"
           ? new Date(now.getFullYear(), now.getMonth(), 1).getTime()
           : 0;
-  const rangeEnd =
-    histRange === "semana"
-      ? endOfWeek(now).getTime()
-      : histRange === "mes"
-        ? endOfMonth(now).getTime()
-        : todayEnd.getTime();
+  const rangeEnd = histRange === "mes" ? endOfMonth(now).getTime() : todayEnd.getTime();
   const all = list.data ?? [];
   const today = all.filter((d) => {
     const t = new Date(d.occurred_at).getTime();
