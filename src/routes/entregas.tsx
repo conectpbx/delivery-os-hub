@@ -33,7 +33,13 @@ import {
 import type { Delivery, DeliveryStop, PaymentMethod } from "@/lib/data";
 
 import { brl, dateTimeLabel, minutesLabel, num, paymentMethodLabel } from "@/lib/format";
-import { adaptiveDailyRevenueGoal } from "@/lib/metrics";
+import {
+  adaptiveDailyRevenueGoal,
+  endOfMonth,
+  endOfWeek,
+  startOfMonth,
+  startOfWeek,
+} from "@/lib/metrics";
 import {
   fetchRouteWithFallback,
   geocodeAddress,
@@ -48,6 +54,7 @@ import {
 } from "@/lib/geo";
 import { usePersistentState } from "@/lib/persistent-state";
 import { useChainedDistance } from "@/lib/chained-distance";
+import { useCalendarNow } from "@/hooks/useCalendarNow";
 
 const RouteMap = lazy(() => import("@/components/RouteMap"));
 
@@ -135,6 +142,7 @@ function dec(v: string | number | null | undefined): number {
 }
 
 function Entregas() {
+  const now = useCalendarNow();
   const list = useDeliveries();
   const apps = useApps();
   const goals = useGoals();
@@ -162,7 +170,7 @@ function Entregas() {
     stops: Stop[];
   } | null>("entregas.finishing", null);
   const [finishGeo, setFinishGeo] = useState<string | null>(null);
-  const [histRange, setHistRange] = useState<"hoje" | "7d" | "30d" | "tudo">("hoje");
+  const [histRange, setHistRange] = useState<"hoje" | "semana" | "mes" | "tudo">("hoje");
 
   const [form, setForm] = usePersistentState("entregas.form", {
     app_name: "",
@@ -479,24 +487,33 @@ function Entregas() {
     }
   }
 
-  const todayStart = new Date();
+  const todayStart = new Date(now);
   todayStart.setHours(0, 0, 0, 0);
-  const todayEnd = new Date();
+  const todayEnd = new Date(now);
   todayEnd.setHours(23, 59, 59, 999);
   const rangeStart =
     histRange === "hoje"
       ? todayStart.getTime()
-      : histRange === "7d"
-        ? todayEnd.getTime() - 7 * 86400000
-        : histRange === "30d"
-          ? todayEnd.getTime() - 30 * 86400000
+      : histRange === "semana"
+        ? startOfWeek(now).getTime()
+        : histRange === "mes"
+          ? startOfMonth(now).getTime()
           : 0;
+  const rangeEnd =
+    histRange === "semana"
+      ? endOfWeek(now).getTime()
+      : histRange === "mes"
+        ? endOfMonth(now).getTime()
+        : todayEnd.getTime();
   const all = list.data ?? [];
   const today = all.filter((d) => {
     const t = new Date(d.occurred_at).getTime();
     return t >= todayStart.getTime() && t <= todayEnd.getTime();
   });
-  const data = all.filter((d) => new Date(d.occurred_at).getTime() >= rangeStart);
+  const data = all.filter((d) => {
+    const time = new Date(d.occurred_at).getTime();
+    return time >= rangeStart && (histRange === "tudo" || time <= rangeEnd);
+  });
 
   const total = today.reduce((s, d) => s + Number(d.earnings) + Number(d.tip), 0);
   const deliveryKmSum = today.reduce((s, d) => s + Number(d.distance_km), 0);
@@ -505,6 +522,7 @@ function Entregas() {
     deliveries: all,
     goals: goals.data ?? [],
     profile: profile.data,
+    date: now,
   }).target;
   const goalRemaining = Math.max(0, dailyGoal - total);
   const deliveryIntel = buildDeliveryInsights({
@@ -960,8 +978,8 @@ function Entregas() {
               {(
                 [
                   ["hoje", "Hoje"],
-                  ["7d", "7 dias"],
-                  ["30d", "30 dias"],
+                  ["semana", "Segunda a domingo"],
+                  ["mes", "Mês atual"],
                   ["tudo", "Tudo"],
                 ] as const
               ).map(([k, label]) => (
