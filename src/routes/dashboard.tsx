@@ -54,13 +54,17 @@ export const Route = createFileRoute("/dashboard")({
   component: Dashboard,
 });
 
-const RANGES = [PERIODS[0], PERIODS[1], PERIODS[3]];
+const RANGES = [
+  { key: "1", label: "Hoje", days: 1 },
+  { key: "7", label: "7 dias", days: 7 },
+  { key: "month", label: "Mês atual", days: 0 },
+] as const;
 
 const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
 function Dashboard() {
   const now = useCalendarNow();
-  const [range, setRange] = useState<(typeof RANGES)[number]>(RANGES[0]!);
+  const [range, setRange] = useState<(typeof RANGES)[number]>(RANGES[0]);
   const deliveries = useDeliveries();
   const fuelings = useFuelings();
   const expenses = useExpenses();
@@ -74,7 +78,12 @@ function Dashboard() {
   const maintenancesData = useMemo(() => maintenances.data ?? [], [maintenances.data]);
 
   const cpk = useMemo(() => costPerKm(fuelingsData, profile.data), [fuelingsData, profile.data]);
-  const { from, to } = useMemo(() => periodRange(range, now), [now, range]);
+  const { from, to } = useMemo(() => {
+    return {
+      from: startOfDay(new Date(now.getTime() - (range.days - 1) * 86400000)),
+      to: endOfDay(now),
+    };
+  }, [now, range.days]);
 
   const periodDeliveries = useMemo(
     () => deliveriesData.filter((d) => inRange(d.occurred_at, from, to)),
@@ -98,8 +107,8 @@ function Dashboard() {
 
   const series = useMemo(() => {
     const days: { day: string; receita: number; lucro: number }[] = [];
-    for (const cursor = new Date(from); cursor <= to; cursor.setDate(cursor.getDate() + 1)) {
-      const d = new Date(cursor);
+    for (let i = range.days - 1; i >= 0; i--) {
+      const d = new Date(now.getTime() - i * 86400000);
       const dayFrom = startOfDay(d);
       const dayTo = endOfDay(d);
       const dd = deliveriesData.filter((x) => inRange(x.occurred_at, dayFrom, dayTo));
@@ -108,7 +117,7 @@ function Dashboard() {
       days.push({ day: dateLabel(d.toISOString()), receita: sum.revenue, lucro: sum.profit });
     }
     return days;
-  }, [deliveriesData, expensesData, cpk, from, to]);
+  }, [deliveriesData, expensesData, cpk, now, range.days]);
 
   const dailyGoalPlan = adaptiveDailyRevenueGoal({
     deliveries: deliveriesData,

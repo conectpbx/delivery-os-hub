@@ -170,7 +170,7 @@ function Entregas() {
     stops: Stop[];
   } | null>("entregas.finishing", null);
   const [finishGeo, setFinishGeo] = useState<string | null>(null);
-  const [histRange, setHistRange] = useState<"hoje" | "semana" | "mes" | "tudo">("hoje");
+  const [histRange, setHistRange] = useState<"hoje" | "7d" | "mes" | "tudo">("hoje");
 
   const [form, setForm] = usePersistentState("entregas.form", {
     app_name: "",
@@ -494,10 +494,10 @@ function Entregas() {
   const rangeStart =
     histRange === "hoje"
       ? todayStart.getTime()
-      : histRange === "semana"
-        ? startOfWeek(now).getTime()
+      : histRange === "7d"
+        ? todayEnd.getTime() - 7 * 86400000
         : histRange === "mes"
-          ? startOfMonth(now).getTime()
+          ? new Date(now.getFullYear(), now.getMonth(), 1).getTime()
           : 0;
   const rangeEnd =
     histRange === "semana"
@@ -978,7 +978,7 @@ function Entregas() {
               {(
                 [
                   ["hoje", "Hoje"],
-                  ["semana", "Segunda a domingo"],
+                  ["7d", "7 dias"],
                   ["mes", "Mês atual"],
                   ["tudo", "Tudo"],
                 ] as const
