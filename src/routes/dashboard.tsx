@@ -113,17 +113,23 @@ function Dashboard() {
 
   const series = useMemo(() => {
     const days: { day: string; receita: number; lucro: number }[] = [];
-    for (let i = range.days - 1; i >= 0; i--) {
-      const d = new Date(now.getTime() - i * 86400000);
-      const dayFrom = startOfDay(d);
-      const dayTo = endOfDay(d);
+    const cursor = startOfDay(from);
+    const last = startOfDay(to);
+    while (cursor.getTime() <= last.getTime()) {
+      const dayFrom = startOfDay(cursor);
+      const dayTo = endOfDay(cursor);
       const dd = deliveriesData.filter((x) => inRange(x.occurred_at, dayFrom, dayTo));
       const de = expensesData.filter((x) => inRange(x.occurred_at, dayFrom, dayTo));
       const sum = summarize(dd, de, [], cpk);
-      days.push({ day: dateLabel(d.toISOString()), receita: sum.revenue, lucro: sum.profit });
+      days.push({
+        day: dateLabel(dayFrom.toISOString()),
+        receita: sum.revenue,
+        lucro: sum.profit,
+      });
+      cursor.setDate(cursor.getDate() + 1);
     }
     return days;
-  }, [deliveriesData, expensesData, cpk, now, range.days]);
+  }, [deliveriesData, expensesData, cpk, from, to]);
 
   const dailyGoalPlan = adaptiveDailyRevenueGoal({
     deliveries: deliveriesData,
