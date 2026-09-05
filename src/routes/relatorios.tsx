@@ -238,7 +238,7 @@ function Relatorios() {
         description="Receita x lucro real"
       >
         {chart.length ? (
-          <div className="h-72">
+          <div className="h-80 sm:h-96">
             <Suspense fallback={<div className="size-full animate-pulse rounded-md bg-muted" />}>
               <MonthsBarChart data={chart} />
             </Suspense>
