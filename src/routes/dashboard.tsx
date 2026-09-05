@@ -249,7 +249,7 @@ function Dashboard() {
           className="lg:col-span-2"
         >
           {series.some((d) => d.receita > 0) ? (
-            <div className="h-64">
+            <div className="h-72 sm:h-80 lg:h-72">
               <Suspense fallback={<div className="size-full animate-pulse rounded-md bg-muted" />}>
                 <RevenueAreaChart data={series} />
               </Suspense>
