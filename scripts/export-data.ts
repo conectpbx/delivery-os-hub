@@ -42,7 +42,9 @@ function parseArgs() {
   const out = get("--out") || "./backup";
 
   if (!url || !key || !token) {
-    console.error("Uso: bun scripts/export-data.ts --url <url> --key <anon-key> --token <access-token> [--out <dir>]");
+    console.error(
+      "Uso: bun scripts/export-data.ts --url <url> --key <anon-key> --token <access-token> [--out <dir>]",
+    );
     process.exit(1);
   }
 

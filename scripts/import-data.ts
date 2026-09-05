@@ -44,7 +44,9 @@ function parseArgs() {
   const inputDir = get("--in") || "./backup";
 
   if (!url || !serviceRoleKey) {
-    console.error("Uso: bun scripts/import-data.ts --url <url> --service-role-key <key> [--in <dir>]");
+    console.error(
+      "Uso: bun scripts/import-data.ts --url <url> --service-role-key <key> [--in <dir>]",
+    );
     process.exit(1);
   }
 
@@ -134,7 +136,9 @@ async function main() {
   }
 
   console.log("\nImportacao finalizada.");
-  console.log("Lembrete: os usuarios criados com email placeholder precisam redefinir senha ou usar Magic Link.");
+  console.log(
+    "Lembrete: os usuarios criados com email placeholder precisam redefinir senha ou usar Magic Link.",
+  );
 }
 
 main().catch((err) => {
