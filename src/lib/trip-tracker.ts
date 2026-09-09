@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 
 const PREFIX = "deliveryos.trip:";
+const GPS_SAMPLE_INTERVAL_MS = 2_000;
+const STORAGE_WRITE_DELAY_MS = 3_000;
 
 export type GpsPoint = {
   lat: number;
@@ -106,12 +108,30 @@ export function useTripTracker() {
   const [error, setError] = useState<string | null>(null);
   const watchId = useRef<number | null>(null);
   const stateRef = useRef<TripState>(EMPTY);
+  const lastSampleAt = useRef(0);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const persistSoon = useCallback(() => {
+    if (!storageKey || saveTimer.current != null) return;
+    saveTimer.current = setTimeout(() => {
+      saveTimer.current = null;
+      save(storageKey, stateRef.current);
+    }, STORAGE_WRITE_DELAY_MS);
+  }, [storageKey]);
 
   const apply = useCallback(
     (next: TripState) => {
       stateRef.current = next;
       setState(next);
-      save(storageKey, next);
+      persistSoon();
+    },
+    [persistSoon],
+  );
+
+  useEffect(
+    () => () => {
+      if (saveTimer.current != null) clearTimeout(saveTimer.current);
+      save(storageKey, stateRef.current);
     },
     [storageKey],
   );
@@ -131,6 +151,9 @@ export function useTripTracker() {
     if (watchId.current != null) return;
     watchId.current = navigator.geolocation.watchPosition(
       (pos) => {
+        const now = Date.now();
+        if (now - lastSampleAt.current < GPS_SAMPLE_INTERVAL_MS) return;
+        lastSampleAt.current = now;
         const cur = stateRef.current;
         const point = {
           lat: pos.coords.latitude,
@@ -155,6 +178,7 @@ export function useTripTracker() {
       navigator.geolocation.clearWatch(watchId.current);
     }
     watchId.current = null;
+    lastSampleAt.current = 0;
   }, []);
 
   // Retoma a captura ao recarregar a página com jornada ativa (somente no browser).
