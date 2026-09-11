@@ -32,52 +32,6 @@ export type SystemAccess = {
   role: "super_admin" | "admin" | "user";
   maintenanceMode: boolean;
   modules: Record<string, boolean>;
-  subscriptionStatus?: "trialing" | "active" | "past_due" | "suspended" | "canceled";
-  features?: Record<string, boolean>;
-  announcement?: { title: string; message: string; severity: string } | null;
-  maintenance?: { title: string; message: string; block_access: boolean } | null;
-  release?: {
-    version: string;
-    minimum_version: string;
-    force_update: boolean;
-    notes: string;
-  } | null;
-};
-
-export type CommercialPlan = {
-  id: string;
-  slug: string;
-  name: string;
-  description: string;
-  price_cents: number;
-  billing_interval: string;
-  trial_days: number;
-  active: boolean;
-  limits: Record<string, number>;
-  modules: Record<string, boolean>;
-};
-export type CommercialSubscription = {
-  id: string;
-  organizationId: string;
-  organizationName: string;
-  planId: string;
-  status: "trialing" | "active" | "past_due" | "suspended" | "canceled";
-  trialEndsAt: string | null;
-  periodEndsAt: string | null;
-};
-export type FeatureFlag = {
-  key: string;
-  name: string;
-  enabled: boolean;
-  rollout_kind: "all" | "percentage" | "allowlist";
-  rollout_percentage: number;
-};
-export type CommercialSnapshot = {
-  plans: CommercialPlan[];
-  subscriptions: CommercialSubscription[];
-  features: FeatureFlag[];
-  releases: unknown[];
-  announcements: unknown[];
 };
 
 export type SystemSettings = {
@@ -156,14 +110,6 @@ export function useSystemModules(enabled = true) {
       if (error) throw error;
       return data as SystemModule[];
     },
-    enabled,
-  });
-}
-
-export function useCommercialSnapshot(enabled = true) {
-  return useQuery({
-    queryKey: ["admin", "commercial"],
-    queryFn: () => rpc<CommercialSnapshot>("commercial_admin_snapshot"),
     enabled,
   });
 }

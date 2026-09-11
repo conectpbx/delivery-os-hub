@@ -10,7 +10,6 @@ import {
   LogOut,
   Menu,
   ShieldCheck,
-  AlertTriangle,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -53,19 +52,6 @@ export function AppShell({
   const currentModule = nav.find((item) => item.to === pathname);
   const moduleDisabled = Boolean(
     currentModule && !isSuperAdmin && access.data?.modules[currentModule.module] === false,
-  );
-  const commercialBlocked = Boolean(
-    !isSuperAdmin &&
-    ["past_due", "suspended", "canceled"].includes(access.data?.subscriptionStatus ?? ""),
-  );
-  const maintenanceBlocked = Boolean(!isSuperAdmin && access.data?.maintenance?.block_access);
-  const updateBlocked = Boolean(
-    !isSuperAdmin &&
-    access.data?.release?.force_update &&
-    versionIsOlder(
-      import.meta.env["VITE_APP_VERSION"] ?? "0.0.0",
-      access.data.release.minimum_version,
-    ),
   );
 
   useEffect(() => {
@@ -162,35 +148,12 @@ export function AppShell({
           ) : null}
         </header>
         <main className="mx-auto w-full max-w-6xl px-4 pb-24 pt-5 sm:px-6 lg:pb-10">
-          {access.data?.announcement ? (
-            <div className="mb-4 flex gap-3 rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm">
-              <AlertTriangle className="size-5 shrink-0 text-warning" />
-              <div>
-                <p className="font-semibold">{access.data.announcement.title}</p>
-                <p className="text-muted-foreground">{access.data.announcement.message}</p>
-              </div>
-            </div>
-          ) : null}
-          {moduleDisabled || commercialBlocked || maintenanceBlocked || updateBlocked ? (
+          {moduleDisabled ? (
             <div className="surface-card mx-auto mt-12 max-w-lg p-8 text-center">
               <ShieldCheck className="mx-auto size-10 text-muted-foreground" />
-              <h2 className="mt-4 text-lg font-semibold">
-                {updateBlocked
-                  ? "Atualização necessária"
-                  : maintenanceBlocked
-                    ? access.data?.maintenance?.title
-                    : commercialBlocked
-                      ? "Assinatura requer atenção"
-                      : "Módulo temporariamente indisponível"}
-              </h2>
+              <h2 className="mt-4 text-lg font-semibold">Módulo temporariamente indisponível</h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                {updateBlocked
-                  ? access.data?.release?.notes || "Atualize o PWA para continuar usando o sistema."
-                  : maintenanceBlocked
-                    ? access.data?.maintenance?.message
-                    : commercialBlocked
-                      ? "Regularize a assinatura da sua organização para restaurar os módulos."
-                      : "Este recurso foi desativado pela administração do sistema."}
+                Este recurso foi desativado pela administração do sistema.
               </p>
               <Button className="mt-5" onClick={() => void navigate({ to: "/dashboard" })}>
                 Voltar ao dashboard

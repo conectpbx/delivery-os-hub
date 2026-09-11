@@ -13,9 +13,6 @@ import {
   Smartphone,
   Truck,
   Users,
-  Building2,
-  CreditCard,
-  Flag,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
@@ -25,13 +22,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -47,13 +37,11 @@ import {
   type AdminUser,
   type AuditLog,
   type SystemModule,
-  type CommercialSnapshot,
   useAdminOverview,
   useAdminUsers,
   useAuditLogs,
   useIsAdmin,
   useSystemModules,
-  useCommercialSnapshot,
   useSystemSettings,
 } from "@/lib/admin";
 import { brl, dateTimeLabel } from "@/lib/format";
@@ -80,7 +68,6 @@ function Admin() {
   const settings = useSystemSettings(access.data === true);
   const audit = useAuditLogs(access.data === true);
   const modules = useSystemModules(access.data === true);
-  const commercial = useCommercialSnapshot(access.data === true);
 
   useEffect(() => {
     if (!authLoading && user && access.isFetched && access.data !== true) {
@@ -153,11 +140,10 @@ function Admin() {
       </div>
 
       <Tabs defaultValue="users" className="mt-5">
-        <TabsList className="grid h-auto w-full grid-cols-5 sm:w-fit">
+        <TabsList className="grid h-auto w-full grid-cols-4 sm:w-fit">
           <TabsTrigger value="users">Usuários</TabsTrigger>
           <TabsTrigger value="system">Sistema & PWA</TabsTrigger>
           <TabsTrigger value="modules">Módulos</TabsTrigger>
-          <TabsTrigger value="commercial">Comercial</TabsTrigger>
           <TabsTrigger value="audit">Auditoria</TabsTrigger>
         </TabsList>
         <TabsContent value="users" className="mt-4">
@@ -242,15 +228,6 @@ function Admin() {
             onSaved={async () => {
               await Promise.all([modules.refetch(), audit.refetch()]);
               await queryClient.invalidateQueries({ queryKey: ["system"] });
-            }}
-          />
-        </TabsContent>
-        <TabsContent value="commercial" className="mt-4">
-          <CommercialPanel
-            data={commercial.data}
-            modules={modules.data ?? []}
-            onSaved={async () => {
-              await Promise.all([commercial.refetch(), audit.refetch()]);
             }}
           />
         </TabsContent>
@@ -516,314 +493,6 @@ function ModulesPanel({
         ))}
       </div>
     </SectionCard>
-  );
-}
-
-function CommercialPanel({
-  data,
-  modules,
-  onSaved,
-}: {
-  data: CommercialSnapshot | undefined;
-  modules: SystemModule[];
-  onSaved: () => Promise<void>;
-}) {
-  const [saving, setSaving] = useState<string | null>(null);
-  const [release, setRelease] = useState({ version: "", minimum: "", force: false, notes: "" });
-  const [notice, setNotice] = useState({ title: "", message: "", severity: "info" });
-  async function mutate(name: string, args: Record<string, unknown>, key: string) {
-    setSaving(key);
-    try {
-      await adminRpc(name, args);
-      await onSaved();
-      toast.success("Configuração comercial atualizada");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Falha na atualização");
-    } finally {
-      setSaving(null);
-    }
-  }
-  if (!data) return <EmptyState>Carregando estrutura comercial...</EmptyState>;
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-3">
-        <StatCard
-          label="Planos"
-          value={String(data.plans.length)}
-          icon={<CreditCard className="size-4" />}
-        />
-        <StatCard
-          label="Assinaturas"
-          value={String(data.subscriptions.length)}
-          icon={<Building2 className="size-4" />}
-        />
-        <StatCard
-          label="Feature flags"
-          value={String(data.features.length)}
-          icon={<Flag className="size-4" />}
-        />
-      </div>
-      <SectionCard
-        title="Planos e módulos"
-        description="Defina quais recursos fazem parte de cada oferta"
-      >
-        <div className="grid gap-3 lg:grid-cols-3">
-          {data.plans.map((plan) => (
-            <div key={plan.id} className="rounded-xl border p-4">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="font-semibold">{plan.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {plan.price_cents ? brl(plan.price_cents / 100) + "/mês" : "Grátis"} ·{" "}
-                    {plan.trial_days} dias de teste
-                  </p>
-                </div>
-                <Badge>{plan.slug}</Badge>
-              </div>
-              <div className="mt-4 space-y-3">
-                {modules.map((module) => (
-                  <div key={module.key} className="flex items-center justify-between gap-2">
-                    <Label className="text-xs">{module.name}</Label>
-                    <Switch
-                      checked={plan.modules[module.key] === true}
-                      disabled={saving === `${plan.id}-${module.key}`}
-                      onCheckedChange={(enabled) =>
-                        void mutate(
-                          "super_admin_set_plan_module",
-                          { _plan_id: plan.id, _module_key: module.key, _enabled: enabled },
-                          `${plan.id}-${module.key}`,
-                        )
-                      }
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      </SectionCard>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <SectionCard
-          title="Versão mínima do PWA"
-          description="Publique e force atualizações quando necessário"
-        >
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <Input
-                placeholder="Versão atual"
-                value={release.version}
-                onChange={(e) => setRelease({ ...release, version: e.target.value })}
-              />
-              <Input
-                placeholder="Versão mínima"
-                value={release.minimum}
-                onChange={(e) => setRelease({ ...release, minimum: e.target.value })}
-              />
-            </div>
-            <Input
-              placeholder="Notas da versão"
-              value={release.notes}
-              onChange={(e) => setRelease({ ...release, notes: e.target.value })}
-            />
-            <Toggle
-              label="Atualização obrigatória"
-              description="Exige a versão mínima configurada."
-              checked={release.force}
-              onChange={(force) => setRelease({ ...release, force })}
-            />
-            <Button
-              className="w-full"
-              disabled={!release.version || !release.minimum || saving === "release"}
-              onClick={() =>
-                void mutate(
-                  "super_admin_publish_release",
-                  {
-                    _version: release.version,
-                    _minimum_version: release.minimum,
-                    _force: release.force,
-                    _notes: release.notes,
-                  },
-                  "release",
-                )
-              }
-            >
-              Publicar versão
-            </Button>
-          </div>
-        </SectionCard>
-        <SectionCard
-          title="Aviso global"
-          description="Comunique incidentes e novidades aos usuários"
-        >
-          <div className="space-y-3">
-            <Input
-              placeholder="Título"
-              value={notice.title}
-              onChange={(e) => setNotice({ ...notice, title: e.target.value })}
-            />
-            <Input
-              placeholder="Mensagem"
-              value={notice.message}
-              onChange={(e) => setNotice({ ...notice, message: e.target.value })}
-            />
-            <Select
-              value={notice.severity}
-              onValueChange={(severity) => setNotice({ ...notice, severity })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="info">Informativo</SelectItem>
-                <SelectItem value="warning">Atenção</SelectItem>
-                <SelectItem value="critical">Crítico</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button
-              className="w-full"
-              disabled={!notice.title || !notice.message || saving === "notice"}
-              onClick={() =>
-                void mutate(
-                  "super_admin_publish_announcement",
-                  { _title: notice.title, _message: notice.message, _severity: notice.severity },
-                  "notice",
-                )
-              }
-            >
-              Publicar aviso
-            </Button>
-          </div>
-        </SectionCard>
-      </div>
-      <SectionCard
-        title="Assinaturas e tenants"
-        description="Plano, trial e situação financeira por empresa ou workspace"
-      >
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Empresa / tenant</TableHead>
-                <TableHead>Plano</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Vencimento</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.subscriptions.map((subscription) => (
-                <TableRow key={subscription.id}>
-                  <TableCell className="font-medium">{subscription.organizationName}</TableCell>
-                  <TableCell>
-                    <Select
-                      value={subscription.planId}
-                      onValueChange={(planId) =>
-                        void mutate(
-                          "super_admin_update_subscription",
-                          {
-                            _organization_id: subscription.organizationId,
-                            _plan_id: planId,
-                            _status: subscription.status,
-                          },
-                          subscription.id,
-                        )
-                      }
-                    >
-                      <SelectTrigger className="w-36">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {data.plans.map((plan) => (
-                          <SelectItem key={plan.id} value={plan.id}>
-                            {plan.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell>
-                    <Select
-                      value={subscription.status}
-                      onValueChange={(status) =>
-                        void mutate(
-                          "super_admin_update_subscription",
-                          {
-                            _organization_id: subscription.organizationId,
-                            _plan_id: subscription.planId,
-                            _status: status,
-                          },
-                          subscription.id,
-                        )
-                      }
-                    >
-                      <SelectTrigger className="w-36">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="trialing">Em teste</SelectItem>
-                        <SelectItem value="active">Ativa</SelectItem>
-                        <SelectItem value="past_due">Inadimplente</SelectItem>
-                        <SelectItem value="suspended">Suspensa</SelectItem>
-                        <SelectItem value="canceled">Cancelada</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {subscription.trialEndsAt
-                      ? dateTimeLabel(subscription.trialEndsAt)
-                      : subscription.periodEndsAt
-                        ? dateTimeLabel(subscription.periodEndsAt)
-                        : "—"}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      </SectionCard>
-      <SectionCard
-        title="Feature flags graduais"
-        description="Ative recursos novos globalmente ou por percentual"
-      >
-        <div className="space-y-3">
-          {data.features.length ? (
-            data.features.map((flag) => (
-              <div
-                key={flag.key}
-                className="flex items-center justify-between rounded-lg border p-3"
-              >
-                <div>
-                  <p className="text-sm font-medium">{flag.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {flag.key} ·{" "}
-                    {flag.rollout_kind === "percentage"
-                      ? `${flag.rollout_percentage}% dos usuários`
-                      : flag.rollout_kind}
-                  </p>
-                </div>
-                <Switch
-                  checked={flag.enabled}
-                  onCheckedChange={(enabled) =>
-                    void mutate(
-                      "super_admin_set_feature",
-                      {
-                        _key: flag.key,
-                        _name: flag.name,
-                        _enabled: enabled,
-                        _kind: flag.rollout_kind,
-                        _percentage: flag.rollout_percentage,
-                      },
-                      flag.key,
-                    )
-                  }
-                />
-              </div>
-            ))
-          ) : (
-            <EmptyState>Nenhuma feature flag cadastrada.</EmptyState>
-          )}
-        </div>
-      </SectionCard>
-    </div>
   );
 }
 
