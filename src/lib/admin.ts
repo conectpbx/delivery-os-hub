@@ -1,0 +1,215 @@
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+
+export type AdminOverview = {
+  totalUsers: number;
+  activeUsers30d: number;
+  deliveries30d: number;
+  revenue30d: number;
+  scansToday: number;
+};
+
+export type AdminUser = {
+  user_id: string;
+  email: string;
+  full_name: string | null;
+  role: "super_admin" | "admin" | "user";
+  created_at: string;
+  last_sign_in_at: string | null;
+  is_blocked: boolean;
+  delivery_count: number;
+};
+
+export type SystemModule = {
+  key: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  position: number;
+};
+
+export type SystemAccess = {
+  role: "super_admin" | "admin" | "user";
+  maintenanceMode: boolean;
+  modules: Record<string, boolean>;
+  subscriptionStatus?: "trialing" | "active" | "past_due" | "suspended" | "canceled";
+  features?: Record<string, boolean>;
+  announcement?: { title: string; message: string; severity: string } | null;
+  maintenance?: { title: string; message: string; block_access: boolean } | null;
+  release?: {
+    version: string;
+    minimum_version: string;
+    force_update: boolean;
+    notes: string;
+  } | null;
+};
+
+export type CommercialPlan = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  price_cents: number;
+  billing_interval: string;
+  trial_days: number;
+  active: boolean;
+  limits: Record<string, number>;
+  modules: Record<string, boolean>;
+};
+export type CommercialSubscription = {
+  id: string;
+  organizationId: string;
+  organizationName: string;
+  planId: string;
+  status: "trialing" | "active" | "past_due" | "suspended" | "canceled";
+  trialEndsAt: string | null;
+  periodEndsAt: string | null;
+};
+export type FeatureFlag = {
+  key: string;
+  name: string;
+  enabled: boolean;
+  rollout_kind: "all" | "percentage" | "allowlist";
+  rollout_percentage: number;
+};
+export type CommercialSnapshot = {
+  plans: CommercialPlan[];
+  subscriptions: CommercialSubscription[];
+  features: FeatureFlag[];
+  releases: unknown[];
+  announcements: unknown[];
+};
+
+export type SystemSettings = {
+  id: boolean;
+  app_name: string;
+  support_email: string;
+  maintenance_mode: boolean;
+  allow_registrations: boolean;
+  ai_daily_limit: number;
+  updated_at: string;
+};
+
+export type AuditLog = {
+  id: number;
+  action: string;
+  actor_id: string | null;
+  target_id: string | null;
+  details: Record<string, unknown>;
+  created_at: string;
+};
+
+// The generated database types are updated by Lovable after migrations run.
+// Keep the privileged surface isolated here until that generation happens.
+const adminApi = supabase as unknown as {
+  rpc: (
+    name: string,
+    args?: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: Error | null }>;
+  from: (table: string) => {
+    select: (columns?: string) => {
+      order: (
+        column: string,
+        options: { ascending: boolean },
+      ) => {
+        limit: (limit: number) => Promise<{ data: unknown; error: Error | null }>;
+      };
+      single: () => Promise<{ data: unknown; error: Error | null }>;
+    };
+  };
+};
+
+async function rpc<T>(name: string, args?: Record<string, unknown>): Promise<T> {
+  const { data, error } = await adminApi.rpc(name, args);
+  if (error) throw error;
+  return data as T;
+}
+
+export function useIsAdmin(enabled = true) {
+  return useQuery({
+    queryKey: ["admin", "access"],
+    queryFn: () => rpc<boolean>("is_super_admin"),
+    enabled,
+    staleTime: 60_000,
+    retry: false,
+  });
+}
+
+export function useSystemAccess(enabled = true) {
+  return useQuery({
+    queryKey: ["system", "access"],
+    queryFn: () => rpc<SystemAccess>("get_my_system_access"),
+    enabled,
+    staleTime: 30_000,
+  });
+}
+
+export function useSystemModules(enabled = true) {
+  return useQuery({
+    queryKey: ["admin", "modules"],
+    queryFn: async () => {
+      const { data, error } = await adminApi
+        .from("system_modules")
+        .select("*")
+        .order("position", { ascending: true })
+        .limit(50);
+      if (error) throw error;
+      return data as SystemModule[];
+    },
+    enabled,
+  });
+}
+
+export function useCommercialSnapshot(enabled = true) {
+  return useQuery({
+    queryKey: ["admin", "commercial"],
+    queryFn: () => rpc<CommercialSnapshot>("commercial_admin_snapshot"),
+    enabled,
+  });
+}
+
+export function useAdminOverview(enabled = true) {
+  return useQuery({
+    queryKey: ["admin", "overview"],
+    queryFn: () => rpc<AdminOverview>("admin_overview"),
+    enabled,
+  });
+}
+
+export function useAdminUsers(search: string, enabled = true) {
+  return useQuery({
+    queryKey: ["admin", "users", search],
+    queryFn: () => rpc<AdminUser[]>("admin_list_users", { _search: search, _limit: 100 }),
+    enabled,
+  });
+}
+
+export function useSystemSettings(enabled = true) {
+  return useQuery({
+    queryKey: ["admin", "settings"],
+    queryFn: async () => {
+      const { data, error } = await adminApi.from("system_settings").select("*").single();
+      if (error) throw error;
+      return data as SystemSettings;
+    },
+    enabled,
+  });
+}
+
+export function useAuditLogs(enabled = true) {
+  return useQuery({
+    queryKey: ["admin", "audit"],
+    queryFn: async () => {
+      const { data, error } = await adminApi
+        .from("admin_audit_logs")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      return data as AuditLog[];
+    },
+    enabled,
+  });
+}
+
+export { rpc as adminRpc };
