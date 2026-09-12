@@ -12,6 +12,51 @@ export function costPerKm(fuelings: Fueling[], profile: Profile | null | undefin
   return avgFuelPrice(fuelings) / eff;
 }
 
+export type MaintenanceReserveItem = {
+  maintenance: Maintenance;
+  intervalKm: number;
+  costPerKm: number;
+};
+
+export type MaintenanceReserve = {
+  costPerKm: number;
+  items: MaintenanceReserveItem[];
+  incomplete: Maintenance[];
+};
+
+/** Usa somente o ciclo mais recente de cada serviço para não somar ciclos já encerrados. */
+export function maintenanceReservePerKm(maintenances: Maintenance[]): MaintenanceReserve {
+  const latestByType = new Map<string, Maintenance>();
+  const sorted = [...maintenances].sort(
+    (a, b) => new Date(b.performed_at).getTime() - new Date(a.performed_at).getTime(),
+  );
+
+  for (const maintenance of sorted) {
+    const key = maintenance.service_type.trim().toLocaleLowerCase("pt-BR");
+    if (!latestByType.has(key)) latestByType.set(key, maintenance);
+  }
+
+  const items: MaintenanceReserveItem[] = [];
+  const incomplete: Maintenance[] = [];
+  for (const maintenance of latestByType.values()) {
+    const currentKm = Number(maintenance.odometer);
+    const nextKm = Number(maintenance.next_due_km);
+    const cost = Number(maintenance.cost);
+    const intervalKm = nextKm - currentKm;
+    if (!Number.isFinite(cost) || cost < 0 || !Number.isFinite(intervalKm) || intervalKm <= 0) {
+      incomplete.push(maintenance);
+      continue;
+    }
+    items.push({ maintenance, intervalKm, costPerKm: cost / intervalKm });
+  }
+
+  return {
+    costPerKm: items.reduce((sum, item) => sum + item.costPerKm, 0),
+    items,
+    incomplete,
+  };
+}
+
 export function inRange(iso: string, from: Date, to: Date) {
   const d = new Date(iso).getTime();
   return d >= from.getTime() && d <= to.getTime();
@@ -114,6 +159,21 @@ export function summarizeRecordedCosts(
     ...summary,
     fuelCost,
     profit: summary.revenue - fuelCost - summary.otherCost - summary.maintenanceCost,
+  };
+}
+
+export function summarizeOperational(
+  deliveries: Delivery[],
+  expenses: Expense[],
+  fuelCostPerKm: number,
+  maintenanceCostPerKm: number,
+): Summary {
+  const summary = summarize(deliveries, expenses, [], fuelCostPerKm);
+  const maintenanceCost = summary.distance * maintenanceCostPerKm;
+  return {
+    ...summary,
+    maintenanceCost,
+    profit: summary.revenue - summary.fuelCost - summary.otherCost - maintenanceCost,
   };
 }
 

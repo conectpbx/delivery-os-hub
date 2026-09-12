@@ -10,10 +10,13 @@ import { useDeliveries, useExpenses, useFuelings, useMaintenances, useProfile } 
 import { brl, dateTimeLabel, downloadCsv, monthLabel, num, paymentMethodLabel } from "@/lib/format";
 import {
   byApp,
+  byMonth,
   byMonthRecordedCosts,
   costPerKm,
   costsByCategory,
   filterByRange,
+  maintenanceReservePerKm,
+  summarizeOperational,
   summarizeRecordedCosts,
 } from "@/lib/metrics";
 import { PeriodFilter, PeriodSummary, usePeriodSelection } from "@/components/PeriodFilter";
@@ -53,6 +56,10 @@ function Relatorios() {
   const maintenancesData = useMemo(() => maintenances.data ?? [], [maintenances.data]);
 
   const cpk = useMemo(() => costPerKm(fuelingsData, profile.data), [fuelingsData, profile.data]);
+  const maintenanceReserve = useMemo(
+    () => maintenanceReservePerKm(maintenancesData),
+    [maintenancesData],
+  );
   const perDeliveries = useMemo(
     () => filterByRange(deliveriesData, (d) => d.occurred_at, period.fromDate, period.toDate),
     [deliveriesData, period.fromDate, period.toDate],
@@ -79,17 +86,28 @@ function Relatorios() {
     () => summarizeRecordedCosts(perDeliveries, perExpenses, perMaint, perFuelings),
     [perDeliveries, perExpenses, perFuelings, perMaint],
   );
-  const ranking = useMemo(() => byApp(perDeliveries, cpk), [perDeliveries, cpk]);
+  const operational = useMemo(
+    () => summarizeOperational(perDeliveries, perExpenses, cpk, maintenanceReserve.costPerKm),
+    [perDeliveries, perExpenses, cpk, maintenanceReserve.costPerKm],
+  );
+  const operationalMonths = useMemo(
+    () => byMonth(deliveriesData, expensesData, cpk + maintenanceReserve.costPerKm).slice(-12),
+    [deliveriesData, expensesData, cpk, maintenanceReserve.costPerKm],
+  );
+  const ranking = useMemo(
+    () => byApp(perDeliveries, cpk + maintenanceReserve.costPerKm),
+    [perDeliveries, cpk, maintenanceReserve.costPerKm],
+  );
   const categories = useMemo(() => costsByCategory(perExpenses), [perExpenses]);
   const totalCost = total.fuelCost + total.otherCost + total.maintenanceCost;
-  const last = months[months.length - 1];
-  const prev = months[months.length - 2];
-  const delta =
-    last && prev && prev.profit ? ((last.profit - prev.profit) / Math.abs(prev.profit)) * 100 : 0;
-
   const chart = useMemo(
-    () => months.map((m) => ({ mes: monthLabel(m.month), receita: m.revenue, lucro: m.profit })),
-    [months],
+    () =>
+      operationalMonths.map((m) => ({
+        mes: monthLabel(m.month),
+        receita: m.revenue,
+        lucro: m.profit,
+      })),
+    [operationalMonths],
   );
 
   const costRows: { label: string; value: number; hint?: string }[] = useMemo(
@@ -141,8 +159,9 @@ function Relatorios() {
 
   function exportCosts() {
     downloadCsv("custos-delivery-os.csv", [
-      ["Item", "Valor"],
-      ...costRows.map((r) => [r.label, r.value]),
+      ["Item", "Valor", "Tipo"],
+      ...costRows.map((r) => [r.label, r.value, "Pago"]),
+      ["Reserva de manutenção", operational.maintenanceCost, "Operacional (não somar ao pago)"],
     ]);
   }
 
@@ -177,26 +196,22 @@ function Relatorios() {
           tone="primary"
         />
         <StatCard
-          label="Lucro acumulado"
+          label="Lucro por caixa"
           value={brl(total.profit)}
           hint={`Margem ${num(total.revenue ? (total.profit / total.revenue) * 100 : 0)}%`}
           tone={total.profit >= 0 ? "success" : "destructive"}
+        />
+        <StatCard
+          label="Lucro operacional"
+          value={brl(operational.profit)}
+          hint={`Reserva ${brl(operational.maintenanceCost)} · ${brl(maintenanceReserve.costPerKm)}/km`}
+          tone={operational.profit >= 0 ? "success" : "destructive"}
         />
         <StatCard
           label="Custos no período"
           value={brl(totalCost)}
           tone="destructive"
           hint={`${brl(total.fuelCost)} combustível`}
-        />
-        <StatCard
-          label="Variação vs mês anterior"
-          value={`${delta >= 0 ? "+" : ""}${num(delta, 0)}%`}
-          tone={delta >= 0 ? "success" : "destructive"}
-          hint={
-            prev
-              ? `${monthLabel(prev.month)} → ${last ? monthLabel(last.month) : ""}`
-              : "sem histórico"
-          }
         />
       </div>
 
@@ -235,7 +250,7 @@ function Relatorios() {
       <SectionCard
         className="mt-4"
         title="Comparação entre meses"
-        description="Receita x lucro real"
+        description="Receita x lucro operacional"
       >
         {chart.length ? (
           <div className="h-80 sm:h-96">
