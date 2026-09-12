@@ -160,8 +160,8 @@ function Financeiro() {
       <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Receita total"
-          value={brl(s.revenue)}
-          hint={`${s.count} entregas no período`}
+          value={brl(cash.revenue)}
+          hint={`${cash.count} entregas no período`}
           tone="primary"
         />
         <StatCard
