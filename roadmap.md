@@ -5,4 +5,4 @@
 - [x] Separar lucro por caixa e lucro operacional.
 - [x] Manter exportações pagas separadas da reserva operacional.
 - [x] Validar os cálculos automatizados.
-- [ ] Validar a apresentação no navegador.
+- [ ] Validar a apresentação no navegador — bloqueado até o usuário entrar na prévia.
