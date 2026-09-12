@@ -4,4 +4,5 @@
 - [x] Mostrar prévia, cobertura e custo diluído na manutenção.
 - [x] Separar lucro por caixa e lucro operacional.
 - [x] Manter exportações pagas separadas da reserva operacional.
-- [ ] Validar cálculos e apresentação no navegador.
+- [x] Validar os cálculos automatizados.
+- [ ] Validar a apresentação no navegador.

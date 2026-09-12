@@ -122,7 +122,11 @@ function Dashboard() {
     () => summarizeOperational(periodDeliveries, periodExpenses, cpk, maintenanceReserve.costPerKm),
     [periodDeliveries, periodExpenses, cpk, maintenanceReserve.costPerKm],
   );
-  const ranking = useMemo(() => byApp(periodDeliveries, cpk), [periodDeliveries, cpk]);
+  const operationalCpk = cpk + maintenanceReserve.costPerKm;
+  const ranking = useMemo(
+    () => byApp(periodDeliveries, operationalCpk),
+    [periodDeliveries, operationalCpk],
+  );
   const { chainKm, km: periodKm } = useChainedDistance(periodDeliveries);
   const { grid, max } = useMemo(() => heatmap(deliveriesData), [deliveriesData]);
 

@@ -10,6 +10,7 @@ import { useDeliveries, useExpenses, useFuelings, useMaintenances, useProfile } 
 import { brl, dateTimeLabel, downloadCsv, monthLabel, num, paymentMethodLabel } from "@/lib/format";
 import {
   byApp,
+  byMonth,
   byMonthRecordedCosts,
   costPerKm,
   costsByCategory,
@@ -89,17 +90,24 @@ function Relatorios() {
     () => summarizeOperational(perDeliveries, perExpenses, cpk, maintenanceReserve.costPerKm),
     [perDeliveries, perExpenses, cpk, maintenanceReserve.costPerKm],
   );
-  const ranking = useMemo(() => byApp(perDeliveries, cpk), [perDeliveries, cpk]);
+  const operationalMonths = useMemo(
+    () => byMonth(deliveriesData, expensesData, cpk + maintenanceReserve.costPerKm).slice(-12),
+    [deliveriesData, expensesData, cpk, maintenanceReserve.costPerKm],
+  );
+  const ranking = useMemo(
+    () => byApp(perDeliveries, cpk + maintenanceReserve.costPerKm),
+    [perDeliveries, cpk, maintenanceReserve.costPerKm],
+  );
   const categories = useMemo(() => costsByCategory(perExpenses), [perExpenses]);
   const totalCost = total.fuelCost + total.otherCost + total.maintenanceCost;
-  const last = months[months.length - 1];
-  const prev = months[months.length - 2];
-  const delta =
-    last && prev && prev.profit ? ((last.profit - prev.profit) / Math.abs(prev.profit)) * 100 : 0;
-
   const chart = useMemo(
-    () => months.map((m) => ({ mes: monthLabel(m.month), receita: m.revenue, lucro: m.profit })),
-    [months],
+    () =>
+      operationalMonths.map((m) => ({
+        mes: monthLabel(m.month),
+        receita: m.revenue,
+        lucro: m.profit,
+      })),
+    [operationalMonths],
   );
 
   const costRows: { label: string; value: number; hint?: string }[] = useMemo(
@@ -242,7 +250,7 @@ function Relatorios() {
       <SectionCard
         className="mt-4"
         title="Comparação entre meses"
-        description="Receita x lucro real"
+        description="Receita x lucro operacional"
       >
         {chart.length ? (
           <div className="h-80 sm:h-96">

@@ -54,7 +54,6 @@ function Manutencao() {
   const previewCostPerKm = previewInterval > 0 ? dec(form.cost) / previewInterval : 0;
   const today = new Date().toISOString().slice(0, 10);
   const pending = data.filter((m) => m.next_due_date && m.next_due_date >= today);
-  const overdue = data.filter((m) => m.next_due_date && m.next_due_date < today);
 
   return (
     <AppShell title="Manutenção" subtitle="Histórico e agenda preventiva do veículo">

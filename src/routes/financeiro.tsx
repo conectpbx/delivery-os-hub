@@ -178,7 +178,7 @@ function Financeiro() {
         <StatCard
           label="Lucro operacional"
           value={brl(operational.profit)}
-          hint={`Reserva de manutenção ${brl(operational.maintenanceCost)}`}
+          hint={`Custo ${brl(cpk + maintenanceReserve.costPerKm)}/km · reserva ${brl(operational.maintenanceCost)}`}
           tone={operational.profit >= 0 ? "success" : "destructive"}
         />
       </div>
