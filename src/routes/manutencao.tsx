@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useInsert, useMaintenances, useRemove } from "@/lib/data";
-import { brl, dateLabel, num } from "@/lib/format";
+import { brl, dateLabel, dec, num } from "@/lib/format";
+import { maintenanceReservePerKm } from "@/lib/metrics";
 
 export const Route = createFileRoute("/manutencao")({
   head: () => ({
@@ -48,16 +49,30 @@ function Manutencao() {
 
   const data = list.data ?? [];
   const total = data.reduce((s, m) => s + Number(m.cost), 0);
+  const reserve = maintenanceReservePerKm(data);
+  const previewInterval = dec(form.next_due_km) - dec(form.odometer);
+  const previewCostPerKm = previewInterval > 0 ? dec(form.cost) / previewInterval : 0;
   const today = new Date().toISOString().slice(0, 10);
   const pending = data.filter((m) => m.next_due_date && m.next_due_date >= today);
   const overdue = data.filter((m) => m.next_due_date && m.next_due_date < today);
 
   return (
     <AppShell title="Manutenção" subtitle="Histórico e agenda preventiva do veículo">
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Investido em manutenção" value={brl(total)} tone="primary" />
+        <StatCard
+          label="Reserva de manutenção"
+          value={`${brl(reserve.costPerKm)}/km`}
+          hint={`${reserve.items.length} serviço(s) no cálculo`}
+          tone="warning"
+        />
         <StatCard label="Agendamentos futuros" value={String(pending.length)} />
-        <StatCard label="Vencidos" value={String(overdue.length)} tone={overdue.length ? "destructive" : "default"} />
+        <StatCard
+          label="Dados pendentes"
+          value={String(reserve.incomplete.length)}
+          hint="Sem intervalo válido em km"
+          tone={reserve.incomplete.length ? "destructive" : "default"}
+        />
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[380px_1fr]">
@@ -96,7 +111,7 @@ function Manutencao() {
                 <Input value={form.cost} onChange={(e) => setForm({ ...form, cost: e.target.value })} />
               </div>
               <div className="space-y-2">
-                <Label className="text-xs">Odômetro</Label>
+                <Label className="text-xs">Odômetro atual</Label>
                 <Input value={form.odometer} onChange={(e) => setForm({ ...form, odometer: e.target.value })} />
               </div>
               <div className="space-y-2">
@@ -108,9 +123,17 @@ function Manutencao() {
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-xs">Próximo km</Label>
+                <Label className="text-xs">Próximo serviço (km)</Label>
                 <Input value={form.next_due_km} onChange={(e) => setForm({ ...form, next_due_km: e.target.value })} />
               </div>
+            </div>
+            <div className="rounded-md border border-border bg-muted/40 p-3 text-xs">
+              <p className="font-medium">Prévia da reserva: {brl(previewCostPerKm)}/km</p>
+              <p className="mt-1 text-muted-foreground">
+                {previewInterval > 0
+                  ? `${brl(dec(form.cost))} distribuídos por ${num(previewInterval, 0)} km.`
+                  : "Informe o odômetro atual e o próximo serviço em km para calcular."}
+              </p>
             </div>
             <div className="space-y-2">
               <Label className="text-xs">Observações</Label>
@@ -127,6 +150,7 @@ function Manutencao() {
             <ul className="divide-y divide-border">
               {data.map((m) => {
                 const late = m.next_due_date && m.next_due_date < today;
+                const reserveItem = reserve.items.find((item) => item.maintenance.id === m.id);
                 return (
                   <li key={m.id} className="flex items-start gap-3 py-3">
                     <div className="min-w-0 flex-1">
@@ -149,6 +173,11 @@ function Manutencao() {
                           {m.next_due_km ? ` ou ${num(Number(m.next_due_km), 0)} km` : ""}
                         </p>
                       ) : null}
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {reserveItem
+                          ? `${brl(reserveItem.costPerKm)}/km · custo diluído em ${num(reserveItem.intervalKm, 0)} km`
+                          : "Fora da reserva: informe um intervalo válido em km ou este não é o ciclo mais recente."}
+                      </p>
                     </div>
                     <Button variant="ghost" size="icon" aria-label="Excluir" onClick={() => del.mutate(m.id)}>
                       <Trash2 className="size-4 text-destructive" />

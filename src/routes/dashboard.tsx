@@ -26,10 +26,13 @@ import {
   heatmap,
   inRange,
   monthRange,
+  maintenanceReservePerKm,
   PERIODS,
   periodRange,
   startOfDay,
   summarize,
+  summarizeOperational,
+  summarizeRecordedCosts,
 } from "@/lib/metrics";
 import { useChainedDistance } from "@/lib/chained-distance";
 import { useCalendarNow } from "@/hooks/useCalendarNow";
@@ -80,6 +83,10 @@ function Dashboard() {
   const maintenancesData = useMemo(() => maintenances.data ?? [], [maintenances.data]);
 
   const cpk = useMemo(() => costPerKm(fuelingsData, profile.data), [fuelingsData, profile.data]);
+  const maintenanceReserve = useMemo(
+    () => maintenanceReservePerKm(maintenancesData),
+    [maintenancesData],
+  );
   const { from, to } = useMemo(() => {
     if (range.monthOffset !== null) {
       const { from: mFrom, to: mTo } = monthRange(range.monthOffset, now);
@@ -103,9 +110,17 @@ function Dashboard() {
     () => maintenancesData.filter((m) => inRange(m.performed_at, from, to)),
     [maintenancesData, from, to],
   );
+  const periodFuelings = useMemo(
+    () => fuelingsData.filter((f) => inRange(f.occurred_at, from, to)),
+    [fuelingsData, from, to],
+  );
+  const cash = useMemo(
+    () => summarizeRecordedCosts(periodDeliveries, periodExpenses, periodMaint, periodFuelings),
+    [periodDeliveries, periodExpenses, periodFuelings, periodMaint],
+  );
   const s = useMemo(
-    () => summarize(periodDeliveries, periodExpenses, periodMaint, cpk),
-    [periodDeliveries, periodExpenses, periodMaint, cpk],
+    () => summarizeOperational(periodDeliveries, periodExpenses, cpk, maintenanceReserve.costPerKm),
+    [periodDeliveries, periodExpenses, cpk, maintenanceReserve.costPerKm],
   );
   const ranking = useMemo(() => byApp(periodDeliveries, cpk), [periodDeliveries, cpk]);
   const { chainKm, km: periodKm } = useChainedDistance(periodDeliveries);
@@ -120,7 +135,7 @@ function Dashboard() {
       const dayTo = endOfDay(cursor);
       const dd = deliveriesData.filter((x) => inRange(x.occurred_at, dayFrom, dayTo));
       const de = expensesData.filter((x) => inRange(x.occurred_at, dayFrom, dayTo));
-      const sum = summarize(dd, de, [], cpk);
+      const sum = summarizeOperational(dd, de, cpk, maintenanceReserve.costPerKm);
       days.push({
         day: dateLabel(dayFrom.toISOString()),
         receita: sum.revenue,
@@ -129,7 +144,7 @@ function Dashboard() {
       cursor.setDate(cursor.getDate() + 1);
     }
     return days;
-  }, [deliveriesData, expensesData, cpk, from, to]);
+  }, [deliveriesData, expensesData, cpk, maintenanceReserve.costPerKm, from, to]);
 
   const dailyGoalPlan = adaptiveDailyRevenueGoal({
     deliveries: deliveriesData,
@@ -193,16 +208,16 @@ function Dashboard() {
           icon={<Banknote className="size-4" />}
         />
         <StatCard
-          label="Lucro real"
+          label="Lucro operacional"
           value={brl(s.profit)}
           hint={`Margem ${num(s.revenue ? (s.profit / s.revenue) * 100 : 0)}%`}
           tone={s.profit >= 0 ? "success" : "destructive"}
           icon={<TrendingUp className="size-4" />}
         />
         <StatCard
-          label="Custos"
+          label="Custos operacionais"
           value={brl(s.fuelCost + s.otherCost + s.maintenanceCost)}
-          hint={`Combustível ${brl(s.fuelCost)} · outros ${brl(s.otherCost + s.maintenanceCost)}`}
+          hint={`Combustível ${brl(s.fuelCost)} · reserva ${brl(s.maintenanceCost)}`}
           tone="destructive"
           icon={<Fuel className="size-4" />}
         />
@@ -229,13 +244,22 @@ function Dashboard() {
           tone="warning"
           icon={<Timer className="size-4" />}
         />
-        <StatCard label="Ticket médio" value={brl(s.count ? s.revenue / s.count : 0)} />
+        <StatCard
+          label="Lucro por caixa"
+          value={brl(cash.profit)}
+          hint={`Pagamentos no período: ${brl(cash.fuelCost + cash.otherCost + cash.maintenanceCost)}`}
+          tone={cash.profit >= 0 ? "success" : "destructive"}
+        />
         <StatCard
           label="Meta de hoje"
           value={`${num((todayRevenue / dailyGoal) * 100, 0)}%`}
           hint={`${brl(todayRevenue)} hoje${dailyGoalPlan.monthTarget > 0 ? ` · ${dailyGoalPlan.remainingDaysIncludingToday} dias para ${brl(dailyGoalPlan.monthTarget)}` : ""}`}
         />
-        <StatCard label="Manutenção no período" value={brl(s.maintenanceCost)} />
+        <StatCard
+          label="Reserva de manutenção"
+          value={brl(s.maintenanceCost)}
+          hint={`${brl(maintenanceReserve.costPerKm)}/km`}
+        />
       </div>
 
       <div className="mt-4">
@@ -244,7 +268,7 @@ function Dashboard() {
 
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <SectionCard
-          title="Receita x lucro real"
+          title="Receita x lucro operacional"
           description="Evolução diária"
           className="lg:col-span-2"
         >

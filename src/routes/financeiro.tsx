@@ -26,7 +26,14 @@ import {
   reverseGeocodeAddress,
 } from "@/lib/geo";
 import { useTripTracker } from "@/lib/trip-tracker";
-import { avgFuelPrice, costPerKm, filterByRange, summarize } from "@/lib/metrics";
+import {
+  avgFuelPrice,
+  costPerKm,
+  filterByRange,
+  maintenanceReservePerKm,
+  summarizeOperational,
+  summarizeRecordedCosts,
+} from "@/lib/metrics";
 import { PeriodFilter, PeriodSummary, usePeriodSelection } from "@/components/PeriodFilter";
 import { usePersistentState } from "@/lib/persistent-state";
 
@@ -84,6 +91,7 @@ function Financeiro() {
   const { trip, error: tripError, start, finish, reset, pushGps } = useTripTracker();
 
   const cpk = costPerKm(fuelings.data ?? [], profile.data);
+  const maintenanceReserve = maintenanceReservePerKm(maintenances.data ?? []);
   const perDeliveries = filterByRange(
     deliveries.data ?? [],
     (d) => d.occurred_at,
@@ -108,7 +116,13 @@ function Financeiro() {
     period.fromDate,
     period.toDate,
   );
-  const s = summarize(perDeliveries, perExpenses, perMaint, cpk);
+  const cash = summarizeRecordedCosts(perDeliveries, perExpenses, perMaint, perFuelings);
+  const operational = summarizeOperational(
+    perDeliveries,
+    perExpenses,
+    cpk,
+    maintenanceReserve.costPerKm,
+  );
   const fuelTotal = perFuelings.reduce((a, f) => a + Number(f.total), 0);
   const lastOdometer = (fuelings.data ?? []).find((f) => f.odometer != null)?.odometer ?? null;
   const estimatedOdometer =
@@ -151,10 +165,10 @@ function Financeiro() {
           tone="primary"
         />
         <StatCard
-          label="Lucro real"
-          value={brl(s.profit)}
-          hint={`Custos ${brl(s.fuelCost + s.otherCost + s.maintenanceCost)}`}
-          tone={s.profit >= 0 ? "success" : "destructive"}
+          label="Lucro por caixa"
+          value={brl(cash.profit)}
+          hint={`Pagamentos ${brl(cash.fuelCost + cash.otherCost + cash.maintenanceCost)}`}
+          tone={cash.profit >= 0 ? "success" : "destructive"}
         />
         <StatCard
           label="Gasto com combustível"
@@ -162,9 +176,10 @@ function Financeiro() {
           hint={`Média ${brl(avgFuelPrice(fuelings.data ?? []))}/L`}
         />
         <StatCard
-          label="Custo por km"
-          value={brl(cpk)}
-          hint={`${num(Number(profile.data?.fuel_efficiency ?? 12))} km/L`}
+          label="Lucro operacional"
+          value={brl(operational.profit)}
+          hint={`Reserva de manutenção ${brl(operational.maintenanceCost)}`}
+          tone={operational.profit >= 0 ? "success" : "destructive"}
         />
       </div>
 

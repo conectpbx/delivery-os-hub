@@ -46,7 +46,7 @@ function ChartTooltip({
           <div key={item.dataKey} className="flex items-center justify-between gap-5 text-xs">
             <span className="flex items-center gap-2 text-muted-foreground">
               <span className="size-2 rounded-full" style={{ backgroundColor: item.color }} />
-              {item.dataKey === "receita" ? "Receita" : "Lucro real"}
+              {item.dataKey === "receita" ? "Receita" : "Lucro operacional"}
             </span>
             <strong className="font-semibold tabular-nums text-popover-foreground">
               {brl(Number(item.value ?? 0))}
@@ -65,7 +65,7 @@ export default function RevenueAreaChart({ data }: { data: Point[] }) {
     <div
       className="flex size-full min-h-0 flex-col"
       role="img"
-      aria-label="Gráfico de receita e lucro real por dia"
+      aria-label="Gráfico de receita e lucro operacional por dia"
     >
       <div className="mb-3 flex flex-wrap items-center gap-x-5 gap-y-2 px-1 text-xs text-muted-foreground">
         <span className="flex items-center gap-2">
@@ -74,7 +74,7 @@ export default function RevenueAreaChart({ data }: { data: Point[] }) {
         </span>
         <span className="flex items-center gap-2">
           <span className="h-2.5 w-2.5 rounded-full bg-chart-2 shadow-[0_0_0_4px_color-mix(in_oklab,var(--color-chart-2)_14%,transparent)]" />
-          Lucro real
+          Lucro operacional
         </span>
       </div>
       <div className="min-h-0 flex-1">

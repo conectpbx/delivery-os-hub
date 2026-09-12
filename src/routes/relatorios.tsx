@@ -14,6 +14,8 @@ import {
   costPerKm,
   costsByCategory,
   filterByRange,
+  maintenanceReservePerKm,
+  summarizeOperational,
   summarizeRecordedCosts,
 } from "@/lib/metrics";
 import { PeriodFilter, PeriodSummary, usePeriodSelection } from "@/components/PeriodFilter";
@@ -53,6 +55,10 @@ function Relatorios() {
   const maintenancesData = useMemo(() => maintenances.data ?? [], [maintenances.data]);
 
   const cpk = useMemo(() => costPerKm(fuelingsData, profile.data), [fuelingsData, profile.data]);
+  const maintenanceReserve = useMemo(
+    () => maintenanceReservePerKm(maintenancesData),
+    [maintenancesData],
+  );
   const perDeliveries = useMemo(
     () => filterByRange(deliveriesData, (d) => d.occurred_at, period.fromDate, period.toDate),
     [deliveriesData, period.fromDate, period.toDate],
@@ -78,6 +84,10 @@ function Relatorios() {
   const total = useMemo(
     () => summarizeRecordedCosts(perDeliveries, perExpenses, perMaint, perFuelings),
     [perDeliveries, perExpenses, perFuelings, perMaint],
+  );
+  const operational = useMemo(
+    () => summarizeOperational(perDeliveries, perExpenses, cpk, maintenanceReserve.costPerKm),
+    [perDeliveries, perExpenses, cpk, maintenanceReserve.costPerKm],
   );
   const ranking = useMemo(() => byApp(perDeliveries, cpk), [perDeliveries, cpk]);
   const categories = useMemo(() => costsByCategory(perExpenses), [perExpenses]);
@@ -141,8 +151,9 @@ function Relatorios() {
 
   function exportCosts() {
     downloadCsv("custos-delivery-os.csv", [
-      ["Item", "Valor"],
-      ...costRows.map((r) => [r.label, r.value]),
+      ["Item", "Valor", "Tipo"],
+      ...costRows.map((r) => [r.label, r.value, "Pago"]),
+      ["Reserva de manutenção", operational.maintenanceCost, "Operacional (não somar ao pago)"],
     ]);
   }
 
@@ -177,26 +188,22 @@ function Relatorios() {
           tone="primary"
         />
         <StatCard
-          label="Lucro acumulado"
+          label="Lucro por caixa"
           value={brl(total.profit)}
           hint={`Margem ${num(total.revenue ? (total.profit / total.revenue) * 100 : 0)}%`}
           tone={total.profit >= 0 ? "success" : "destructive"}
+        />
+        <StatCard
+          label="Lucro operacional"
+          value={brl(operational.profit)}
+          hint={`Reserva ${brl(operational.maintenanceCost)} · ${brl(maintenanceReserve.costPerKm)}/km`}
+          tone={operational.profit >= 0 ? "success" : "destructive"}
         />
         <StatCard
           label="Custos no período"
           value={brl(totalCost)}
           tone="destructive"
           hint={`${brl(total.fuelCost)} combustível`}
-        />
-        <StatCard
-          label="Variação vs mês anterior"
-          value={`${delta >= 0 ? "+" : ""}${num(delta, 0)}%`}
-          tone={delta >= 0 ? "success" : "destructive"}
-          hint={
-            prev
-              ? `${monthLabel(prev.month)} → ${last ? monthLabel(last.month) : ""}`
-              : "sem histórico"
-          }
         />
       </div>
 
