@@ -87,8 +87,14 @@ function Relatorios() {
     [perDeliveries, perExpenses, perFuelings, perMaint],
   );
   const operational = useMemo(
-    () => summarizeOperational(perDeliveries, perExpenses, cpk, maintenanceReserve.costPerKm),
-    [perDeliveries, perExpenses, cpk, maintenanceReserve.costPerKm],
+    () =>
+      summarizeOperational(perDeliveries, expensesData, cpk, maintenanceReserve.costPerKm, {
+        from: period.fromDate,
+        to: period.toDate,
+        maintenanceCostPerDay: maintenanceReserve.costPerDay,
+        maintenanceItems: maintenanceReserve.items,
+      }),
+    [perDeliveries, expensesData, cpk, maintenanceReserve, period.fromDate, period.toDate],
   );
   const operationalMonths = useMemo(
     () => byMonth(deliveriesData, expensesData, cpk + maintenanceReserve.costPerKm).slice(-12),

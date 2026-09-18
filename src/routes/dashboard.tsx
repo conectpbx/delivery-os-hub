@@ -119,8 +119,14 @@ function Dashboard() {
     [periodDeliveries, periodExpenses, periodFuelings, periodMaint],
   );
   const s = useMemo(
-    () => summarizeOperational(periodDeliveries, periodExpenses, cpk, maintenanceReserve.costPerKm),
-    [periodDeliveries, periodExpenses, cpk, maintenanceReserve.costPerKm],
+    () =>
+      summarizeOperational(periodDeliveries, expensesData, cpk, maintenanceReserve.costPerKm, {
+        from,
+        to,
+        maintenanceCostPerDay: maintenanceReserve.costPerDay,
+        maintenanceItems: maintenanceReserve.items,
+      }),
+    [periodDeliveries, expensesData, cpk, maintenanceReserve, from, to],
   );
   const operationalCpk = cpk + maintenanceReserve.costPerKm;
   const ranking = useMemo(
@@ -138,8 +144,12 @@ function Dashboard() {
       const dayFrom = startOfDay(cursor);
       const dayTo = endOfDay(cursor);
       const dd = deliveriesData.filter((x) => inRange(x.occurred_at, dayFrom, dayTo));
-      const de = expensesData.filter((x) => inRange(x.occurred_at, dayFrom, dayTo));
-      const sum = summarizeOperational(dd, de, cpk, maintenanceReserve.costPerKm);
+      const sum = summarizeOperational(dd, expensesData, cpk, maintenanceReserve.costPerKm, {
+        from: dayFrom,
+        to: dayTo,
+        maintenanceCostPerDay: maintenanceReserve.costPerDay,
+        maintenanceItems: maintenanceReserve.items,
+      });
       days.push({
         day: dateLabel(dayFrom.toISOString()),
         receita: sum.revenue,
@@ -148,7 +158,7 @@ function Dashboard() {
       cursor.setDate(cursor.getDate() + 1);
     }
     return days;
-  }, [deliveriesData, expensesData, cpk, maintenanceReserve.costPerKm, from, to]);
+  }, [deliveriesData, expensesData, cpk, maintenanceReserve, from, to]);
 
   const dailyGoalPlan = adaptiveDailyRevenueGoal({
     deliveries: deliveriesData,
