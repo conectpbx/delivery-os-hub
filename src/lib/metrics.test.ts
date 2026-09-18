@@ -43,10 +43,10 @@ test("gera alertas para manutenções vencidas, próximas e futuras", () => {
   const reference = new Date(2026, 8, 18, 12);
   const alerts = buildMaintenanceAlerts(
     [
-      maintenance({ id: "vencida", next_due_date: "2026-09-16" }),
-      maintenance({ id: "proxima", next_due_date: "2026-09-22" }),
-      maintenance({ id: "futura", next_due_date: "2026-10-18" }),
-      maintenance({ id: "sem-data", next_due_date: null }),
+      maintenance({ id: "vencida", service_type: "Troca de óleo", next_due_date: "2026-09-16" }),
+      maintenance({ id: "proxima", service_type: "Freios", next_due_date: "2026-09-22" }),
+      maintenance({ id: "futura", service_type: "Pneus", next_due_date: "2026-10-18" }),
+      maintenance({ id: "sem-data", service_type: "Revisão geral", next_due_date: null }),
     ],
     reference,
   );
