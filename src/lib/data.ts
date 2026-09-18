@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
@@ -105,8 +106,28 @@ function useList<T>(key: string, table: string, orderCol: string) {
 
 export const useDeliveries = () => useList<Delivery>("deliveries", "deliveries", "occurred_at");
 export const useFuelings = () => useList<Fueling>("fuelings", "fuelings", "occurred_at");
-export const useMaintenances = () =>
-  useList<Maintenance>("maintenances", "maintenances", "performed_at");
+export function useMaintenances() {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("maintenances-live")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "maintenances" },
+        () => {
+          void queryClient.invalidateQueries({ queryKey: ["maintenances"] });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
+  return useList<Maintenance>("maintenances", "maintenances", "performed_at");
+}
 export const useExpenses = () => useList<Expense>("expenses", "expenses", "occurred_at");
 export const useGoals = () => useList<Goal>("goals", "goals", "month");
 export const useApps = () => useList<App>("apps", "apps", "name");
