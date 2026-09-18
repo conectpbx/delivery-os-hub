@@ -84,6 +84,7 @@ function Financeiro() {
     description: "",
     amount: "",
     occurred_at: localDateValue(),
+    allocation_method: "immediate" as "immediate" | "monthly",
   });
   const [eff, setEff] = useState("");
   const period = usePeriodSelection(3);
@@ -119,9 +120,15 @@ function Financeiro() {
   const cash = summarizeRecordedCosts(perDeliveries, perExpenses, perMaint, perFuelings);
   const operational = summarizeOperational(
     perDeliveries,
-    perExpenses,
+    expenses.data ?? [],
     cpk,
     maintenanceReserve.costPerKm,
+    {
+      from: period.fromDate,
+      to: period.toDate,
+      maintenanceCostPerDay: maintenanceReserve.costPerDay,
+      maintenanceItems: maintenanceReserve.items,
+    },
   );
   const fuelTotal = perFuelings.reduce((a, f) => a + Number(f.total), 0);
   const lastOdometer = (fuelings.data ?? []).find((f) => f.odometer != null)?.odometer ?? null;
@@ -359,12 +366,14 @@ function Financeiro() {
                 description: exp.description || null,
                 amount: dec(exp.amount),
                 occurred_at: exp.occurred_at,
+                allocation_method: exp.allocation_method ?? "immediate",
               });
               setExp({
                 category: CATEGORIES[0]!,
                 description: "",
                 amount: "",
-                 occurred_at: localDateValue(),
+                occurred_at: localDateValue(),
+                allocation_method: "immediate",
               });
               toast.success("Despesa registrada");
             }}
@@ -373,12 +382,34 @@ function Financeiro() {
               <Label className="text-xs">Categoria</Label>
               <select
                 value={exp.category}
-                onChange={(e) => setExp({ ...exp, category: e.target.value })}
+                onChange={(e) =>
+                  setExp({
+                    ...exp,
+                    category: e.target.value,
+                    allocation_method: e.target.value === "Seguro" ? "monthly" : "immediate",
+                  })
+                }
                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
               >
                 {CATEGORIES.map((c) => (
                   <option key={c}>{c}</option>
                 ))}
+              </select>
+            </div>
+            <div className="col-span-2 space-y-2">
+              <Label className="text-xs">Como considerar no lucro</Label>
+              <select
+                value={exp.allocation_method ?? "immediate"}
+                onChange={(e) =>
+                  setExp({
+                    ...exp,
+                    allocation_method: e.target.value as "immediate" | "monthly",
+                  })
+                }
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="immediate">Valor integral na data</option>
+                <option value="monthly">Diluir até o próximo vencimento mensal</option>
               </select>
             </div>
             <div className="col-span-2 space-y-2">
@@ -399,6 +430,12 @@ function Financeiro() {
               value={exp.description}
               onChange={(v) => setExp({ ...exp, description: v })}
             />
+            {(exp.allocation_method ?? "immediate") === "monthly" ? (
+              <p className="col-span-2 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+                O valor será diluído diariamente desta data até o mesmo dia do próximo mês. Esta
+                opção funciona para qualquer categoria atual ou adicionada futuramente.
+              </p>
+            ) : null}
             <Button type="submit" className="col-span-2">
               Salvar despesa
             </Button>
@@ -408,6 +445,7 @@ function Financeiro() {
               <li key={x.id} className="flex items-center justify-between gap-2 py-2 text-sm">
                 <span className="text-muted-foreground">
                   {dateLabel(x.occurred_at)} · {x.category}
+                  {x.allocation_method === "monthly" ? " · diluída mensalmente" : ""}
                 </span>
                 <span className="flex items-center gap-2 font-medium tabular-nums">
                   {brl(Number(x.amount))}

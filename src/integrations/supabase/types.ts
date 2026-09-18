@@ -136,6 +136,7 @@ export type Database = {
       }
       expenses: {
         Row: {
+          allocation_method: string
           amount: number
           category: string
           created_at: string
@@ -145,6 +146,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          allocation_method?: string
           amount?: number
           category: string
           created_at?: string
@@ -154,6 +156,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          allocation_method?: string
           amount?: number
           category?: string
           created_at?: string

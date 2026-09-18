@@ -59,7 +59,9 @@ function Manutencao() {
   const previewCostPerKm = previewInterval > 0 ? dec(form.cost) / previewInterval : 0;
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   const activeCycleIds = new Set(latestMaintenanceCycles(data).map((m) => m.id));
-  const pending = data.filter((m) => activeCycleIds.has(m.id) && m.next_due_date && m.next_due_date >= today);
+  const pending = data.filter(
+    (m) => activeCycleIds.has(m.id) && m.next_due_date && m.next_due_date >= today,
+  );
   const maintenanceAlerts = buildMaintenanceAlerts(data, now);
 
   return (
@@ -68,7 +70,11 @@ function Manutencao() {
         <StatCard label="Investido em manutenção" value={brl(total)} tone="primary" />
         <StatCard
           label="Reserva de manutenção"
-          value={`${brl(reserve.costPerKm)}/km`}
+          value={
+            reserve.costPerKm > 0
+              ? `${brl(reserve.costPerKm)}/km`
+              : `${brl(reserve.costPerDay)}/dia`
+          }
           hint={`${reserve.items.length} serviço(s) no cálculo`}
           tone="warning"
         />
@@ -76,7 +82,7 @@ function Manutencao() {
         <StatCard
           label="Dados pendentes"
           value={String(reserve.incomplete.length)}
-          hint="Sem intervalo válido em km"
+          hint="Sem intervalo válido em km ou dias"
           tone={reserve.incomplete.length ? "destructive" : "default"}
         />
       </div>
@@ -100,7 +106,15 @@ function Manutencao() {
                 next_due_date: form.next_due_date || null,
                 next_due_km: form.next_due_km ? Number(form.next_due_km) : null,
               });
-              setForm({ ...form, cost: "", odometer: "", notes: "", performed_at: localDateValue(), next_due_date: "", next_due_km: "" });
+              setForm({
+                ...form,
+                cost: "",
+                odometer: "",
+                notes: "",
+                performed_at: localDateValue(),
+                next_due_date: "",
+                next_due_km: "",
+              });
               toast.success("Manutenção registrada");
             }}
           >
@@ -127,11 +141,17 @@ function Manutencao() {
               </div>
               <div className="space-y-2">
                 <Label className="text-xs">Custo (R$)</Label>
-                <Input value={form.cost} onChange={(e) => setForm({ ...form, cost: e.target.value })} />
+                <Input
+                  value={form.cost}
+                  onChange={(e) => setForm({ ...form, cost: e.target.value })}
+                />
               </div>
               <div className="space-y-2">
                 <Label className="text-xs">Odômetro atual</Label>
-                <Input value={form.odometer} onChange={(e) => setForm({ ...form, odometer: e.target.value })} />
+                <Input
+                  value={form.odometer}
+                  onChange={(e) => setForm({ ...form, odometer: e.target.value })}
+                />
               </div>
               <div className="space-y-2">
                 <Label className="text-xs">Próxima data</Label>
@@ -143,7 +163,10 @@ function Manutencao() {
               </div>
               <div className="space-y-2">
                 <Label className="text-xs">Próximo serviço (km)</Label>
-                <Input value={form.next_due_km} onChange={(e) => setForm({ ...form, next_due_km: e.target.value })} />
+                <Input
+                  value={form.next_due_km}
+                  onChange={(e) => setForm({ ...form, next_due_km: e.target.value })}
+                />
               </div>
             </div>
             <div className="rounded-md border border-border bg-muted/40 p-3 text-xs">
@@ -156,7 +179,10 @@ function Manutencao() {
             </div>
             <div className="space-y-2">
               <Label className="text-xs">Observações</Label>
-              <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+              <Input
+                value={form.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              />
             </div>
             <Button type="submit" className="w-full">
               Salvar manutenção
@@ -184,18 +210,28 @@ function Manutencao() {
                         {m.service_type} · {brl(Number(m.cost))}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {m.odometer ? `${num(Number(m.odometer), 0)} km` : "Quilometragem não informada"}
+                        {m.odometer
+                          ? `${num(Number(m.odometer), 0)} km`
+                          : "Quilometragem não informada"}
                         {m.description ? ` · ${m.description}` : ""}
                       </p>
                       {(m.next_due_date || m.next_due_km) && isActiveCycle ? (
                         <div
                           className={`mt-3 flex items-start gap-2 rounded-md border px-3 py-2 text-xs ${
-                            late ? "bg-destructive/10 text-destructive" : "bg-accent text-accent-foreground"
+                            late
+                              ? "bg-destructive/10 text-destructive"
+                              : "bg-accent text-accent-foreground"
                           }`}
                         >
-                          {late ? <AlertTriangle className="mt-0.5 size-3 shrink-0" /> : <CalendarClock className="mt-0.5 size-3 shrink-0" />}
+                          {late ? (
+                            <AlertTriangle className="mt-0.5 size-3 shrink-0" />
+                          ) : (
+                            <CalendarClock className="mt-0.5 size-3 shrink-0" />
+                          )}
                           <div>
-                            <p className="font-semibold">{late ? "Agendamento vencido" : "Próximo agendamento"}</p>
+                            <p className="font-semibold">
+                              {late ? "Agendamento vencido" : "Próximo agendamento"}
+                            </p>
                             <p>
                               {m.next_due_date ? dateLabel(m.next_due_date) : "Por quilometragem"}
                               {m.next_due_km ? ` · ${num(Number(m.next_due_km), 0)} km` : ""}
@@ -205,11 +241,18 @@ function Manutencao() {
                       ) : null}
                       <p className="mt-1 text-xs text-muted-foreground">
                         {reserveItem
-                          ? `${brl(reserveItem.costPerKm)}/km · custo diluído em ${num(reserveItem.intervalKm, 0)} km`
-                          : "Fora da reserva: informe um intervalo válido em km ou este não é o ciclo mais recente."}
+                          ? reserveItem.basis === "km"
+                            ? `${brl(reserveItem.costPerKm)}/km · custo diluído em ${num(reserveItem.intervalKm, 0)} km`
+                            : `${brl(reserveItem.costPerDay)}/dia · custo diluído em ${num(reserveItem.intervalDays, 0)} dias`
+                          : "Fora da reserva: informe a próxima quilometragem/data ou este não é o ciclo mais recente."}
                       </p>
                     </div>
-                    <Button variant="ghost" size="icon" aria-label="Excluir" onClick={() => del.mutate(m.id)}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Excluir"
+                      onClick={() => del.mutate(m.id)}
+                    >
                       <Trash2 className="size-4 text-destructive" />
                     </Button>
                   </li>

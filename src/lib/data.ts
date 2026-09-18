@@ -63,6 +63,7 @@ export type Expense = {
   description: string | null;
   amount: number;
   occurred_at: string;
+  allocation_method?: "immediate" | "monthly";
 };
 
 export type Goal = {
