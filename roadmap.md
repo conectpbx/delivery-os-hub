@@ -1,2 +1,2 @@
-- [ ] Ativar sincronização em tempo real no dashboard, gráficos, metas e alertas
-- [ ] Não alertar como atrasado um serviço já substituído por manutenção posterior
+- [x] Ativar sincronização em tempo real no dashboard, gráficos, metas e alertas
+- [x] Não alertar como atrasado um serviço já substituído por manutenção posterior
