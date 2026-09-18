@@ -91,6 +91,23 @@ export type Profile = {
 };
 
 function useList<T>(key: string, table: string, orderCol: string) {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const channel = supabase
+      .channel(`${table}-live`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table },
+        () => void queryClient.invalidateQueries({ queryKey: [key] }),
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [key, queryClient, table]);
+
   return useQuery({
     queryKey: [key],
     queryFn: async () => {
@@ -106,28 +123,8 @@ function useList<T>(key: string, table: string, orderCol: string) {
 
 export const useDeliveries = () => useList<Delivery>("deliveries", "deliveries", "occurred_at");
 export const useFuelings = () => useList<Fueling>("fuelings", "fuelings", "occurred_at");
-export function useMaintenances() {
-  const queryClient = useQueryClient();
-
-  useEffect(() => {
-    const channel = supabase
-      .channel("maintenances-live")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "maintenances" },
-        () => {
-          void queryClient.invalidateQueries({ queryKey: ["maintenances"] });
-        },
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [queryClient]);
-
-  return useList<Maintenance>("maintenances", "maintenances", "performed_at");
-}
+export const useMaintenances = () =>
+  useList<Maintenance>("maintenances", "maintenances", "performed_at");
 export const useExpenses = () => useList<Expense>("expenses", "expenses", "occurred_at");
 export const useGoals = () => useList<Goal>("goals", "goals", "month");
 export const useApps = () => useList<App>("apps", "apps", "name");
@@ -153,6 +150,23 @@ export function useUpdate<T extends Record<string, unknown>>(table: string, key:
 export const useUpdateApp = () => useUpdate<{ fee_percent: number }>("apps", "apps");
 
 export function useProfile() {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("profile-live")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "profiles" },
+        () => void queryClient.invalidateQueries({ queryKey: ["profile"] }),
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
   return useQuery({
     queryKey: ["profile"],
     queryFn: async () => {

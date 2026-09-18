@@ -69,7 +69,7 @@ export function buildMaintenanceAlerts(maintenances: Maintenance[], date = new D
   const alerts: SmartAlert[] = [];
   const referenceDate = calendarDate(date);
 
-  for (const maintenance of maintenances) {
+  for (const maintenance of latestMaintenanceCycles(maintenances)) {
     if (!maintenance.next_due_date) continue;
     const diff = daysBetween(calendarDate(maintenance.next_due_date), referenceDate);
 
@@ -112,6 +112,23 @@ export function buildMaintenanceAlerts(maintenances: Maintenance[], date = new D
 
   const order = { danger: 0, warning: 1, success: 2, info: 3 } as const;
   return alerts.sort((a, b) => order[a.severity] - order[b.severity]);
+}
+
+function normalizedServiceType(value: string) {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+/** O registro mais recente encerra o ciclo anterior do mesmo serviço. */
+export function latestMaintenanceCycles(maintenances: Maintenance[]) {
+  const latest = new Map<string, Maintenance>();
+  for (const maintenance of maintenances) {
+    const key = normalizedServiceType(maintenance.service_type);
+    const current = latest.get(key);
+    if (!current || new Date(maintenance.performed_at).getTime() > new Date(current.performed_at).getTime()) {
+      latest.set(key, maintenance);
+    }
+  }
+  return [...latest.values()];
 }
 
 export function buildAlerts(input: {

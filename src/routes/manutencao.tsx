@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useInsert, useMaintenances, useRemove } from "@/lib/data";
-import { buildMaintenanceAlerts } from "@/lib/alerts";
+import { buildMaintenanceAlerts, latestMaintenanceCycles } from "@/lib/alerts";
 import { useCalendarNow } from "@/hooks/useCalendarNow";
 import { brl, dateLabel, dec, num } from "@/lib/format";
 import { maintenanceReservePerKm } from "@/lib/metrics";
@@ -57,7 +57,8 @@ function Manutencao() {
   const previewInterval = dec(form.next_due_km) - dec(form.odometer);
   const previewCostPerKm = previewInterval > 0 ? dec(form.cost) / previewInterval : 0;
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  const pending = data.filter((m) => m.next_due_date && m.next_due_date >= today);
+  const activeCycleIds = new Set(latestMaintenanceCycles(data).map((m) => m.id));
+  const pending = data.filter((m) => activeCycleIds.has(m.id) && m.next_due_date && m.next_due_date >= today);
   const maintenanceAlerts = buildMaintenanceAlerts(data, now);
 
   return (
@@ -157,7 +158,8 @@ function Manutencao() {
           {data.length ? (
             <ol className="relative ml-2 border-l border-border">
               {data.map((m) => {
-                const late = m.next_due_date && m.next_due_date < today;
+                const isActiveCycle = activeCycleIds.has(m.id);
+                const late = isActiveCycle && m.next_due_date && m.next_due_date < today;
                 const reserveItem = reserve.items.find((item) => item.maintenance.id === m.id);
                 return (
                   <li key={m.id} className="relative flex items-start gap-3 pb-6 pl-6 last:pb-0">
@@ -175,7 +177,7 @@ function Manutencao() {
                         {m.odometer ? `${num(Number(m.odometer), 0)} km` : "Quilometragem não informada"}
                         {m.description ? ` · ${m.description}` : ""}
                       </p>
-                      {m.next_due_date || m.next_due_km ? (
+                      {(m.next_due_date || m.next_due_km) && isActiveCycle ? (
                         <div
                           className={`mt-3 flex items-start gap-2 rounded-md border px-3 py-2 text-xs ${
                             late ? "bg-destructive/10 text-destructive" : "bg-accent text-accent-foreground"

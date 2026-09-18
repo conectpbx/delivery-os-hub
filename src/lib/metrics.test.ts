@@ -56,3 +56,15 @@ test("gera alertas para manutenções vencidas, próximas e futuras", () => {
     ["manut-atrasada-vencida", "manut-proxima-proxima", "manut-agendada-futura"],
   );
 });
+
+test("encerra o alerta vencido quando o mesmo serviço foi realizado novamente", () => {
+  const alerts = buildMaintenanceAlerts(
+    [
+      maintenance({ id: "oleo-antigo", service_type: "Troca de óleo", performed_at: "2026-01-10", next_due_date: "2026-06-10" }),
+      maintenance({ id: "oleo-novo", service_type: "  TROCA DE OLEO ", performed_at: "2026-09-17", next_due_date: "2026-12-17" }),
+    ],
+    new Date(2026, 8, 18, 12),
+  );
+
+  assert.deepEqual(alerts.map((alert) => alert.id), ["manut-agendada-oleo-novo"]);
+});
