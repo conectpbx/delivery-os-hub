@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { AlertTriangle, Trash2 } from "lucide-react";
+import { AlertTriangle, CalendarClock, CheckCircle2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { SmartAlerts } from "@/components/SmartAlerts";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useInsert, useMaintenances, useRemove } from "@/lib/data";
 import { buildMaintenanceAlerts } from "@/lib/alerts";
+import { useCalendarNow } from "@/hooks/useCalendarNow";
 import { brl, dateLabel, dec, num } from "@/lib/format";
 import { maintenanceReservePerKm } from "@/lib/metrics";
 
@@ -37,11 +38,12 @@ export const Route = createFileRoute("/manutencao")({
 const TYPES = ["Troca de óleo", "Pneus", "Freios", "Relação", "Revisão geral", "Outros"];
 
 function Manutencao() {
+  const now = useCalendarNow();
   const list = useMaintenances();
   const add = useInsert("maintenances", "maintenances");
   const del = useRemove("maintenances", "maintenances");
   const [form, setForm] = useState({
-    service_type: TYPES[0]!,
+    service_type: TYPES[0] ?? "Troca de óleo",
     cost: "",
     odometer: "",
     notes: "",
@@ -54,9 +56,9 @@ function Manutencao() {
   const reserve = maintenanceReservePerKm(data);
   const previewInterval = dec(form.next_due_km) - dec(form.odometer);
   const previewCostPerKm = previewInterval > 0 ? dec(form.cost) / previewInterval : 0;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   const pending = data.filter((m) => m.next_due_date && m.next_due_date >= today);
-  const maintenanceAlerts = buildMaintenanceAlerts(data);
+  const maintenanceAlerts = buildMaintenanceAlerts(data, now);
 
   return (
     <AppShell title="Manutenção" subtitle="Histórico e agenda preventiva do veículo">
@@ -151,33 +153,43 @@ function Manutencao() {
           </form>
         </SectionCard>
 
-        <SectionCard title="Histórico" description={`${data.length} serviços registrados`}>
+        <SectionCard title="Linha do tempo" description={`${data.length} serviços registrados`}>
           {data.length ? (
-            <ul className="divide-y divide-border">
+            <ol className="relative ml-2 border-l border-border">
               {data.map((m) => {
                 const late = m.next_due_date && m.next_due_date < today;
                 const reserveItem = reserve.items.find((item) => item.maintenance.id === m.id);
                 return (
-                  <li key={m.id} className="flex items-start gap-3 py-3">
+                  <li key={m.id} className="relative flex items-start gap-3 pb-6 pl-6 last:pb-0">
+                    <span className="absolute -left-[9px] top-0 flex size-4 items-center justify-center rounded-full bg-success text-success-foreground ring-4 ring-card">
+                      <CheckCircle2 className="size-3" />
+                    </span>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium">
+                      <p className="text-xs font-medium text-muted-foreground">
+                        {dateLabel(m.performed_at)} · Serviço realizado
+                      </p>
+                      <p className="mt-0.5 text-sm font-semibold">
                         {m.service_type} · {brl(Number(m.cost))}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {dateLabel(m.performed_at)}
-                        {m.odometer ? ` · ${num(Number(m.odometer), 0)} km` : ""}
+                        {m.odometer ? `${num(Number(m.odometer), 0)} km` : "Quilometragem não informada"}
                         {m.description ? ` · ${m.description}` : ""}
                       </p>
                       {m.next_due_date || m.next_due_km ? (
-                        <p
-                          className={`mt-1 inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs ${
+                        <div
+                          className={`mt-3 flex items-start gap-2 rounded-md border px-3 py-2 text-xs ${
                             late ? "bg-destructive/10 text-destructive" : "bg-accent text-accent-foreground"
                           }`}
                         >
-                          {late ? <AlertTriangle className="size-3" /> : null}
-                          Próxima: {m.next_due_date ? dateLabel(m.next_due_date) : ""}
-                          {m.next_due_km ? ` ou ${num(Number(m.next_due_km), 0)} km` : ""}
-                        </p>
+                          {late ? <AlertTriangle className="mt-0.5 size-3 shrink-0" /> : <CalendarClock className="mt-0.5 size-3 shrink-0" />}
+                          <div>
+                            <p className="font-semibold">{late ? "Agendamento vencido" : "Próximo agendamento"}</p>
+                            <p>
+                              {m.next_due_date ? dateLabel(m.next_due_date) : "Por quilometragem"}
+                              {m.next_due_km ? ` · ${num(Number(m.next_due_km), 0)} km` : ""}
+                            </p>
+                          </div>
+                        </div>
                       ) : null}
                       <p className="mt-1 text-xs text-muted-foreground">
                         {reserveItem
@@ -191,7 +203,7 @@ function Manutencao() {
                   </li>
                 );
               })}
-            </ul>
+            </ol>
           ) : (
             <EmptyState>Nenhuma manutenção registrada.</EmptyState>
           )}
