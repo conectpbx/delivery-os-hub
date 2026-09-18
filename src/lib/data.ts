@@ -152,18 +152,19 @@ export function useInsert<T extends Record<string, unknown>>(table: string, key:
 
       if (isOffline()) {
         const queued = enqueueInsert(table, key, payload, auth.user.id);
-        qc.setQueryData([key], (old: unknown) => [
-          { id: queued.id, occurred_at: queued.createdAt, ...payload },
-          ...((old as unknown[]) ?? []),
-        ]);
-        return;
+        return { id: queued.id, occurred_at: queued.createdAt, ...payload };
       }
 
-      const { error } = await db.from(table).insert(payload);
+      const { data, error } = await db.from(table).insert(payload).select("*").single();
       if (error) throw error;
+      return data as Record<string, unknown>;
     },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: [key] });
+    onSuccess: async (created) => {
+      qc.setQueryData([key], (old: unknown) => {
+        const current = (old as Record<string, unknown>[] | undefined) ?? [];
+        return [created, ...current.filter((item) => item["id"] !== created["id"])];
+      });
+      await qc.invalidateQueries({ queryKey: [key] });
     },
   });
 }
@@ -175,8 +176,13 @@ export function useRemove(table: string, key: string) {
       const { error } = await db.from(table).delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: [key] });
+    onSuccess: async (_data, removedId) => {
+      qc.setQueryData([key], (old: unknown) =>
+        ((old as Record<string, unknown>[] | undefined) ?? []).filter(
+          (item) => item["id"] !== removedId,
+        ),
+      );
+      await qc.invalidateQueries({ queryKey: [key] });
     },
   });
 }

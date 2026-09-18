@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Maintenance } from "./data";
+import { buildMaintenanceAlerts } from "./alerts";
 import { maintenanceReservePerKm } from "./metrics";
 
 const maintenance = (values: Partial<Maintenance>): Maintenance => ({
@@ -36,4 +37,22 @@ test("usa apenas o ciclo mais recente do mesmo serviço", () => {
   assert.equal(result.items.length, 1);
   assert.equal(result.items[0]?.maintenance.id, "novo");
   assert.equal(result.costPerKm, 0.04);
+});
+
+test("gera alertas para manutenções vencidas, próximas e futuras", () => {
+  const reference = new Date(2026, 8, 18, 12);
+  const alerts = buildMaintenanceAlerts(
+    [
+      maintenance({ id: "vencida", next_due_date: "2026-09-16" }),
+      maintenance({ id: "proxima", next_due_date: "2026-09-22" }),
+      maintenance({ id: "futura", next_due_date: "2026-10-18" }),
+      maintenance({ id: "sem-data", next_due_date: null }),
+    ],
+    reference,
+  );
+
+  assert.deepEqual(
+    alerts.map((alert) => alert.id),
+    ["manut-atrasada-vencida", "manut-proxima-proxima", "manut-agendada-futura"],
+  );
 });
