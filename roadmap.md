@@ -6,3 +6,5 @@
 - [x] Manter exportações pagas separadas da reserva operacional.
 - [x] Validar os cálculos automatizados.
 - [ ] Validar a apresentação no navegador — bloqueado até o usuário entrar na prévia.
+- [x] Atualizar alertas imediatamente após salvar ou excluir uma manutenção.
+- [x] Exibir manutenções futuras, próximas e vencidas nos alertas preventivos.

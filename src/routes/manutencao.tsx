@@ -3,11 +3,13 @@ import { useState } from "react";
 import { AlertTriangle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
+import { SmartAlerts } from "@/components/SmartAlerts";
 import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useInsert, useMaintenances, useRemove } from "@/lib/data";
+import { buildMaintenanceAlerts } from "@/lib/alerts";
 import { brl, dateLabel, dec, num } from "@/lib/format";
 import { maintenanceReservePerKm } from "@/lib/metrics";
 
@@ -54,6 +56,7 @@ function Manutencao() {
   const previewCostPerKm = previewInterval > 0 ? dec(form.cost) / previewInterval : 0;
   const today = new Date().toISOString().slice(0, 10);
   const pending = data.filter((m) => m.next_due_date && m.next_due_date >= today);
+  const maintenanceAlerts = buildMaintenanceAlerts(data);
 
   return (
     <AppShell title="Manutenção" subtitle="Histórico e agenda preventiva do veículo">
@@ -72,6 +75,10 @@ function Manutencao() {
           hint="Sem intervalo válido em km"
           tone={reserve.incomplete.length ? "destructive" : "default"}
         />
+      </div>
+
+      <div className="mt-4">
+        <SmartAlerts alerts={maintenanceAlerts} />
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[380px_1fr]">

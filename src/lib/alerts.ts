@@ -57,6 +57,63 @@ function daysBetween(a: Date, b: Date) {
   return Math.round((a.getTime() - b.getTime()) / 86400000);
 }
 
+function calendarDate(value: string | Date) {
+  if (value instanceof Date) return startOfDay(value);
+  const date = value.slice(0, 10).split("-").map(Number);
+  const [year, month, day] = date;
+  if (year && month && day) return new Date(year, month - 1, day);
+  return startOfDay(new Date(value));
+}
+
+export function buildMaintenanceAlerts(maintenances: Maintenance[], date = new Date()): SmartAlert[] {
+  const alerts: SmartAlert[] = [];
+  const referenceDate = calendarDate(date);
+
+  for (const maintenance of maintenances) {
+    if (!maintenance.next_due_date) continue;
+    const diff = daysBetween(calendarDate(maintenance.next_due_date), referenceDate);
+
+    if (diff < 0) {
+      alerts.push({
+        id: `manut-atrasada-${maintenance.id}`,
+        kind: "aviso",
+        severity: "danger",
+        title: `Manutenção atrasada: ${maintenance.service_type}`,
+        message: `Vencida há ${Math.abs(diff)} dia(s). Agende o quanto antes para evitar custo maior.`,
+        toast: true,
+      });
+    } else if (diff === 0) {
+      alerts.push({
+        id: `manut-hoje-${maintenance.id}`,
+        kind: "lembrete",
+        severity: "warning",
+        title: `Manutenção para hoje: ${maintenance.service_type}`,
+        message: "O serviço preventivo está agendado para hoje.",
+        toast: true,
+      });
+    } else if (diff <= 7) {
+      alerts.push({
+        id: `manut-proxima-${maintenance.id}`,
+        kind: "lembrete",
+        severity: "warning",
+        title: `Manutenção em ${diff} dia(s): ${maintenance.service_type}`,
+        message: "Programe uma parada para não perder dias de trabalho depois.",
+      });
+    } else {
+      alerts.push({
+        id: `manut-agendada-${maintenance.id}`,
+        kind: "lembrete",
+        severity: "info",
+        title: `Manutenção agendada: ${maintenance.service_type}`,
+        message: `Faltam ${diff} dias para o serviço preventivo.`,
+      });
+    }
+  }
+
+  const order = { danger: 0, warning: 1, success: 2, info: 3 } as const;
+  return alerts.sort((a, b) => order[a.severity] - order[b.severity]);
+}
+
 export function buildAlerts(input: {
   deliveries: Delivery[];
   fuelings: Fueling[];
@@ -151,30 +208,7 @@ export function buildAlerts(input: {
   }
 
   // ---- Manutenção ----
-  for (const m of maintenances) {
-    if (m.status === "concluida" && !m.next_due_date && !m.next_due_km) continue;
-    if (m.next_due_date) {
-      const diff = daysBetween(new Date(m.next_due_date), startOfDay());
-      if (diff < 0) {
-        alerts.push({
-          id: `manut-atrasada-${m.id}`,
-          kind: "aviso",
-          severity: "danger",
-          title: `Manutenção atrasada: ${m.service_type}`,
-          message: `Vencida há ${Math.abs(diff)} dia(s). Agende o quanto antes para evitar custo maior.`,
-          toast: true,
-        });
-      } else if (diff <= 7) {
-        alerts.push({
-          id: `manut-proxima-${m.id}`,
-          kind: "lembrete",
-          severity: "warning",
-          title: `Manutenção em ${diff} dia(s): ${m.service_type}`,
-          message: "Programe uma parada para não perder dias de trabalho depois.",
-        });
-      }
-    }
-  }
+  alerts.push(...buildMaintenanceAlerts(maintenances, now));
 
   // ---- Abastecimento ----
   const lastFuel = [...fuelings].sort(
