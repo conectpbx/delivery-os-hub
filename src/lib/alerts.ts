@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import type { Delivery, Expense, Fueling, Goal, Maintenance, Profile } from "./data";
-import { brl, num } from "./format";
+import { brl, localDateValue, num, parseDateValue } from "./format";
 import {
   adaptiveDailyRevenueGoal,
   costPerKm,
@@ -21,7 +21,7 @@ export type SmartAlert = {
   toast?: boolean;
 };
 
-const TODAY = () => new Date().toISOString().slice(0, 10);
+const TODAY = () => localDateValue();
 const STORE_KEY = "delivery-os:alerts-shown";
 
 function readStore(): Record<string, string> {
@@ -124,7 +124,7 @@ export function latestMaintenanceCycles(maintenances: Maintenance[]) {
   for (const maintenance of maintenances) {
     const key = normalizedServiceType(maintenance.service_type);
     const current = latest.get(key);
-    if (!current || new Date(maintenance.performed_at).getTime() > new Date(current.performed_at).getTime()) {
+    if (!current || parseDateValue(maintenance.performed_at).getTime() > parseDateValue(current.performed_at).getTime()) {
       latest.set(key, maintenance);
     }
   }

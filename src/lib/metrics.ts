@@ -1,5 +1,5 @@
 import type { Delivery, Expense, Fueling, Goal, Maintenance, Profile } from "./data";
-import { monthKey } from "./format";
+import { monthKey, parseDateValue } from "./format";
 
 export function avgFuelPrice(fuelings: Fueling[]) {
   const valid = fuelings.filter((f) => Number(f.price_per_liter) > 0);
@@ -28,7 +28,7 @@ export type MaintenanceReserve = {
 export function maintenanceReservePerKm(maintenances: Maintenance[]): MaintenanceReserve {
   const latestByType = new Map<string, Maintenance>();
   const sorted = [...maintenances].sort(
-    (a, b) => new Date(b.performed_at).getTime() - new Date(a.performed_at).getTime(),
+    (a, b) => parseDateValue(b.performed_at).getTime() - parseDateValue(a.performed_at).getTime(),
   );
 
   for (const maintenance of sorted) {
@@ -58,7 +58,7 @@ export function maintenanceReservePerKm(maintenances: Maintenance[]): Maintenanc
 }
 
 export function inRange(iso: string, from: Date, to: Date) {
-  const d = new Date(iso).getTime();
+  const d = parseDateValue(iso).getTime();
   return d >= from.getTime() && d <= to.getTime();
 }
 
@@ -264,7 +264,7 @@ export function byMonth(deliveries: Delivery[], expenses: Expense[], cpk: number
   }
 
   for (const e of expenses) {
-    ensure(monthKey(new Date(e.occurred_at))).cost += Number(e.amount);
+    ensure(monthKey(parseDateValue(e.occurred_at))).cost += Number(e.amount);
   }
   return [...map.values()]
     .map((m) => ({ ...m, profit: m.revenue - m.km * cpk - m.cost }))
@@ -294,13 +294,13 @@ export function byMonthRecordedCosts(
     current.count += 1;
   }
   for (const expense of expenses) {
-    ensure(monthKey(new Date(expense.occurred_at))).cost += Number(expense.amount);
+    ensure(monthKey(parseDateValue(expense.occurred_at))).cost += Number(expense.amount);
   }
   for (const fueling of fuelings) {
     ensure(monthKey(new Date(fueling.occurred_at))).cost += Number(fueling.total);
   }
   for (const maintenance of maintenances) {
-    ensure(monthKey(new Date(maintenance.performed_at))).cost += Number(maintenance.cost);
+    ensure(monthKey(parseDateValue(maintenance.performed_at))).cost += Number(maintenance.cost);
   }
 
   return [...map.values()]
