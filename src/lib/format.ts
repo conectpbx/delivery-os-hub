@@ -9,8 +9,21 @@ export const num = (v: number, digits = 1) =>
     maximumFractionDigits: digits,
   }).format(Number.isFinite(v) ? v : 0);
 
+/** Data civil local, sem passar por UTC (evita exibir o dia anterior no Brasil). */
+export const localDateValue = (date = new Date()) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+
+export function parseDateValue(value: string) {
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})(?:$|T00:00:00(?:\.000)?Z$)/.exec(value);
+  if (dateOnly) {
+    const [, year, month, day] = dateOnly;
+    return new Date(Number(year), Number(month) - 1, Number(day));
+  }
+  return new Date(value);
+}
+
 export const dateLabel = (iso: string) =>
-  new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  parseDateValue(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
 
 export const dateTimeLabel = (iso: string) =>
   new Date(iso).toLocaleString("pt-BR", {

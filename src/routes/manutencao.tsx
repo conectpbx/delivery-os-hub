@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { useInsert, useMaintenances, useRemove } from "@/lib/data";
 import { buildMaintenanceAlerts, latestMaintenanceCycles } from "@/lib/alerts";
 import { useCalendarNow } from "@/hooks/useCalendarNow";
-import { brl, dateLabel, dec, num } from "@/lib/format";
+import { brl, dateLabel, dec, localDateValue, num } from "@/lib/format";
 import { maintenanceReservePerKm } from "@/lib/metrics";
 
 export const Route = createFileRoute("/manutencao")({
@@ -47,6 +47,7 @@ function Manutencao() {
     cost: "",
     odometer: "",
     notes: "",
+    performed_at: localDateValue(),
     next_due_date: "",
     next_due_km: "",
   });
@@ -95,10 +96,11 @@ function Manutencao() {
                 cost: Number(form.cost || 0),
                 odometer: form.odometer ? Number(form.odometer) : null,
                 description: form.notes || null,
+                performed_at: form.performed_at || localDateValue(),
                 next_due_date: form.next_due_date || null,
                 next_due_km: form.next_due_km ? Number(form.next_due_km) : null,
               });
-              setForm({ ...form, cost: "", odometer: "", notes: "", next_due_date: "", next_due_km: "" });
+              setForm({ ...form, cost: "", odometer: "", notes: "", performed_at: localDateValue(), next_due_date: "", next_due_km: "" });
               toast.success("Manutenção registrada");
             }}
           >
@@ -115,6 +117,14 @@ function Manutencao() {
               </select>
             </div>
             <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label className="text-xs">Data do serviço</Label>
+                <Input
+                  type="date"
+                  value={form.performed_at ?? localDateValue()}
+                  onChange={(e) => setForm({ ...form, performed_at: e.target.value })}
+                />
+              </div>
               <div className="space-y-2">
                 <Label className="text-xs">Custo (R$)</Label>
                 <Input value={form.cost} onChange={(e) => setForm({ ...form, cost: e.target.value })} />

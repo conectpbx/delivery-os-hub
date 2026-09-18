@@ -17,7 +17,7 @@ import {
   useRemove,
   useUpsertProfile,
 } from "@/lib/data";
-import { brl, dateLabel, dec, num } from "@/lib/format";
+import { brl, dateLabel, dec, localDateValue, num } from "@/lib/format";
 import {
   geolocationErrorMessage,
   getCurrentPosition,
@@ -77,13 +77,13 @@ function Financeiro() {
     price_per_liter: "",
     odometer: "",
     station: "",
-    occurred_at: new Date().toISOString().slice(0, 10),
+    occurred_at: localDateValue(),
   });
   const [exp, setExp] = usePersistentState("financeiro.expense", {
     category: CATEGORIES[0]!,
     description: "",
     amount: "",
-    occurred_at: new Date().toISOString().slice(0, 10),
+    occurred_at: localDateValue(),
   });
   const [eff, setEff] = useState("");
   const period = usePeriodSelection(3);
@@ -259,7 +259,7 @@ function Financeiro() {
                   odometer,
                   station: fuel.station || null,
                   occurred_at: new Date(
-                    `${fuel.occurred_at || new Date().toISOString().slice(0, 10)}T12:00:00`,
+                    `${fuel.occurred_at || localDateValue()}T12:00:00`,
                   ).toISOString(),
                 });
                 setFuel({
@@ -267,7 +267,7 @@ function Financeiro() {
                   price_per_liter: "",
                   odometer: "",
                   station: "",
-                  occurred_at: new Date().toISOString().slice(0, 10),
+                  occurred_at: localDateValue(),
                 });
                 toast.success("Abastecimento registrado");
               } catch (err) {
@@ -364,7 +364,7 @@ function Financeiro() {
                 category: CATEGORIES[0]!,
                 description: "",
                 amount: "",
-                occurred_at: new Date().toISOString().slice(0, 10),
+                 occurred_at: localDateValue(),
               });
               toast.success("Despesa registrada");
             }}
