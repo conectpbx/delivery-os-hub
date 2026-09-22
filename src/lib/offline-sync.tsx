@@ -20,8 +20,10 @@ export function OfflineSync() {
     update();
 
     const sync = async () => {
-      if (!user || !navigator.onLine || !readQueue(user.id).length) return;
+      if (!user || !navigator.onLine) return;
       try {
+        const pending = await readQueue(user.id);
+        if (!pending.length) return;
         const keys = await flushQueue(db, user.id);
         if (!keys.length) return;
         keys.forEach((key) => void qc.invalidateQueries({ queryKey: [key] }));

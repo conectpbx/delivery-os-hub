@@ -30,7 +30,7 @@ export function usePersistentState<T>(key: string, initial: T) {
     setRestored(true);
   }, [loading, storageKey]);
 
-  // Persiste a cada alteração e também ao sair/ocultar a aba.
+  // Agrupa alterações rápidas para não bloquear o celular a cada tecla.
   useEffect(() => {
     if (!restored || !storageKey) return;
     const save = () => {
@@ -40,13 +40,14 @@ export function usePersistentState<T>(key: string, initial: T) {
         /* storage cheio — ignora */
       }
     };
-    save();
+    const timer = window.setTimeout(save, 350);
     const onHide = () => {
       if (document.visibilityState === "hidden") save();
     };
     document.addEventListener("visibilitychange", onHide);
     window.addEventListener("pagehide", save);
     return () => {
+      window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", onHide);
       window.removeEventListener("pagehide", save);
     };

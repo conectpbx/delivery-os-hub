@@ -85,7 +85,9 @@ export function useChainedDistance(deliveries: Delivery[]) {
   const chained = useQuery({
     queryKey: ["chained-km", chainKey],
     enabled: chainPoints.length >= 2,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 1000 * 60 * 60 * 24,
+    gcTime: 1000 * 60 * 60 * 24 * 7,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const r = await fetchRouteWithFallback(chainPoints);
       if (!r) return null;
