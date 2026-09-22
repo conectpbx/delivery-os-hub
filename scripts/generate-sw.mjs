@@ -18,7 +18,7 @@ await generateSW({
       handler: "NetworkFirst",
       options: {
         cacheName: "html-navigations",
-        networkTimeoutSeconds: 5,
+        networkTimeoutSeconds: 2.5,
         expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 7 },
       },
     },
