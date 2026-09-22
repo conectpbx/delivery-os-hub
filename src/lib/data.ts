@@ -187,7 +187,7 @@ export function useInsert<T extends Record<string, unknown>>(table: string, key:
       const payload = { ...values, user_id: auth.user.id };
 
       if (isOffline()) {
-        const queued = enqueueInsert(table, key, payload, auth.user.id);
+        const queued = await enqueueInsert(table, key, payload, auth.user.id);
         return { id: queued.id, occurred_at: queued.createdAt, ...payload };
       }
 
