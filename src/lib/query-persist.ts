@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { persistQueryClient } from "@tanstack/react-query-persist-client";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
+import { get, set, del } from "idb-keyval";
 import { supabase } from "@/integrations/supabase/client";
 
 const PREFIX = "delivery-os-query-cache:";
@@ -19,12 +20,20 @@ export function setupQueryPersistence(queryClient: QueryClient) {
     activeUserId = userId;
     if (!userId) return;
 
+    // Usando IndexedDB via idb-keyval para persistência não-bloqueante na main thread (crítico para mobile)
     const [unsubscribe] = persistQueryClient({
       queryClient,
-      persister: createSyncStoragePersister({
-        storage: window.localStorage,
-        key: `${PREFIX}${userId}`,
-      }),
+      persister: {
+        persistClient: async (client) => {
+          await set(`${PREFIX}${userId}`, client);
+        },
+        restoreClient: async () => {
+          return await get(`${PREFIX}${userId}`);
+        },
+        removeClient: async () => {
+          await del(`${PREFIX}${userId}`);
+        },
+      },
       maxAge: 1000 * 60 * 60 * 24 * 7,
       buster: userId,
     });
