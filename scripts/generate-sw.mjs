@@ -1,5 +1,6 @@
 import { generateSW } from "workbox-build";
 import path from "node:path";
+import fs from "node:fs";
 
 const publicDir = path.resolve(process.cwd(), "public");
 
