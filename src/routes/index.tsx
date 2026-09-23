@@ -27,6 +27,8 @@ export const Route = createFileRoute("/")({
         content:
           "Una ganhos, custos, quilometragem e manutenção do veículo para enxergar o lucro real de cada corrida.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: Home,

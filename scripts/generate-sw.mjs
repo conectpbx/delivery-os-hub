@@ -1,6 +1,5 @@
 import { generateSW } from "workbox-build";
 import path from "node:path";
-import fs from "node:fs";
 
 const publicDir = path.resolve(process.cwd(), "public");
 
@@ -20,7 +19,7 @@ await generateSW({
       handler: "NetworkFirst",
       options: {
         cacheName: "html-navigations",
-        networkTimeoutSeconds: 5,
+        networkTimeoutSeconds: 3,
         expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 7 },
       },
     },

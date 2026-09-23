@@ -1,0 +1,4 @@
+- [x] Ativar sincronização em tempo real no dashboard, gráficos, metas e alertas
+- [x] Não alertar como atrasado um serviço já substituído por manutenção posterior
+- [x] Corrigir divergência de dia no salvamento e exibição de datas
+- [x] Melhorar desempenho e fluidez do PWA em dispositivos móveis

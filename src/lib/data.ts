@@ -1,8 +1,8 @@
+import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { enqueueInsert, isOffline } from "@/lib/offline-queue";
-
 
 // Cliente sem tipagem de schema para tabelas acessadas de forma dinâmica.
 const db = supabase as unknown as SupabaseClient;
@@ -14,13 +14,26 @@ export type Delivery = {
   tip: number;
   distance_km: number;
   duration_min: number;
+  payment_method: PaymentMethod;
   idle_min: number;
   pickup_address: string | null;
   dropoff_address: string | null;
   lat: number | null;
   lng: number | null;
   occurred_at: string;
+  status?: "em_rota" | "concluida";
+  stops?: DeliveryStop[];
 };
+
+export type DeliveryStop = {
+  kind: "coleta" | "entrega";
+  address: string;
+  lat: number | null;
+  lng: number | null;
+  recorded_at?: string;
+};
+
+export type PaymentMethod = "credito" | "pix" | "dinheiro";
 
 export type Fueling = {
   id: string;
@@ -50,6 +63,7 @@ export type Expense = {
   description: string | null;
   amount: number;
   occurred_at: string;
+  allocation_method?: "immediate" | "monthly";
 };
 
 export type Goal = {
@@ -78,6 +92,23 @@ export type Profile = {
 };
 
 function useList<T>(key: string, table: string, orderCol: string) {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const channel = supabase
+      .channel(`${table}-live`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table },
+        () => void queryClient.invalidateQueries({ queryKey: [key] }),
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [key, queryClient, table]);
+
   return useQuery({
     queryKey: [key],
     queryFn: async () => {
@@ -105,7 +136,10 @@ export function useUpdate<T extends Record<string, unknown>>(table: string, key:
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, values }: { id: string; values: T }) => {
-      const { error } = await db.from(table).update(values as never).eq("id", id);
+      const { error } = await db
+        .from(table)
+        .update(values as never)
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -117,6 +151,23 @@ export function useUpdate<T extends Record<string, unknown>>(table: string, key:
 export const useUpdateApp = () => useUpdate<{ fee_percent: number }>("apps", "apps");
 
 export function useProfile() {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("profile-live")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "profiles" },
+        () => void queryClient.invalidateQueries({ queryKey: ["profile"] }),
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
   return useQuery({
     queryKey: ["profile"],
     queryFn: async () => {
@@ -132,26 +183,27 @@ export function useInsert<T extends Record<string, unknown>>(table: string, key:
   return useMutation({
     mutationFn: async (values: T) => {
       const { data: auth } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
-      const payload = { ...values, user_id: auth.user?.id };
+      if (!auth.user) throw new Error("Sessão expirada. Entre novamente para salvar.");
+      const payload = { ...values, user_id: auth.user.id };
 
       if (isOffline()) {
-        const queued = enqueueInsert(table, key, payload);
-        qc.setQueryData([key], (old: unknown) => [
-          { id: queued.id, occurred_at: queued.createdAt, ...payload },
-          ...((old as unknown[]) ?? []),
-        ]);
-        return;
+        const queued = await enqueueInsert(table, key, payload, auth.user.id);
+        return { id: queued.id, occurred_at: queued.createdAt, ...payload };
       }
 
-      const { error } = await db.from(table).insert(payload);
+      const { data, error } = await db.from(table).insert(payload).select("*").single();
       if (error) throw error;
+      return data as Record<string, unknown>;
     },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: [key] });
+    onSuccess: async (created) => {
+      qc.setQueryData([key], (old: unknown) => {
+        const current = (old as Record<string, unknown>[] | undefined) ?? [];
+        return [created, ...current.filter((item) => item["id"] !== created["id"])];
+      });
+      await qc.invalidateQueries({ queryKey: [key] });
     },
   });
 }
-
 
 export function useRemove(table: string, key: string) {
   const qc = useQueryClient();
@@ -160,8 +212,13 @@ export function useRemove(table: string, key: string) {
       const { error } = await db.from(table).delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: [key] });
+    onSuccess: async (_data, removedId) => {
+      qc.setQueryData([key], (old: unknown) =>
+        ((old as Record<string, unknown>[] | undefined) ?? []).filter(
+          (item) => item["id"] !== removedId,
+        ),
+      );
+      await qc.invalidateQueries({ queryKey: [key] });
     },
   });
 }

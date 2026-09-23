@@ -9,8 +9,21 @@ export const num = (v: number, digits = 1) =>
     maximumFractionDigits: digits,
   }).format(Number.isFinite(v) ? v : 0);
 
+/** Data civil local, sem passar por UTC (evita exibir o dia anterior no Brasil). */
+export const localDateValue = (date = new Date()) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+
+export function parseDateValue(value: string) {
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})(?:$|T00:00:00(?:\.000)?Z$)/.exec(value);
+  if (dateOnly) {
+    const [, year, month, day] = dateOnly;
+    return new Date(Number(year), Number(month) - 1, Number(day));
+  }
+  return new Date(value);
+}
+
 export const dateLabel = (iso: string) =>
-  new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  parseDateValue(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
 
 export const dateTimeLabel = (iso: string) =>
   new Date(iso).toLocaleString("pt-BR", {
@@ -37,6 +50,12 @@ export const minutesLabel = (min: number) => {
   return h > 0 ? `${h}h ${m}min` : `${m}min`;
 };
 
+export const paymentMethodLabel = (method: string | null | undefined) => {
+  if (method === "pix") return "Pix";
+  if (method === "dinheiro") return "Dinheiro";
+  return "Crédito";
+};
+
 export function downloadCsv(filename: string, rows: (string | number)[][]) {
   const csv = rows
     .map((r) =>
@@ -57,10 +76,21 @@ export function downloadCsv(filename: string, rows: (string | number)[][]) {
   URL.revokeObjectURL(url);
 }
 
-/** Converte texto com vírgula decimal (pt-BR) em número. */
+/** Converte texto com vírgula decimal (pt-BR) ou ponto decimal em número. */
 export function dec(v: string | number | null | undefined): number {
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
   if (!v) return 0;
-  const n = Number(String(v).replace(/\s/g, "").replace(/\./g, "").replace(",", "."));
+  let s = String(v)
+    .trim()
+    .replace(/[^\d.,-]/g, "");
+  if (s.includes(",")) {
+    // vírgula é o separador decimal → pontos são milhar
+    s = s.replace(/\./g, "").replace(",", ".");
+  } else {
+    // sem vírgula: ponto só é milhar se houver grupos de 3 dígitos (ex.: 1.234.567)
+    const isThousands = /^-?\d{1,3}(\.\d{3})+$/.test(s);
+    if (isThousands) s = s.replace(/\./g, "");
+  }
+  const n = Number(s);
   return Number.isFinite(n) ? n : 0;
 }

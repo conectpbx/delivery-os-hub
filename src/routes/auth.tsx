@@ -23,6 +23,8 @@ export const Route = createFileRoute("/auth")({
         property: "og:description",
         content: "Login do sistema de gestão financeira e operacional para entregadores.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: AuthPage,

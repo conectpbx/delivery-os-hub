@@ -9,6 +9,7 @@ import {
   ScanLine,
   LogOut,
   Menu,
+  ShieldCheck,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,15 +17,16 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { BrandLoading } from "@/components/BrandLoader";
+import { useSystemAccess } from "@/lib/admin";
 
 const nav = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/entregas", label: "Entregas", icon: RouteIcon },
-  { to: "/financeiro", label: "Financeiro", icon: Wallet },
-  { to: "/manutencao", label: "Manutenção", icon: Wrench },
-  { to: "/metas", label: "Metas", icon: Target },
-  { to: "/scanner", label: "Scanner IA", icon: ScanLine },
-  { to: "/relatorios", label: "Relatórios", icon: FileBarChart },
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, module: "dashboard" },
+  { to: "/entregas", label: "Entregas", icon: RouteIcon, module: "deliveries" },
+  { to: "/financeiro", label: "Financeiro", icon: Wallet, module: "finance" },
+  { to: "/manutencao", label: "Manutenção", icon: Wrench, module: "maintenance" },
+  { to: "/metas", label: "Metas", icon: Target, module: "goals" },
+  { to: "/scanner", label: "Scanner IA", icon: ScanLine, module: "scanner" },
+  { to: "/relatorios", label: "Relatórios", icon: FileBarChart, module: "reports" },
 ] as const;
 
 export function AppShell({
@@ -39,9 +41,18 @@ export function AppShell({
   children: ReactNode;
 }) {
   const { session, loading } = useAuth();
+  const access = useSystemAccess(Boolean(session));
+  const isSuperAdmin = access.data?.role === "super_admin";
+  const visibleNav = nav.filter(
+    (item) => isSuperAdmin || access.data?.modules[item.module] !== false,
+  );
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [open, setOpen] = useState(false);
+  const currentModule = nav.find((item) => item.to === pathname);
+  const moduleDisabled = Boolean(
+    currentModule && !isSuperAdmin && access.data?.modules[currentModule.module] === false,
+  );
 
   useEffect(() => {
     if (!loading && !session) void navigate({ to: "/auth" });
@@ -60,9 +71,17 @@ export function AppShell({
       <aside className="no-print fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-sidebar-border bg-sidebar px-3 py-5 lg:flex">
         <Brand />
         <nav className="mt-6 flex flex-1 flex-col gap-1">
-          {nav.map((item) => (
+          {visibleNav.map((item) => (
             <NavItem key={item.to} {...item} active={pathname === item.to} />
           ))}
+          {isSuperAdmin ? (
+            <NavItem
+              to="/admin"
+              label="Administração"
+              icon={ShieldCheck}
+              active={pathname === "/admin"}
+            />
+          ) : null}
         </nav>
         <Button
           variant="ghost"
@@ -89,7 +108,9 @@ export function AppShell({
               <Menu className="size-5" />
             </Button>
             <div className="min-w-0 flex-1">
-              <h1 className="truncate text-base font-semibold tracking-tight sm:text-lg">{title}</h1>
+              <h1 className="truncate text-base font-semibold tracking-tight sm:text-lg">
+                {title}
+              </h1>
               {subtitle ? (
                 <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
               ) : null}
@@ -102,9 +123,17 @@ export function AppShell({
 
           {open ? (
             <nav className="grid gap-1 border-t border-border p-3 lg:hidden">
-              {nav.map((item) => (
+              {visibleNav.map((item) => (
                 <NavItem key={item.to} {...item} active={pathname === item.to} />
               ))}
+              {isSuperAdmin ? (
+                <NavItem
+                  to="/admin"
+                  label="Administração"
+                  icon={ShieldCheck}
+                  active={pathname === "/admin"}
+                />
+              ) : null}
               <Button
                 variant="ghost"
                 className="justify-start gap-2 text-muted-foreground"
@@ -118,11 +147,26 @@ export function AppShell({
             </nav>
           ) : null}
         </header>
-        <main className="mx-auto w-full max-w-6xl px-4 pb-24 pt-5 sm:px-6 lg:pb-10">{children}</main>
+        <main className="mx-auto w-full max-w-6xl px-4 pb-24 pt-5 sm:px-6 lg:pb-10">
+          {moduleDisabled ? (
+            <div className="surface-card mx-auto mt-12 max-w-lg p-8 text-center">
+              <ShieldCheck className="mx-auto size-10 text-muted-foreground" />
+              <h2 className="mt-4 text-lg font-semibold">Módulo temporariamente indisponível</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Este recurso foi desativado pela administração do sistema.
+              </p>
+              <Button className="mt-5" onClick={() => void navigate({ to: "/dashboard" })}>
+                Voltar ao dashboard
+              </Button>
+            </div>
+          ) : (
+            children
+          )}
+        </main>
       </div>
 
       <nav className="no-print fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
-        {nav.slice(0, 5).map(({ to, label, icon: Icon }) => (
+        {visibleNav.slice(0, 5).map(({ to, label, icon: Icon }) => (
           <Link
             key={to}
             to={to}
@@ -136,9 +180,17 @@ export function AppShell({
           </Link>
         ))}
       </nav>
-
     </div>
   );
+}
+
+function versionIsOlder(current: string, minimum: string) {
+  const left = current.split(".").map(Number);
+  const right = minimum.split(".").map(Number);
+  for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
+    if ((left[index] ?? 0) !== (right[index] ?? 0)) return (left[index] ?? 0) < (right[index] ?? 0);
+  }
+  return false;
 }
 
 function NavItem({

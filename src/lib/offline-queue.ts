@@ -1,6 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { get, set } from "idb-keyval";
 
-const KEY = "delivery-os-offline-queue";
+const PREFIX = "delivery-os-offline-queue:";
+
+async function storageKey(userId: string) {
+  if (!userId) throw new Error("Sessão necessária para usar o modo offline");
+  return `${PREFIX}${userId}`;
+}
 
 export type QueuedInsert = {
   id: string;
@@ -14,24 +20,32 @@ export function isOffline(): boolean {
   return typeof navigator !== "undefined" && navigator.onLine === false;
 }
 
-export function readQueue(): QueuedInsert[] {
+export async function readQueue(userId: string): Promise<QueuedInsert[]> {
   if (typeof window === "undefined") return [];
   try {
-    return JSON.parse(window.localStorage.getItem(KEY) ?? "[]") as QueuedInsert[];
+    const key = await storageKey(userId);
+    const value = await get(key);
+    return Array.isArray(value) ? (value as QueuedInsert[]) : [];
   } catch {
     return [];
   }
 }
 
-function writeQueue(items: QueuedInsert[]) {
-  window.localStorage.setItem(KEY, JSON.stringify(items));
+async function writeQueue(userId: string, items: QueuedInsert[]) {
+  try {
+    const key = await storageKey(userId);
+    await set(key, items);
+  } catch {
+    throw new Error("Não foi possível salvar o registro offline neste dispositivo");
+  }
 }
 
-export function enqueueInsert(
+export async function enqueueInsert(
   table: string,
   cacheKey: string,
   values: Record<string, unknown>,
-): QueuedInsert {
+  userId: string,
+): Promise<QueuedInsert> {
   const item: QueuedInsert = {
     id: `offline-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     table,
@@ -39,24 +53,29 @@ export function enqueueInsert(
     values,
     createdAt: new Date().toISOString(),
   };
-  writeQueue([...readQueue(), item]);
+  const current = await readQueue(userId);
+  await writeQueue(userId, [...current, item]);
   return item;
 }
 
 /** Envia tudo que foi salvo offline. Retorna as chaves de cache afetadas. */
-export async function flushQueue(db: SupabaseClient): Promise<string[]> {
-  const items = readQueue();
+export async function flushQueue(db: SupabaseClient, userId: string): Promise<string[]> {
+  const items = await readQueue(userId);
   if (!items.length) return [];
 
   const remaining: QueuedInsert[] = [];
   const synced = new Set<string>();
 
   for (const item of items) {
-    const { error } = await db.from(item.table).insert(item.values);
-    if (error) remaining.push(item);
-    else synced.add(item.cacheKey);
+    try {
+      const { error } = await db.from(item.table).insert(item.values);
+      if (error) remaining.push(item);
+      else synced.add(item.cacheKey);
+    } catch {
+      remaining.push(item);
+    }
   }
 
-  writeQueue(remaining);
+  await writeQueue(userId, remaining);
   return [...synced];
 }

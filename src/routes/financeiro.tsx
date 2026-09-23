@@ -17,10 +17,23 @@ import {
   useRemove,
   useUpsertProfile,
 } from "@/lib/data";
-import { brl, dateLabel, dec, num } from "@/lib/format";
-import { nearestFuelStation, reverseGeocodeAddress } from "@/lib/geo";
+import { brl, dateLabel, dec, localDateValue, num } from "@/lib/format";
+import {
+  geolocationErrorMessage,
+  getCurrentPosition,
+  isGeolocationError,
+  nearestFuelStation,
+  reverseGeocodeAddress,
+} from "@/lib/geo";
 import { useTripTracker } from "@/lib/trip-tracker";
-import { avgFuelPrice, costPerKm, filterByRange, summarize } from "@/lib/metrics";
+import {
+  avgFuelPrice,
+  costPerKm,
+  filterByRange,
+  maintenanceReservePerKm,
+  summarizeOperational,
+  summarizeRecordedCosts,
+} from "@/lib/metrics";
 import { PeriodFilter, PeriodSummary, usePeriodSelection } from "@/components/PeriodFilter";
 import { usePersistentState } from "@/lib/persistent-state";
 
@@ -38,6 +51,8 @@ export const Route = createFileRoute("/financeiro")({
         property: "og:description",
         content: "Abastecimento, despesas e custo por quilômetro do entregador.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: Financeiro,
@@ -62,13 +77,14 @@ function Financeiro() {
     price_per_liter: "",
     odometer: "",
     station: "",
-    occurred_at: new Date().toISOString().slice(0, 10),
+    occurred_at: localDateValue(),
   });
   const [exp, setExp] = usePersistentState("financeiro.expense", {
     category: CATEGORIES[0]!,
     description: "",
     amount: "",
-    occurred_at: new Date().toISOString().slice(0, 10),
+    occurred_at: localDateValue(),
+    allocation_method: "immediate" as "immediate" | "monthly",
   });
   const [eff, setEff] = useState("");
   const period = usePeriodSelection(3);
@@ -76,75 +92,102 @@ function Financeiro() {
   const { trip, error: tripError, start, finish, reset, pushGps } = useTripTracker();
 
   const cpk = costPerKm(fuelings.data ?? [], profile.data);
-  const perDeliveries = filterByRange(deliveries.data ?? [], (d) => d.occurred_at, period.fromDate, period.toDate);
-  const perExpenses = filterByRange(expenses.data ?? [], (e) => e.occurred_at, period.fromDate, period.toDate);
-  const perMaint = filterByRange(maintenances.data ?? [], (m) => m.performed_at, period.fromDate, period.toDate);
-  const perFuelings = filterByRange(fuelings.data ?? [], (f) => f.occurred_at, period.fromDate, period.toDate);
-  const s = summarize(perDeliveries, perExpenses, perMaint, cpk);
+  const maintenanceReserve = maintenanceReservePerKm(maintenances.data ?? []);
+  const perDeliveries = filterByRange(
+    deliveries.data ?? [],
+    (d) => d.occurred_at,
+    period.fromDate,
+    period.toDate,
+  );
+  const perExpenses = filterByRange(
+    expenses.data ?? [],
+    (e) => e.occurred_at,
+    period.fromDate,
+    period.toDate,
+  );
+  const perMaint = filterByRange(
+    maintenances.data ?? [],
+    (m) => m.performed_at,
+    period.fromDate,
+    period.toDate,
+  );
+  const perFuelings = filterByRange(
+    fuelings.data ?? [],
+    (f) => f.occurred_at,
+    period.fromDate,
+    period.toDate,
+  );
+  const cash = summarizeRecordedCosts(perDeliveries, perExpenses, perMaint, perFuelings);
+  const operational = summarizeOperational(
+    perDeliveries,
+    expenses.data ?? [],
+    cpk,
+    maintenanceReserve.costPerKm,
+    {
+      from: period.fromDate,
+      to: period.toDate,
+      maintenanceCostPerDay: maintenanceReserve.costPerDay,
+      maintenanceItems: maintenanceReserve.items,
+    },
+  );
   const fuelTotal = perFuelings.reduce((a, f) => a + Number(f.total), 0);
   const lastOdometer = (fuelings.data ?? []).find((f) => f.odometer != null)?.odometer ?? null;
   const estimatedOdometer =
     lastOdometer != null ? Math.round(Number(lastOdometer) + trip.distanceKm) : null;
 
   async function captureStation() {
-    if (!navigator.geolocation) {
-      toast.error("GPS indisponível");
-      return;
-    }
-
     setGps(true);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          const { latitude: lat, longitude: lng } = pos.coords;
-          const station = await nearestFuelStation(lat, lng);
-          if (station) {
-            setFuel((f) => ({ ...f, station }));
-            toast.success(`Posto: ${station}`);
-          } else {
-            const place = await reverseGeocodeAddress(lat, lng);
-            setFuel((f) => ({ ...f, station: place?.address ?? "" }));
-            toast.message("Posto não identificado", { description: "Usei o endereço atual." });
-          }
-        } catch {
-          toast.error("Não consegui identificar o posto");
-        } finally {
-          setGps(false);
-        }
-      },
-      (err) => {
-        setGps(false);
-        toast.error(err.message);
-      },
-      { enableHighAccuracy: true, timeout: 15000 },
-    );
+    try {
+      const { lat, lng } = await getCurrentPosition();
+      const station = await nearestFuelStation(lat, lng);
+      if (station) {
+        setFuel((f) => ({ ...f, station }));
+        toast.success(`Posto: ${station}`);
+      } else {
+        const place = await reverseGeocodeAddress(lat, lng);
+        setFuel((f) => ({ ...f, station: place?.address ?? "" }));
+        toast.message("Posto não identificado", { description: "Usei o endereço atual." });
+      }
+    } catch (err) {
+      toast.error(
+        isGeolocationError(err) ? geolocationErrorMessage(err) : "Não consegui identificar o posto",
+      );
+    } finally {
+      setGps(false);
+    }
   }
-
 
   return (
     <AppShell
       title="Financeiro"
       subtitle={`Abastecimento, despesas e lucro real · ${period.label}`}
-      actions={
-        <PeriodFilter selection={period} />
-      }
+      actions={<PeriodFilter selection={period} />}
     >
       <PeriodSummary selection={period} />
       <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Receita total"
-          value={brl(s.revenue)}
-          hint={`${s.count} entregas no período`}
+          value={brl(cash.revenue)}
+          hint={`${cash.count} entregas no período`}
           tone="primary"
         />
         <StatCard
-          label="Lucro real"
-          value={brl(s.profit)}
-          hint={`Custos ${brl(s.fuelCost + s.otherCost + s.maintenanceCost)}`}
-          tone={s.profit >= 0 ? "success" : "destructive"}
+          label="Lucro por caixa"
+          value={brl(cash.profit)}
+          hint={`Pagamentos ${brl(cash.fuelCost + cash.otherCost + cash.maintenanceCost)}`}
+          tone={cash.profit >= 0 ? "success" : "destructive"}
         />
-        <StatCard label="Gasto com combustível" value={brl(fuelTotal)} hint={`Média ${brl(avgFuelPrice(fuelings.data ?? []))}/L`} />
-        <StatCard label="Custo por km" value={brl(cpk)} hint={`${num(Number(profile.data?.fuel_efficiency ?? 12))} km/L`} />
+        <StatCard
+          label="Gasto com combustível"
+          value={brl(fuelTotal)}
+          hint={`Média ${brl(avgFuelPrice(fuelings.data ?? []))}/L`}
+        />
+        <StatCard
+          label="Lucro operacional"
+          value={brl(operational.profit)}
+          hint={`Custo ${brl(cpk + maintenanceReserve.costPerKm)}/km · reserva ${brl(operational.maintenanceCost)}`}
+          tone={operational.profit >= 0 ? "success" : "destructive"}
+        />
       </div>
 
       <SectionCard
@@ -200,11 +243,9 @@ function Financeiro() {
             : "Informe o odômetro em um abastecimento para servir de base ao cálculo."}
           {tripError ? ` · GPS: ${tripError}` : ""}
         </p>
-
       </SectionCard>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
-
         <SectionCard title="Novo abastecimento">
           <form
             className="grid grid-cols-2 gap-3"
@@ -224,14 +265,16 @@ function Financeiro() {
                   total: Number((liters * price).toFixed(2)),
                   odometer,
                   station: fuel.station || null,
-                  occurred_at: new Date(`${fuel.occurred_at || new Date().toISOString().slice(0, 10)}T12:00:00`).toISOString(),
+                  occurred_at: new Date(
+                    `${fuel.occurred_at || localDateValue()}T12:00:00`,
+                  ).toISOString(),
                 });
                 setFuel({
                   liters: "",
                   price_per_liter: "",
                   odometer: "",
                   station: "",
-                  occurred_at: new Date().toISOString().slice(0, 10),
+                  occurred_at: localDateValue(),
                 });
                 toast.success("Abastecimento registrado");
               } catch (err) {
@@ -241,9 +284,21 @@ function Financeiro() {
               }
             }}
           >
-            <Text label="Litros" value={fuel.liters} onChange={(v) => setFuel({ ...fuel, liters: v })} />
-            <Text label="R$/litro" value={fuel.price_per_liter} onChange={(v) => setFuel({ ...fuel, price_per_liter: v })} />
-            <Text label="Odômetro" value={fuel.odometer} onChange={(v) => setFuel({ ...fuel, odometer: v })} />
+            <Text
+              label="Litros"
+              value={fuel.liters}
+              onChange={(v) => setFuel({ ...fuel, liters: v })}
+            />
+            <Text
+              label="R$/litro"
+              value={fuel.price_per_liter}
+              onChange={(v) => setFuel({ ...fuel, price_per_liter: v })}
+            />
+            <Text
+              label="Odômetro"
+              value={fuel.odometer}
+              onChange={(v) => setFuel({ ...fuel, odometer: v })}
+            />
             <div className="space-y-2">
               <Label className="text-xs">Data</Label>
               <Input
@@ -284,14 +339,21 @@ function Financeiro() {
                 </span>
                 <span className="flex items-center gap-2 font-medium tabular-nums">
                   {brl(Number(f.total))}
-                  <Button variant="ghost" size="icon" aria-label="Excluir" onClick={() => delFuel.mutate(f.id)}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Excluir"
+                    onClick={() => delFuel.mutate(f.id)}
+                  >
                     <Trash2 className="size-4 text-destructive" />
                   </Button>
                 </span>
               </li>
             ))}
           </ul>
-          {!perFuelings.length ? <EmptyState>Nenhum abastecimento em {period.label.toLowerCase()}.</EmptyState> : null}
+          {!perFuelings.length ? (
+            <EmptyState>Nenhum abastecimento em {period.label.toLowerCase()}.</EmptyState>
+          ) : null}
         </SectionCard>
 
         <SectionCard title="Nova despesa">
@@ -304,12 +366,14 @@ function Financeiro() {
                 description: exp.description || null,
                 amount: dec(exp.amount),
                 occurred_at: exp.occurred_at,
+                allocation_method: exp.allocation_method ?? "immediate",
               });
               setExp({
                 category: CATEGORIES[0]!,
                 description: "",
                 amount: "",
-                occurred_at: new Date().toISOString().slice(0, 10),
+                occurred_at: localDateValue(),
+                allocation_method: "immediate",
               });
               toast.success("Despesa registrada");
             }}
@@ -318,12 +382,34 @@ function Financeiro() {
               <Label className="text-xs">Categoria</Label>
               <select
                 value={exp.category}
-                onChange={(e) => setExp({ ...exp, category: e.target.value })}
+                onChange={(e) =>
+                  setExp({
+                    ...exp,
+                    category: e.target.value,
+                    allocation_method: e.target.value === "Seguro" ? "monthly" : "immediate",
+                  })
+                }
                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
               >
                 {CATEGORIES.map((c) => (
                   <option key={c}>{c}</option>
                 ))}
+              </select>
+            </div>
+            <div className="col-span-2 space-y-2">
+              <Label className="text-xs">Como considerar no lucro</Label>
+              <select
+                value={exp.allocation_method ?? "immediate"}
+                onChange={(e) =>
+                  setExp({
+                    ...exp,
+                    allocation_method: e.target.value as "immediate" | "monthly",
+                  })
+                }
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="immediate">Valor integral na data</option>
+                <option value="monthly">Diluir até o próximo vencimento mensal</option>
               </select>
             </div>
             <div className="col-span-2 space-y-2">
@@ -334,8 +420,22 @@ function Financeiro() {
                 onChange={(e) => setExp({ ...exp, occurred_at: e.target.value })}
               />
             </div>
-            <Text label="Valor (R$)" value={exp.amount} onChange={(v) => setExp({ ...exp, amount: v })} />
-            <Text label="Descrição" value={exp.description} onChange={(v) => setExp({ ...exp, description: v })} />
+            <Text
+              label="Valor (R$)"
+              value={exp.amount}
+              onChange={(v) => setExp({ ...exp, amount: v })}
+            />
+            <Text
+              label="Descrição"
+              value={exp.description}
+              onChange={(v) => setExp({ ...exp, description: v })}
+            />
+            {(exp.allocation_method ?? "immediate") === "monthly" ? (
+              <p className="col-span-2 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+                O valor será diluído diariamente desta data até o mesmo dia do próximo mês. Esta
+                opção funciona para qualquer categoria atual ou adicionada futuramente.
+              </p>
+            ) : null}
             <Button type="submit" className="col-span-2">
               Salvar despesa
             </Button>
@@ -345,17 +445,25 @@ function Financeiro() {
               <li key={x.id} className="flex items-center justify-between gap-2 py-2 text-sm">
                 <span className="text-muted-foreground">
                   {dateLabel(x.occurred_at)} · {x.category}
+                  {x.allocation_method === "monthly" ? " · diluída mensalmente" : ""}
                 </span>
                 <span className="flex items-center gap-2 font-medium tabular-nums">
                   {brl(Number(x.amount))}
-                  <Button variant="ghost" size="icon" aria-label="Excluir" onClick={() => delExpense.mutate(x.id)}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Excluir"
+                    onClick={() => delExpense.mutate(x.id)}
+                  >
                     <Trash2 className="size-4 text-destructive" />
                   </Button>
                 </span>
               </li>
             ))}
           </ul>
-          {!perExpenses.length ? <EmptyState>Nenhuma despesa em {period.label.toLowerCase()}.</EmptyState> : null}
+          {!perExpenses.length ? (
+            <EmptyState>Nenhuma despesa em {period.label.toLowerCase()}.</EmptyState>
+          ) : null}
         </SectionCard>
       </div>
 

@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
 
-const KEY = "deliveryos.trip";
+const PREFIX = "deliveryos.trip:";
+const GPS_SAMPLE_INTERVAL_MS = 2_000;
+const STORAGE_WRITE_DELAY_MS = 3_000;
 
 export type GpsPoint = {
   lat: number;
@@ -38,24 +41,26 @@ export function haversineKm(a: GpsPoint, b: GpsPoint) {
   const dLng = toRad(b.lng - a.lng);
   const lat1 = toRad(a.lat);
   const lat2 = toRad(b.lat);
-  const h =
-    Math.sin(dLat / 2) ** 2 + Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
+  const h = Math.sin(dLat / 2) ** 2 + Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
-function load(): TripState {
+function load(key: string): TripState {
   if (typeof window === "undefined") return EMPTY;
   try {
-    const raw = window.localStorage.getItem(KEY);
-    return raw ? ({ ...EMPTY, ...(JSON.parse(raw) as TripState) }) : EMPTY;
+    const raw = window.localStorage.getItem(key);
+    // Coordenadas exatas nunca são restauradas do armazenamento persistente.
+    return raw ? { ...EMPTY, ...(JSON.parse(raw) as TripState), last: null } : EMPTY;
   } catch {
     return EMPTY;
   }
 }
 
-function save(state: TripState) {
+function save(key: string | null, state: TripState) {
+  if (!key) return;
   try {
-    window.localStorage.setItem(KEY, JSON.stringify(state));
+    // Persiste somente o resumo da jornada. O último ponto GPS vive apenas em memória.
+    window.localStorage.setItem(key, JSON.stringify({ ...state, last: null }));
   } catch {
     /* storage indisponível */
   }
@@ -97,31 +102,58 @@ function ingest(
  * Também aceita pontos vindos de um app nativo pela rede Wi-Fi (pushGps).
  */
 export function useTripTracker() {
+  const { user, loading } = useAuth();
+  const storageKey = user ? `${PREFIX}${user.id}` : null;
   const [state, setState] = useState<TripState>(EMPTY);
   const [error, setError] = useState<string | null>(null);
   const watchId = useRef<number | null>(null);
   const stateRef = useRef<TripState>(EMPTY);
+  const lastSampleAt = useRef(0);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const apply = useCallback((next: TripState) => {
-    stateRef.current = next;
-    setState(next);
-    save(next);
-  }, []);
+  const persistSoon = useCallback(() => {
+    if (!storageKey || saveTimer.current != null) return;
+    saveTimer.current = setTimeout(() => {
+      saveTimer.current = null;
+      save(storageKey, stateRef.current);
+    }, STORAGE_WRITE_DELAY_MS);
+  }, [storageKey]);
+
+  const apply = useCallback(
+    (next: TripState) => {
+      stateRef.current = next;
+      setState(next);
+      persistSoon();
+    },
+    [persistSoon],
+  );
+
+  useEffect(
+    () => () => {
+      if (saveTimer.current != null) clearTimeout(saveTimer.current);
+      save(storageKey, stateRef.current);
+    },
+    [storageKey],
+  );
 
   useEffect(() => {
-    const loaded = load();
+    if (loading || !storageKey) return;
+    const loaded = load(storageKey);
     stateRef.current = loaded;
     setState(loaded);
-  }, []);
+  }, [loading, storageKey]);
 
   const startWatch = useCallback(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
-      setError("GPS indisvironível neste dispositivo");
+      setError("GPS indisponível neste dispositivo");
       return;
     }
     if (watchId.current != null) return;
     watchId.current = navigator.geolocation.watchPosition(
       (pos) => {
+        const now = Date.now();
+        if (now - lastSampleAt.current < GPS_SAMPLE_INTERVAL_MS) return;
+        lastSampleAt.current = now;
         const cur = stateRef.current;
         const point = {
           lat: pos.coords.latitude,
@@ -132,7 +164,11 @@ export function useTripTracker() {
         if (!result.next) return;
         apply({ ...result.next, source: "browser" });
       },
-      (err) => setError(err.message),
+      (err) => {
+        if (err.code === err.PERMISSION_DENIED) setError("Permissão de localização negada");
+        else if (err.code === err.TIMEOUT) setError("O GPS demorou demais para responder");
+        else setError("Não foi possível obter a localização");
+      },
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 },
     );
   }, [apply]);
@@ -142,6 +178,7 @@ export function useTripTracker() {
       navigator.geolocation.clearWatch(watchId.current);
     }
     watchId.current = null;
+    lastSampleAt.current = 0;
   }, []);
 
   // Retoma a captura ao recarregar a página com jornada ativa (somente no browser).

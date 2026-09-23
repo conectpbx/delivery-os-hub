@@ -5,17 +5,37 @@ const RevenueAreaChart = lazy(() => import("@/components/charts/RevenueAreaChart
 import { Banknote, Fuel, Gauge, Timer, TrendingUp } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
+import { SmartAlerts } from "@/components/SmartAlerts";
 import { Button } from "@/components/ui/button";
 import {
   useDeliveries,
   useExpenses,
   useFuelings,
+  useGoals,
   useMaintenances,
   useProfile,
 } from "@/lib/data";
-import { brl, dateLabel, dateTimeLabel, minutesLabel, num } from "@/lib/format";
+import { brl, dateLabel, dateTimeLabel, minutesLabel, num, paymentMethodLabel } from "@/lib/format";
 import { useGoalCelebrations } from "@/lib/celebrate";
-import { byApp, costPerKm, endOfDay, heatmap, inRange, startOfDay, summarize } from "@/lib/metrics";
+import { useSmartAlerts } from "@/lib/alerts";
+import {
+  adaptiveDailyRevenueGoal,
+  byApp,
+  costPerKm,
+  endOfDay,
+  heatmap,
+  inRange,
+  monthRange,
+  maintenanceReservePerKm,
+  PERIODS,
+  periodRange,
+  startOfDay,
+  summarize,
+  summarizeOperational,
+  summarizeRecordedCosts,
+} from "@/lib/metrics";
+import { useChainedDistance } from "@/lib/chained-distance";
+import { useCalendarNow } from "@/hooks/useCalendarNow";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -31,55 +51,124 @@ export const Route = createFileRoute("/dashboard")({
         property: "og:description",
         content: "Acompanhe lucro real, custos e desempenho das suas entregas em tempo real.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: Dashboard,
 });
 
 const RANGES = [
-  { key: "1", label: "Hoje", days: 1 },
-  { key: "7", label: "7 dias", days: 7 },
-  { key: "30", label: "30 dias", days: 30 },
+  { key: "1", label: "Hoje", days: 1, monthOffset: null },
+  { key: "7", label: "7 dias", days: 7, monthOffset: null },
+  { key: "month", label: "Mês atual", days: 0, monthOffset: 0 },
+  { key: "prev-month", label: "Mês anterior", days: 0, monthOffset: -1 },
 ] as const;
 
 const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
 function Dashboard() {
+  const now = useCalendarNow();
   const [range, setRange] = useState<(typeof RANGES)[number]>(RANGES[0]);
   const deliveries = useDeliveries();
   const fuelings = useFuelings();
   const expenses = useExpenses();
   const maintenances = useMaintenances();
   const profile = useProfile();
+  const goals = useGoals();
 
-  const cpk = costPerKm(fuelings.data ?? [], profile.data);
-  const to = endOfDay();
-  const from = startOfDay(new Date(Date.now() - (range.days - 1) * 86400000));
+  const deliveriesData = useMemo(() => deliveries.data ?? [], [deliveries.data]);
+  const expensesData = useMemo(() => expenses.data ?? [], [expenses.data]);
+  const fuelingsData = useMemo(() => fuelings.data ?? [], [fuelings.data]);
+  const maintenancesData = useMemo(() => maintenances.data ?? [], [maintenances.data]);
 
-  const periodDeliveries = (deliveries.data ?? []).filter((d) => inRange(d.occurred_at, from, to));
-  const periodExpenses = (expenses.data ?? []).filter((e) => inRange(e.occurred_at, from, to));
-  const periodMaint = (maintenances.data ?? []).filter((m) => inRange(m.performed_at, from, to));
-  const s = summarize(periodDeliveries, periodExpenses, periodMaint, cpk);
-  const ranking = byApp(periodDeliveries, cpk);
-  const { grid, max } = useMemo(() => heatmap(deliveries.data ?? []), [deliveries.data]);
+  const cpk = useMemo(() => costPerKm(fuelingsData, profile.data), [fuelingsData, profile.data]);
+  const maintenanceReserve = useMemo(
+    () => maintenanceReservePerKm(maintenancesData),
+    [maintenancesData],
+  );
+  const { from, to } = useMemo(() => {
+    if (range.monthOffset !== null) {
+      const { from: mFrom, to: mTo } = monthRange(range.monthOffset, now);
+      return { from: mFrom, to: range.monthOffset === 0 ? endOfDay(now) : mTo };
+    }
+    return {
+      from: startOfDay(new Date(now.getTime() - (range.days - 1) * 86400000)),
+      to: endOfDay(now),
+    };
+  }, [now, range.days, range.monthOffset]);
+
+  const periodDeliveries = useMemo(
+    () => deliveriesData.filter((d) => inRange(d.occurred_at, from, to)),
+    [deliveriesData, from, to],
+  );
+  const periodExpenses = useMemo(
+    () => expensesData.filter((e) => inRange(e.occurred_at, from, to)),
+    [expensesData, from, to],
+  );
+  const periodMaint = useMemo(
+    () => maintenancesData.filter((m) => inRange(m.performed_at, from, to)),
+    [maintenancesData, from, to],
+  );
+  const periodFuelings = useMemo(
+    () => fuelingsData.filter((f) => inRange(f.occurred_at, from, to)),
+    [fuelingsData, from, to],
+  );
+  const cash = useMemo(
+    () => summarizeRecordedCosts(periodDeliveries, periodExpenses, periodMaint, periodFuelings),
+    [periodDeliveries, periodExpenses, periodFuelings, periodMaint],
+  );
+  const s = useMemo(
+    () =>
+      summarizeOperational(periodDeliveries, expensesData, cpk, maintenanceReserve.costPerKm, {
+        from,
+        to,
+        maintenanceCostPerDay: maintenanceReserve.costPerDay,
+        maintenanceItems: maintenanceReserve.items,
+      }),
+    [periodDeliveries, expensesData, cpk, maintenanceReserve, from, to],
+  );
+  const operationalCpk = cpk + maintenanceReserve.costPerKm;
+  const ranking = useMemo(
+    () => byApp(periodDeliveries, operationalCpk),
+    [periodDeliveries, operationalCpk],
+  );
+  const { chainKm, km: periodKm } = useChainedDistance(periodDeliveries);
+  const { grid, max } = useMemo(() => heatmap(deliveriesData), [deliveriesData]);
 
   const series = useMemo(() => {
     const days: { day: string; receita: number; lucro: number }[] = [];
-    for (let i = range.days - 1; i >= 0; i--) {
-      const d = new Date(Date.now() - i * 86400000);
-      const dayFrom = startOfDay(d);
-      const dayTo = endOfDay(d);
-      const dd = (deliveries.data ?? []).filter((x) => inRange(x.occurred_at, dayFrom, dayTo));
-      const de = (expenses.data ?? []).filter((x) => inRange(x.occurred_at, dayFrom, dayTo));
-      const sum = summarize(dd, de, [], cpk);
-      days.push({ day: dateLabel(d.toISOString()), receita: sum.revenue, lucro: sum.profit });
+    const cursor = startOfDay(from);
+    const last = startOfDay(to);
+    while (cursor.getTime() <= last.getTime()) {
+      const dayFrom = startOfDay(cursor);
+      const dayTo = endOfDay(cursor);
+      const dd = deliveriesData.filter((x) => inRange(x.occurred_at, dayFrom, dayTo));
+      const sum = summarizeOperational(dd, expensesData, cpk, maintenanceReserve.costPerKm, {
+        from: dayFrom,
+        to: dayTo,
+        maintenanceCostPerDay: maintenanceReserve.costPerDay,
+        maintenanceItems: maintenanceReserve.items,
+      });
+      days.push({
+        day: dateLabel(dayFrom.toISOString()),
+        receita: sum.revenue,
+        lucro: sum.profit,
+      });
+      cursor.setDate(cursor.getDate() + 1);
     }
     return days;
-  }, [deliveries.data, expenses.data, cpk, range.days]);
+  }, [deliveriesData, expensesData, cpk, maintenanceReserve, from, to]);
 
-  const dailyGoal = Number(profile.data?.daily_goal ?? 200);
+  const dailyGoalPlan = adaptiveDailyRevenueGoal({
+    deliveries: deliveriesData,
+    goals: goals.data ?? [],
+    profile: profile.data,
+    date: now,
+  });
+  const dailyGoal = dailyGoalPlan.target || Number(profile.data?.daily_goal ?? 200);
   const todayRevenue = summarize(
-    (deliveries.data ?? []).filter((d) => inRange(d.occurred_at, startOfDay(), endOfDay())),
+    deliveriesData.filter((d) => inRange(d.occurred_at, startOfDay(now), endOfDay(now))),
     [],
     [],
     cpk,
@@ -87,18 +176,27 @@ function Dashboard() {
 
   useGoalCelebrations([
     {
-      id: `diaria-${new Date().toISOString().slice(0, 10)}-receita`,
+      id: `diaria-${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}-receita`,
       label: "Meta diária de receita",
       value: todayRevenue,
       target: dailyGoal,
     },
   ]);
 
+  const smartAlerts = useSmartAlerts({
+    deliveries: deliveriesData,
+    fuelings: fuelingsData,
+    maintenances: maintenancesData,
+    expenses: expensesData,
+    goals: goals.data ?? [],
+    profile: profile.data,
+    date: now,
+  });
 
   return (
     <AppShell
       title="Dashboard"
-      subtitle={`Custo estimado de ${brl(cpk)}/km · meta diária ${brl(dailyGoal)}`}
+      subtitle={`Custo estimado de ${brl(cpk)}/km · meta diária ${brl(dailyGoal)}${dailyGoalPlan.isAdjusted ? " (ajustada)" : ""}`}
       actions={
         <div className="flex gap-1 rounded-lg bg-muted p-1">
           {RANGES.map((r) => (
@@ -124,23 +222,30 @@ function Dashboard() {
           icon={<Banknote className="size-4" />}
         />
         <StatCard
-          label="Lucro real"
+          label="Lucro operacional"
           value={brl(s.profit)}
           hint={`Margem ${num(s.revenue ? (s.profit / s.revenue) * 100 : 0)}%`}
           tone={s.profit >= 0 ? "success" : "destructive"}
           icon={<TrendingUp className="size-4" />}
         />
         <StatCard
-          label="Custos"
+          label="Custos operacionais"
           value={brl(s.fuelCost + s.otherCost + s.maintenanceCost)}
-          hint={`Combustível ${brl(s.fuelCost)} · outros ${brl(s.otherCost + s.maintenanceCost)}`}
+          hint={`Combustível ${brl(s.fuelCost)} · reserva ${brl(s.maintenanceCost)}`}
           tone="destructive"
           icon={<Fuel className="size-4" />}
         />
         <StatCard
           label="Quilometragem"
-          value={`${num(s.distance)} km`}
-          hint={`${brl(s.perKm)} por km rodado`}
+          value={`${num(periodKm)} km`}
+          hint={
+            (chainKm != null ? "Pontos do período encadeados" : "Soma das entregas do período") +
+            (periodDeliveries.length
+              ? ` · ${num(s.distance)} km registrados em ${periodDeliveries.length} entrega${periodDeliveries.length === 1 ? "" : "s"}`
+              : "") +
+            ` · ${brl(s.perKm)} por km rodado`
+          }
+          tone="primary"
           icon={<Gauge className="size-4" />}
         />
       </div>
@@ -153,15 +258,36 @@ function Dashboard() {
           tone="warning"
           icon={<Timer className="size-4" />}
         />
-        <StatCard label="Ticket médio" value={brl(s.count ? s.revenue / s.count : 0)} />
-        <StatCard label="Meta de hoje" value={`${num((todayRevenue / dailyGoal) * 100, 0)}%`} hint={brl(todayRevenue)} />
-        <StatCard label="Manutenção no período" value={brl(s.maintenanceCost)} />
+        <StatCard
+          label="Lucro por caixa"
+          value={brl(cash.profit)}
+          hint={`Pagamentos no período: ${brl(cash.fuelCost + cash.otherCost + cash.maintenanceCost)}`}
+          tone={cash.profit >= 0 ? "success" : "destructive"}
+        />
+        <StatCard
+          label="Meta de hoje"
+          value={`${num((todayRevenue / dailyGoal) * 100, 0)}%`}
+          hint={`${brl(todayRevenue)} hoje${dailyGoalPlan.monthTarget > 0 ? ` · ${dailyGoalPlan.remainingDaysIncludingToday} dias para ${brl(dailyGoalPlan.monthTarget)}` : ""}`}
+        />
+        <StatCard
+          label="Reserva de manutenção"
+          value={brl(s.maintenanceCost)}
+          hint={`${brl(maintenanceReserve.costPerKm)}/km`}
+        />
+      </div>
+
+      <div className="mt-4">
+        <SmartAlerts alerts={smartAlerts} />
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
-        <SectionCard title="Receita x lucro real" description="Evolução diária" className="lg:col-span-2">
+        <SectionCard
+          title="Receita x lucro operacional"
+          description="Evolução diária"
+          className="lg:col-span-2"
+        >
           {series.some((d) => d.receita > 0) ? (
-            <div className="h-64">
+            <div className="h-72 sm:h-80 lg:h-72">
               <Suspense fallback={<div className="size-full animate-pulse rounded-md bg-muted" />}>
                 <RevenueAreaChart data={series} />
               </Suspense>
@@ -227,15 +353,15 @@ function Dashboard() {
         </SectionCard>
 
         <SectionCard title="Histórico recente" description="Últimas entregas registradas">
-          {(deliveries.data ?? []).length ? (
+          {deliveriesData.length ? (
             <ul className="divide-y divide-border">
-              {(deliveries.data ?? []).slice(0, 8).map((d) => (
+              {deliveriesData.slice(0, 8).map((d) => (
                 <li key={d.id} className="flex items-center justify-between gap-3 py-2.5">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{d.app_name}</p>
                     <p className="truncate text-xs text-muted-foreground">
-                      {dateTimeLabel(d.occurred_at)} · {num(Number(d.distance_km))} km ·{" "}
-                      {d.dropoff_address ?? "sem endereço"}
+                      {dateTimeLabel(d.occurred_at)} · {paymentMethodLabel(d.payment_method)} ·{" "}
+                      {num(Number(d.distance_km))} km · {d.dropoff_address ?? "sem endereço"}
                     </p>
                   </div>
                   <span className="text-sm font-semibold tabular-nums text-success">

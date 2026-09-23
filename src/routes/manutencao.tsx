@@ -1,14 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { AlertTriangle, Trash2 } from "lucide-react";
+import { AlertTriangle, CalendarClock, CheckCircle2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
+import { SmartAlerts } from "@/components/SmartAlerts";
 import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useInsert, useMaintenances, useRemove } from "@/lib/data";
-import { brl, dateLabel, num } from "@/lib/format";
+import { buildMaintenanceAlerts, latestMaintenanceCycles } from "@/lib/alerts";
+import { useCalendarNow } from "@/hooks/useCalendarNow";
+import { brl, dateLabel, dec, localDateValue, num } from "@/lib/format";
+import { maintenanceReservePerKm } from "@/lib/metrics";
 
 export const Route = createFileRoute("/manutencao")({
   head: () => ({
@@ -24,6 +28,8 @@ export const Route = createFileRoute("/manutencao")({
         property: "og:description",
         content: "Histórico e lembretes de manutenção da sua moto ou carro de entrega.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: Manutencao,
@@ -32,30 +38,57 @@ export const Route = createFileRoute("/manutencao")({
 const TYPES = ["Troca de óleo", "Pneus", "Freios", "Relação", "Revisão geral", "Outros"];
 
 function Manutencao() {
+  const now = useCalendarNow();
   const list = useMaintenances();
   const add = useInsert("maintenances", "maintenances");
   const del = useRemove("maintenances", "maintenances");
   const [form, setForm] = useState({
-    service_type: TYPES[0]!,
+    service_type: TYPES[0] ?? "Troca de óleo",
     cost: "",
     odometer: "",
     notes: "",
+    performed_at: localDateValue(),
     next_due_date: "",
     next_due_km: "",
   });
 
   const data = list.data ?? [];
   const total = data.reduce((s, m) => s + Number(m.cost), 0);
-  const today = new Date().toISOString().slice(0, 10);
-  const pending = data.filter((m) => m.next_due_date && m.next_due_date >= today);
-  const overdue = data.filter((m) => m.next_due_date && m.next_due_date < today);
+  const reserve = maintenanceReservePerKm(data);
+  const previewInterval = dec(form.next_due_km) - dec(form.odometer);
+  const previewCostPerKm = previewInterval > 0 ? dec(form.cost) / previewInterval : 0;
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const activeCycleIds = new Set(latestMaintenanceCycles(data).map((m) => m.id));
+  const pending = data.filter(
+    (m) => activeCycleIds.has(m.id) && m.next_due_date && m.next_due_date >= today,
+  );
+  const maintenanceAlerts = buildMaintenanceAlerts(data, now);
 
   return (
     <AppShell title="Manutenção" subtitle="Histórico e agenda preventiva do veículo">
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Investido em manutenção" value={brl(total)} tone="primary" />
+        <StatCard
+          label="Reserva de manutenção"
+          value={
+            reserve.costPerKm > 0
+              ? `${brl(reserve.costPerKm)}/km`
+              : `${brl(reserve.costPerDay)}/dia`
+          }
+          hint={`${reserve.items.length} serviço(s) no cálculo`}
+          tone="warning"
+        />
         <StatCard label="Agendamentos futuros" value={String(pending.length)} />
-        <StatCard label="Vencidos" value={String(overdue.length)} tone={overdue.length ? "destructive" : "default"} />
+        <StatCard
+          label="Dados pendentes"
+          value={String(reserve.incomplete.length)}
+          hint="Sem intervalo válido em km ou dias"
+          tone={reserve.incomplete.length ? "destructive" : "default"}
+        />
+      </div>
+
+      <div className="mt-4">
+        <SmartAlerts alerts={maintenanceAlerts} />
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[380px_1fr]">
@@ -69,10 +102,19 @@ function Manutencao() {
                 cost: Number(form.cost || 0),
                 odometer: form.odometer ? Number(form.odometer) : null,
                 description: form.notes || null,
+                performed_at: form.performed_at || localDateValue(),
                 next_due_date: form.next_due_date || null,
                 next_due_km: form.next_due_km ? Number(form.next_due_km) : null,
               });
-              setForm({ ...form, cost: "", odometer: "", notes: "", next_due_date: "", next_due_km: "" });
+              setForm({
+                ...form,
+                cost: "",
+                odometer: "",
+                notes: "",
+                performed_at: localDateValue(),
+                next_due_date: "",
+                next_due_km: "",
+              });
               toast.success("Manutenção registrada");
             }}
           >
@@ -90,12 +132,26 @@ function Manutencao() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label className="text-xs">Custo (R$)</Label>
-                <Input value={form.cost} onChange={(e) => setForm({ ...form, cost: e.target.value })} />
+                <Label className="text-xs">Data do serviço</Label>
+                <Input
+                  type="date"
+                  value={form.performed_at ?? localDateValue()}
+                  onChange={(e) => setForm({ ...form, performed_at: e.target.value })}
+                />
               </div>
               <div className="space-y-2">
-                <Label className="text-xs">Odômetro</Label>
-                <Input value={form.odometer} onChange={(e) => setForm({ ...form, odometer: e.target.value })} />
+                <Label className="text-xs">Custo (R$)</Label>
+                <Input
+                  value={form.cost}
+                  onChange={(e) => setForm({ ...form, cost: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">Odômetro atual</Label>
+                <Input
+                  value={form.odometer}
+                  onChange={(e) => setForm({ ...form, odometer: e.target.value })}
+                />
               </div>
               <div className="space-y-2">
                 <Label className="text-xs">Próxima data</Label>
@@ -106,13 +162,27 @@ function Manutencao() {
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-xs">Próximo km</Label>
-                <Input value={form.next_due_km} onChange={(e) => setForm({ ...form, next_due_km: e.target.value })} />
+                <Label className="text-xs">Próximo serviço (km)</Label>
+                <Input
+                  value={form.next_due_km}
+                  onChange={(e) => setForm({ ...form, next_due_km: e.target.value })}
+                />
               </div>
+            </div>
+            <div className="rounded-md border border-border bg-muted/40 p-3 text-xs">
+              <p className="font-medium">Prévia da reserva: {brl(previewCostPerKm)}/km</p>
+              <p className="mt-1 text-muted-foreground">
+                {previewInterval > 0
+                  ? `${brl(dec(form.cost))} distribuídos por ${num(previewInterval, 0)} km.`
+                  : "Informe o odômetro atual e o próximo serviço em km para calcular."}
+              </p>
             </div>
             <div className="space-y-2">
               <Label className="text-xs">Observações</Label>
-              <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+              <Input
+                value={form.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              />
             </div>
             <Button type="submit" className="w-full">
               Salvar manutenção
@@ -120,41 +190,75 @@ function Manutencao() {
           </form>
         </SectionCard>
 
-        <SectionCard title="Histórico" description={`${data.length} serviços registrados`}>
+        <SectionCard title="Linha do tempo" description={`${data.length} serviços registrados`}>
           {data.length ? (
-            <ul className="divide-y divide-border">
+            <ol className="relative ml-2 border-l border-border">
               {data.map((m) => {
-                const late = m.next_due_date && m.next_due_date < today;
+                const isActiveCycle = activeCycleIds.has(m.id);
+                const late = isActiveCycle && m.next_due_date && m.next_due_date < today;
+                const reserveItem = reserve.items.find((item) => item.maintenance.id === m.id);
                 return (
-                  <li key={m.id} className="flex items-start gap-3 py-3">
+                  <li key={m.id} className="relative flex items-start gap-3 pb-6 pl-6 last:pb-0">
+                    <span className="absolute -left-[9px] top-0 flex size-4 items-center justify-center rounded-full bg-success text-success-foreground ring-4 ring-card">
+                      <CheckCircle2 className="size-3" />
+                    </span>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium">
+                      <p className="text-xs font-medium text-muted-foreground">
+                        {dateLabel(m.performed_at)} · Serviço realizado
+                      </p>
+                      <p className="mt-0.5 text-sm font-semibold">
                         {m.service_type} · {brl(Number(m.cost))}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {dateLabel(m.performed_at)}
-                        {m.odometer ? ` · ${num(Number(m.odometer), 0)} km` : ""}
+                        {m.odometer
+                          ? `${num(Number(m.odometer), 0)} km`
+                          : "Quilometragem não informada"}
                         {m.description ? ` · ${m.description}` : ""}
                       </p>
-                      {m.next_due_date || m.next_due_km ? (
-                        <p
-                          className={`mt-1 inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs ${
-                            late ? "bg-destructive/10 text-destructive" : "bg-accent text-accent-foreground"
+                      {(m.next_due_date || m.next_due_km) && isActiveCycle ? (
+                        <div
+                          className={`mt-3 flex items-start gap-2 rounded-md border px-3 py-2 text-xs ${
+                            late
+                              ? "bg-destructive/10 text-destructive"
+                              : "bg-accent text-accent-foreground"
                           }`}
                         >
-                          {late ? <AlertTriangle className="size-3" /> : null}
-                          Próxima: {m.next_due_date ? dateLabel(m.next_due_date) : ""}
-                          {m.next_due_km ? ` ou ${num(Number(m.next_due_km), 0)} km` : ""}
-                        </p>
+                          {late ? (
+                            <AlertTriangle className="mt-0.5 size-3 shrink-0" />
+                          ) : (
+                            <CalendarClock className="mt-0.5 size-3 shrink-0" />
+                          )}
+                          <div>
+                            <p className="font-semibold">
+                              {late ? "Agendamento vencido" : "Próximo agendamento"}
+                            </p>
+                            <p>
+                              {m.next_due_date ? dateLabel(m.next_due_date) : "Por quilometragem"}
+                              {m.next_due_km ? ` · ${num(Number(m.next_due_km), 0)} km` : ""}
+                            </p>
+                          </div>
+                        </div>
                       ) : null}
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {reserveItem
+                          ? reserveItem.basis === "km"
+                            ? `${brl(reserveItem.costPerKm)}/km · custo diluído em ${num(reserveItem.intervalKm, 0)} km`
+                            : `${brl(reserveItem.costPerDay)}/dia · custo diluído em ${num(reserveItem.intervalDays, 0)} dias`
+                          : "Fora da reserva: informe a próxima quilometragem/data ou este não é o ciclo mais recente."}
+                      </p>
                     </div>
-                    <Button variant="ghost" size="icon" aria-label="Excluir" onClick={() => del.mutate(m.id)}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Excluir"
+                      onClick={() => del.mutate(m.id)}
+                    >
                       <Trash2 className="size-4 text-destructive" />
                     </Button>
                   </li>
                 );
               })}
-            </ul>
+            </ol>
           ) : (
             <EmptyState>Nenhuma manutenção registrada.</EmptyState>
           )}

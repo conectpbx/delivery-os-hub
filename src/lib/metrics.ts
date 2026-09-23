@@ -1,5 +1,5 @@
-import type { Delivery, Expense, Fueling, Maintenance, Profile } from "./data";
-import { monthKey } from "./format";
+import type { Delivery, Expense, Fueling, Goal, Maintenance, Profile } from "./data";
+import { monthKey, parseDateValue } from "./format";
 
 export function avgFuelPrice(fuelings: Fueling[]) {
   const valid = fuelings.filter((f) => Number(f.price_per_liter) > 0);
@@ -12,8 +12,144 @@ export function costPerKm(fuelings: Fueling[], profile: Profile | null | undefin
   return avgFuelPrice(fuelings) / eff;
 }
 
+export type MaintenanceReserveItem = {
+  maintenance: Maintenance;
+  intervalKm: number;
+  costPerKm: number;
+  intervalDays: number;
+  costPerDay: number;
+  basis: "km" | "day";
+};
+
+export type MaintenanceReserve = {
+  costPerKm: number;
+  costPerDay: number;
+  items: MaintenanceReserveItem[];
+  incomplete: Maintenance[];
+};
+
+/** Usa somente o ciclo mais recente de cada serviço para não somar ciclos já encerrados. */
+export function maintenanceReservePerKm(maintenances: Maintenance[]): MaintenanceReserve {
+  const latestByType = new Map<string, Maintenance>();
+  const sorted = [...maintenances].sort(
+    (a, b) => parseDateValue(b.performed_at).getTime() - parseDateValue(a.performed_at).getTime(),
+  );
+
+  for (const maintenance of sorted) {
+    const key = maintenance.service_type.trim().toLocaleLowerCase("pt-BR");
+    if (!latestByType.has(key)) latestByType.set(key, maintenance);
+  }
+
+  const items: MaintenanceReserveItem[] = [];
+  const incomplete: Maintenance[] = [];
+  for (const maintenance of latestByType.values()) {
+    const currentKm = Number(maintenance.odometer);
+    const nextKm = Number(maintenance.next_due_km);
+    const cost = Number(maintenance.cost);
+    const intervalKm = nextKm - currentKm;
+    const performedAt = startOfDay(parseDateValue(maintenance.performed_at));
+    const dueAt = maintenance.next_due_date
+      ? startOfDay(parseDateValue(maintenance.next_due_date))
+      : null;
+    const intervalDays = dueAt
+      ? Math.round((dueAt.getTime() - performedAt.getTime()) / 86400000)
+      : 0;
+    if (!Number.isFinite(cost) || cost < 0) {
+      incomplete.push(maintenance);
+      continue;
+    }
+    if (Number.isFinite(intervalKm) && intervalKm > 0) {
+      items.push({
+        maintenance,
+        intervalKm,
+        costPerKm: cost / intervalKm,
+        intervalDays,
+        costPerDay: 0,
+        basis: "km",
+      });
+    } else if (intervalDays > 0) {
+      items.push({
+        maintenance,
+        intervalKm: 0,
+        costPerKm: 0,
+        intervalDays,
+        costPerDay: cost / intervalDays,
+        basis: "day",
+      });
+    } else {
+      incomplete.push(maintenance);
+    }
+  }
+
+  return {
+    costPerKm: items.reduce((sum, item) => sum + item.costPerKm, 0),
+    costPerDay: items.reduce((sum, item) => sum + item.costPerDay, 0),
+    items,
+    incomplete,
+  };
+}
+
+function calendarDays(from: Date, to: Date) {
+  const first = startOfDay(from).getTime();
+  const last = startOfDay(to).getTime();
+  return Math.max(0, Math.round((last - first) / 86400000) + 1);
+}
+
+function maintenanceCostByDay(items: MaintenanceReserveItem[], from: Date, to: Date) {
+  const rangeStart = startOfDay(from);
+  const rangeEndExclusive = startOfDay(to);
+  rangeEndExclusive.setDate(rangeEndExclusive.getDate() + 1);
+  return items.reduce((total, item) => {
+    if (item.basis !== "day" || !item.maintenance.next_due_date) return total;
+    const cycleStart = startOfDay(parseDateValue(item.maintenance.performed_at));
+    const cycleEnd = startOfDay(parseDateValue(item.maintenance.next_due_date));
+    const overlapStart = Math.max(cycleStart.getTime(), rangeStart.getTime());
+    const overlapEnd = Math.min(cycleEnd.getTime(), rangeEndExclusive.getTime());
+    const days = Math.max(0, Math.round((overlapEnd - overlapStart) / 86400000));
+    return total + days * item.costPerDay;
+  }, 0);
+}
+
+/** Retorna o próximo vencimento mensal, preservando o dia ou usando o último dia do mês. */
+export function nextMonthlyDueDate(value: string | Date) {
+  const date = startOfDay(typeof value === "string" ? parseDateValue(value) : value);
+  const targetMonth = new Date(date.getFullYear(), date.getMonth() + 1, 1);
+  const lastDay = new Date(date.getFullYear(), date.getMonth() + 2, 0).getDate();
+  targetMonth.setDate(Math.min(date.getDate(), lastDay));
+  return targetMonth;
+}
+
+function usesMonthlyAllocation(expense: Expense) {
+  if (expense.allocation_method) return expense.allocation_method === "monthly";
+  // Compatibilidade com registros de seguro salvos antes da coluna de rateio existir.
+  return expense.category.trim().toLocaleLowerCase("pt-BR") === "seguro";
+}
+
+/** Rateia qualquer despesa configurada entre o lançamento e o próximo vencimento mensal. */
+export function proratedExpenseTotal(expenses: Expense[], from: Date, to: Date) {
+  const rangeStart = startOfDay(from);
+  const rangeEndExclusive = startOfDay(to);
+  rangeEndExclusive.setDate(rangeEndExclusive.getDate() + 1);
+
+  return expenses.reduce((total, expense) => {
+    const amount = Number(expense.amount);
+    const occurredAt = startOfDay(parseDateValue(expense.occurred_at));
+    if (!usesMonthlyAllocation(expense)) {
+      return total + (occurredAt >= rangeStart && occurredAt < rangeEndExclusive ? amount : 0);
+    }
+
+    const dueAt = nextMonthlyDueDate(occurredAt);
+    const overlapStart = new Date(Math.max(occurredAt.getTime(), rangeStart.getTime()));
+    const overlapEnd = new Date(Math.min(dueAt.getTime(), rangeEndExclusive.getTime()));
+    if (overlapEnd <= overlapStart) return total;
+    const coveredDays = Math.round((dueAt.getTime() - occurredAt.getTime()) / 86400000);
+    const overlapDays = Math.round((overlapEnd.getTime() - overlapStart.getTime()) / 86400000);
+    return total + (amount / coveredDays) * overlapDays;
+  }, 0);
+}
+
 export function inRange(iso: string, from: Date, to: Date) {
-  const d = new Date(iso).getTime();
+  const d = parseDateValue(iso).getTime();
   return d >= from.getTime() && d <= to.getTime();
 }
 
@@ -27,6 +163,27 @@ export function endOfDay(d = new Date()) {
   const x = new Date(d);
   x.setHours(23, 59, 59, 999);
   return x;
+}
+
+export function startOfWeek(d = new Date()) {
+  const start = startOfDay(d);
+  const daysSinceMonday = (start.getDay() + 6) % 7;
+  start.setDate(start.getDate() - daysSinceMonday);
+  return start;
+}
+
+export function endOfWeek(d = new Date()) {
+  const end = startOfWeek(d);
+  end.setDate(end.getDate() + 6);
+  return endOfDay(end);
+}
+
+export function startOfMonth(d = new Date()) {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+export function endOfMonth(d = new Date()) {
+  return endOfDay(new Date(d.getFullYear(), d.getMonth() + 1, 0));
 }
 
 export type Summary = {
@@ -73,6 +230,115 @@ export function summarize(
   };
 }
 
+/**
+ * Builds the financial summary from the costs the user actually recorded.
+ *
+ * `summarize` intentionally estimates fuel consumption from the driven distance
+ * for operational projections. Reports, however, must reconcile with the cash
+ * entries in Financeiro, so fuel is the sum of the recorded fueling totals.
+ */
+export function summarizeRecordedCosts(
+  deliveries: Delivery[],
+  expenses: Expense[],
+  maintenances: Maintenance[],
+  fuelings: Fueling[],
+): Summary {
+  const summary = summarize(deliveries, expenses, maintenances, 0);
+  const fuelCost = fuelings.reduce((sum, fueling) => sum + Number(fueling.total), 0);
+
+  return {
+    ...summary,
+    fuelCost,
+    profit: summary.revenue - fuelCost - summary.otherCost - summary.maintenanceCost,
+  };
+}
+
+export function summarizeOperational(
+  deliveries: Delivery[],
+  expenses: Expense[],
+  fuelCostPerKm: number,
+  maintenanceCostPerKm: number,
+  period?: {
+    from: Date;
+    to: Date;
+    maintenanceCostPerDay?: number;
+    maintenanceItems?: MaintenanceReserveItem[];
+  },
+): Summary {
+  const summary = summarize(deliveries, [], [], fuelCostPerKm);
+  const otherCost = period
+    ? proratedExpenseTotal(expenses, period.from, period.to)
+    : expenses.reduce((sum, expense) => sum + Number(expense.amount), 0);
+  const maintenanceCost =
+    summary.distance * maintenanceCostPerKm +
+    (period?.maintenanceItems
+      ? maintenanceCostByDay(period.maintenanceItems, period.from, period.to)
+      : period
+        ? calendarDays(period.from, period.to) * (period.maintenanceCostPerDay ?? 0)
+        : 0);
+  return {
+    ...summary,
+    otherCost,
+    maintenanceCost,
+    profit: summary.revenue - summary.fuelCost - otherCost - maintenanceCost,
+  };
+}
+
+export function currentRevenueTarget(
+  goals: Goal[],
+  profile: Profile | null | undefined,
+  date = new Date(),
+) {
+  const key = monthKey(date);
+  const monthlyGoal = goals.find((g) => g.month.slice(0, 7) === key);
+  return Number(monthlyGoal?.revenue_target ?? 0) || Number(profile?.monthly_goal ?? 0);
+}
+
+export function adaptiveDailyRevenueGoal(input: {
+  deliveries: Delivery[];
+  goals: Goal[];
+  profile: Profile | null | undefined;
+  date?: Date;
+}) {
+  const { deliveries, goals, profile } = input;
+  const date = input.date ?? new Date();
+  const monthTarget = currentRevenueTarget(goals, profile, date);
+  const manualDailyGoal = Number(profile?.daily_goal ?? 0);
+
+  if (monthTarget <= 0) {
+    return {
+      target: manualDailyGoal,
+      monthTarget: 0,
+      revenueBeforeToday: 0,
+      remainingBeforeToday: 0,
+      remainingDaysIncludingToday: 0,
+      isAdjusted: false,
+    };
+  }
+
+  const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
+  const todayStart = startOfDay(date);
+  const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  const remainingDaysIncludingToday = Math.max(1, daysInMonth - date.getDate() + 1);
+  const revenueBeforeToday = deliveries
+    .filter((d) => {
+      const occurred = new Date(d.occurred_at);
+      return occurred >= monthStart && occurred < todayStart;
+    })
+    .reduce((sum, d) => sum + Number(d.earnings) + Number(d.tip), 0);
+  const remainingBeforeToday = Math.max(0, monthTarget - revenueBeforeToday);
+  const adjustedTarget = remainingBeforeToday / remainingDaysIncludingToday;
+
+  return {
+    target: adjustedTarget,
+    monthTarget,
+    revenueBeforeToday,
+    remainingBeforeToday,
+    remainingDaysIncludingToday,
+    isAdjusted: manualDailyGoal > 0 ? Math.abs(adjustedTarget - manualDailyGoal) >= 0.01 : true,
+  };
+}
+
 export function byApp(deliveries: Delivery[], cpk: number) {
   const map = new Map<string, { app: string; revenue: number; km: number; count: number }>();
   for (const d of deliveries) {
@@ -88,7 +354,10 @@ export function byApp(deliveries: Delivery[], cpk: number) {
 }
 
 export function byMonth(deliveries: Delivery[], expenses: Expense[], cpk: number) {
-  const map = new Map<string, { month: string; revenue: number; km: number; cost: number; count: number }>();
+  const map = new Map<
+    string,
+    { month: string; revenue: number; km: number; cost: number; count: number }
+  >();
   const ensure = (key: string) => {
     const cur = map.get(key) ?? { month: key, revenue: 0, km: 0, cost: 0, count: 0 };
     map.set(key, cur);
@@ -102,10 +371,59 @@ export function byMonth(deliveries: Delivery[], expenses: Expense[], cpk: number
   }
 
   for (const e of expenses) {
-    ensure(monthKey(new Date(e.occurred_at))).cost += Number(e.amount);
+    const occurredAt = parseDateValue(e.occurred_at);
+    ensure(monthKey(occurredAt));
+    if (usesMonthlyAllocation(e)) {
+      const finalCoveredDay = nextMonthlyDueDate(occurredAt);
+      finalCoveredDay.setDate(finalCoveredDay.getDate() - 1);
+      ensure(monthKey(finalCoveredDay));
+    }
+  }
+  for (const current of map.values()) {
+    const [year, month] = current.month.split("-").map(Number);
+    const from = new Date(year!, month! - 1, 1);
+    const to = endOfMonth(from);
+    current.cost = proratedExpenseTotal(expenses, from, to);
   }
   return [...map.values()]
     .map((m) => ({ ...m, profit: m.revenue - m.km * cpk - m.cost }))
+    .sort((a, b) => a.month.localeCompare(b.month));
+}
+
+export function byMonthRecordedCosts(
+  deliveries: Delivery[],
+  expenses: Expense[],
+  fuelings: Fueling[],
+  maintenances: Maintenance[],
+) {
+  const map = new Map<
+    string,
+    { month: string; revenue: number; km: number; cost: number; count: number }
+  >();
+  const ensure = (key: string) => {
+    const current = map.get(key) ?? { month: key, revenue: 0, km: 0, cost: 0, count: 0 };
+    map.set(key, current);
+    return current;
+  };
+
+  for (const delivery of deliveries) {
+    const current = ensure(monthKey(new Date(delivery.occurred_at)));
+    current.revenue += Number(delivery.earnings) + Number(delivery.tip);
+    current.km += Number(delivery.distance_km);
+    current.count += 1;
+  }
+  for (const expense of expenses) {
+    ensure(monthKey(parseDateValue(expense.occurred_at))).cost += Number(expense.amount);
+  }
+  for (const fueling of fuelings) {
+    ensure(monthKey(new Date(fueling.occurred_at))).cost += Number(fueling.total);
+  }
+  for (const maintenance of maintenances) {
+    ensure(monthKey(parseDateValue(maintenance.performed_at))).cost += Number(maintenance.cost);
+  }
+
+  return [...map.values()]
+    .map((month) => ({ ...month, profit: month.revenue - month.cost }))
     .sort((a, b) => a.month.localeCompare(b.month));
 }
 
@@ -115,26 +433,37 @@ export function heatmap(deliveries: Delivery[]) {
     const date = new Date(d.occurred_at);
     grid[date.getDay()]![date.getHours()] =
       (grid[date.getDay()]![date.getHours()] ?? 0) + Number(d.earnings) + Number(d.tip);
-
   }
   const max = Math.max(...grid.flat(), 1);
   return { grid, max };
 }
 
 export const PERIODS = [
-  { key: "1", label: "Hoje", days: 1 },
-  { key: "7", label: "Semanal", days: 7 },
-  { key: "15", label: "Quinzenal", days: 15 },
-  { key: "30", label: "Mensal", days: 30 },
-  { key: "all", label: "Tudo", days: 0 },
+  { key: "1", label: "Hoje", days: 1, monthOffset: null },
+  { key: "7", label: "Semanal", days: 7, monthOffset: null },
+  { key: "15", label: "Quinzenal", days: 15, monthOffset: null },
+  { key: "month", label: "Mês atual", days: 0, monthOffset: 0 },
+  { key: "prev-month", label: "Mês anterior", days: 0, monthOffset: -1 },
+  { key: "all", label: "Tudo", days: 0, monthOffset: null },
 ] as const;
 
 export type Period = (typeof PERIODS)[number];
 
-export function periodRange(period: Period) {
-  const to = endOfDay();
+/** Mês civil completo (1º dia até o último dia), com deslocamento em meses. */
+export function monthRange(offset = 0, now = new Date()) {
+  const ref = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+  return { from: startOfMonth(ref), to: endOfMonth(ref) };
+}
+
+export function periodRange(period: Period, now = new Date()) {
+  if (period.monthOffset !== null) {
+    const { from, to } = monthRange(period.monthOffset, now);
+    // Mês atual não deve projetar datas futuras no filtro.
+    return { from, to: period.monthOffset === 0 ? endOfDay(now) : to };
+  }
+  const to = endOfDay(now);
   const from = period.days
-    ? startOfDay(new Date(Date.now() - (period.days - 1) * 86400000))
+    ? startOfDay(new Date(now.getTime() - (period.days - 1) * 86400000))
     : new Date(0);
   return { from, to };
 }
@@ -147,7 +476,6 @@ export function filterByPeriod<T>(items: T[], key: (item: T) => string, period: 
 export function filterByRange<T>(items: T[], key: (item: T) => string, from: Date, to: Date) {
   return items.filter((i) => inRange(key(i), from, to));
 }
-
 
 export function costsByCategory(expenses: Expense[]) {
   const map = new Map<string, number>();
