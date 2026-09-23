@@ -4,12 +4,14 @@ import fs from "node:fs";
 
 const publicDir = path.resolve(process.cwd(), "public");
 
+if (!fs.existsSync(publicDir)) {
+  fs.mkdirSync(publicDir, { recursive: true });
+}
+
 await generateSW({
   swDest: path.join(publicDir, "sw.js"),
   globDirectory: publicDir,
   globPatterns: ["**/*.{js,css,html,svg,png,ico,woff2}"],
-  navigateFallback: "/dashboard",
-  navigateFallbackDenylist: [/^\/~oauth/, /^\/api\//, /^\/_serverFn\//],
   skipWaiting: true,
   clientsClaim: true,
   runtimeCaching: [
