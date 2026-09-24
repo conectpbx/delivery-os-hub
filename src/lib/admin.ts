@@ -54,9 +54,9 @@ export type AuditLog = {
 };
 
 export async function adminRpc<T>(name: string, args: Record<string, unknown>): Promise<T> {
-  if (name === "admin_set_user_access") return runAdminAction({ data: { action: "user", userId: String(args._user_id), role: args._role as AdminUser["role"], blocked: Boolean(args._blocked) } }) as Promise<T>;
-  if (name === "admin_update_settings") return runAdminAction({ data: { action: "settings", appName: String(args._app_name), supportEmail: String(args._support_email), maintenanceMode: Boolean(args._maintenance_mode), allowRegistrations: Boolean(args._allow_registrations), aiDailyLimit: Number(args._ai_daily_limit) } }) as Promise<T>;
-  if (name === "super_admin_update_module") return runAdminAction({ data: { action: "module", key: String(args._key), enabled: Boolean(args._enabled) } }) as Promise<T>;
+  if (name === "admin_set_user_access") return runAdminAction({ data: { action: "user", userId: String(args["_user_id"]), role: args["_role"] as AdminUser["role"], blocked: Boolean(args["_blocked"]) } }) as Promise<T>;
+  if (name === "admin_update_settings") return runAdminAction({ data: { action: "settings", appName: String(args["_app_name"]), supportEmail: String(args["_support_email"]), maintenanceMode: Boolean(args["_maintenance_mode"]), allowRegistrations: Boolean(args["_allow_registrations"]), aiDailyLimit: Number(args["_ai_daily_limit"]) } }) as Promise<T>;
+  if (name === "super_admin_update_module") return runAdminAction({ data: { action: "module", key: String(args["_key"]), enabled: Boolean(args["_enabled"]) } }) as Promise<T>;
   throw new Error("Ação administrativa desconhecida.");
 }
 

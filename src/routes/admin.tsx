@@ -50,6 +50,11 @@ export const Route = createFileRoute("/admin")({
   head: () => ({
     meta: [
       { title: "Administração — Delivery OS" },
+      { name: "description", content: "Gestão protegida de usuários, módulos e configurações do Delivery OS." },
+      { property: "og:title", content: "Administração — Delivery OS" },
+      { property: "og:description", content: "Gestão protegida de usuários, módulos e configurações do Delivery OS." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { name: "robots", content: "noindex,nofollow" },
     ],
   }),
