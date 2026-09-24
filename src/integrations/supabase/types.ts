@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_audit_logs: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          details: Json
+          id: number
+          target_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          details?: Json
+          id?: never
+          target_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          details?: Json
+          id?: never
+          target_id?: string | null
+        }
+        Relationships: []
+      }
       ai_scan_usage: {
         Row: {
           count: number
@@ -305,15 +332,155 @@ export type Database = {
         }
         Relationships: []
       }
+      system_modules: {
+        Row: {
+          description: string
+          enabled: boolean
+          key: string
+          name: string
+          position: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          description?: string
+          enabled?: boolean
+          key: string
+          name: string
+          position?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          description?: string
+          enabled?: boolean
+          key?: string
+          name?: string
+          position?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      system_settings: {
+        Row: {
+          ai_daily_limit: number
+          allow_registrations: boolean
+          app_name: string
+          id: boolean
+          maintenance_mode: boolean
+          support_email: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          ai_daily_limit?: number
+          allow_registrations?: boolean
+          app_name?: string
+          id?: boolean
+          maintenance_mode?: boolean
+          support_email?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          ai_daily_limit?: number
+          allow_registrations?: boolean
+          app_name?: string
+          id?: boolean
+          maintenance_mode?: boolean
+          support_email?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      admin_list_users: {
+        Args: { _limit?: number; _search?: string }
+        Returns: {
+          created_at: string
+          delivery_count: number
+          email: string
+          full_name: string
+          is_blocked: boolean
+          last_sign_in_at: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }[]
+      }
+      admin_overview: { Args: never; Returns: Json }
+      admin_set_user_access: {
+        Args: {
+          _blocked: boolean
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: undefined
+      }
+      admin_update_settings: {
+        Args: {
+          _ai_daily_limit: number
+          _allow_registrations: boolean
+          _app_name: string
+          _maintenance_mode: boolean
+          _support_email: string
+        }
+        Returns: {
+          ai_daily_limit: number
+          allow_registrations: boolean
+          app_name: string
+          id: boolean
+          maintenance_mode: boolean
+          support_email: string
+          updated_at: string
+          updated_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "system_settings"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       consume_ai_scan_quota: { Args: { _limit: number }; Returns: number }
+      get_my_system_access: { Args: never; Returns: Json }
+      is_super_admin: { Args: { _user_id?: string }; Returns: boolean }
+      super_admin_update_module: {
+        Args: { _enabled: boolean; _key: string }
+        Returns: undefined
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "super_admin" | "admin" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -440,6 +607,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["super_admin", "admin", "user"],
+    },
   },
 } as const
