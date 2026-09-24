@@ -2,3 +2,4 @@
 - [x] Não alertar como atrasado um serviço já substituído por manutenção posterior
 - [x] Corrigir divergência de dia no salvamento e exibição de datas
 - [x] Melhorar desempenho e fluidez do PWA em dispositivos móveis
+- [x] Validar, ativar e proteger o acesso à área administrativa
