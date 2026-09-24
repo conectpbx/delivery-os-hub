@@ -884,7 +884,7 @@ function Entregas() {
                 <Suspense
                   fallback={
                     <div className="flex h-64 w-full items-center justify-center rounded-md border border-border bg-muted/40">
-                      <BrandSpinner />
+                      <BrandSpinner vehicle={profile.data?.vehicle} />
                     </div>
                   }
                 >
