@@ -28,7 +28,7 @@ export function BrandSpinner({
   vehicle,
 }: {
   className?: string;
-  vehicle?: string | null;
+  vehicle?: string | null | undefined;
 }) {
   const VehicleIcon = vehicleLoadingIcon(vehicle);
 
@@ -57,7 +57,7 @@ export function BrandLoading({
   vehicle,
 }: {
   label?: string;
-  vehicle?: string | null;
+  vehicle?: string | null | undefined;
 }) {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-3">

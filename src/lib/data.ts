@@ -12,7 +12,7 @@ type RealtimeListener = () => void;
 type SharedRealtimeSubscription = {
   channel: ReturnType<SupabaseClient["channel"]>;
   listeners: Set<RealtimeListener>;
-  removalTimer?: ReturnType<typeof setTimeout>;
+  removalTimer: ReturnType<typeof setTimeout> | undefined;
 };
 
 const realtimeSubscriptions = new Map<string, SharedRealtimeSubscription>();
@@ -30,7 +30,7 @@ function subscribeToTable(table: string, listener: RealtimeListener) {
       })
       .subscribe();
 
-    subscription = { channel, listeners };
+    subscription = { channel, listeners, removalTimer: undefined };
     realtimeSubscriptions.set(table, subscription);
   }
 
