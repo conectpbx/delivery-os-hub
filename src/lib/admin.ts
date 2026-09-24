@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { getAdminData, getMySystemAccess, runAdminAction } from "@/lib/admin.functions";
 
 export type AdminOverview = {
   totalUsers: number;
@@ -53,36 +53,17 @@ export type AuditLog = {
   created_at: string;
 };
 
-// The generated database types are updated by Lovable after migrations run.
-// Keep the privileged surface isolated here until that generation happens.
-const adminApi = supabase as unknown as {
-  rpc: (
-    name: string,
-    args?: Record<string, unknown>,
-  ) => Promise<{ data: unknown; error: Error | null }>;
-  from: (table: string) => {
-    select: (columns?: string) => {
-      order: (
-        column: string,
-        options: { ascending: boolean },
-      ) => {
-        limit: (limit: number) => Promise<{ data: unknown; error: Error | null }>;
-      };
-      single: () => Promise<{ data: unknown; error: Error | null }>;
-    };
-  };
-};
-
-async function rpc<T>(name: string, args?: Record<string, unknown>): Promise<T> {
-  const { data, error } = await adminApi.rpc(name, args);
-  if (error) throw error;
-  return data as T;
+export async function adminRpc<T>(name: string, args: Record<string, unknown>): Promise<T> {
+  if (name === "admin_set_user_access") return runAdminAction({ data: { action: "user", userId: String(args._user_id), role: args._role as AdminUser["role"], blocked: Boolean(args._blocked) } }) as Promise<T>;
+  if (name === "admin_update_settings") return runAdminAction({ data: { action: "settings", appName: String(args._app_name), supportEmail: String(args._support_email), maintenanceMode: Boolean(args._maintenance_mode), allowRegistrations: Boolean(args._allow_registrations), aiDailyLimit: Number(args._ai_daily_limit) } }) as Promise<T>;
+  if (name === "super_admin_update_module") return runAdminAction({ data: { action: "module", key: String(args._key), enabled: Boolean(args._enabled) } }) as Promise<T>;
+  throw new Error("Ação administrativa desconhecida.");
 }
 
 export function useIsAdmin(enabled = true) {
   return useQuery({
     queryKey: ["admin", "access"],
-    queryFn: () => rpc<boolean>("is_super_admin"),
+    queryFn: async () => (await getMySystemAccess()).role === "super_admin",
     enabled,
     staleTime: 60_000,
     retry: false,
@@ -92,7 +73,7 @@ export function useIsAdmin(enabled = true) {
 export function useSystemAccess(enabled = true) {
   return useQuery({
     queryKey: ["system", "access"],
-    queryFn: () => rpc<SystemAccess>("get_my_system_access"),
+    queryFn: () => getMySystemAccess() as Promise<SystemAccess>,
     enabled,
     staleTime: 30_000,
   });
@@ -101,15 +82,7 @@ export function useSystemAccess(enabled = true) {
 export function useSystemModules(enabled = true) {
   return useQuery({
     queryKey: ["admin", "modules"],
-    queryFn: async () => {
-      const { data, error } = await adminApi
-        .from("system_modules")
-        .select("*")
-        .order("position", { ascending: true })
-        .limit(50);
-      if (error) throw error;
-      return data as SystemModule[];
-    },
+    queryFn: () => getAdminData({ data: { section: "modules" } }) as Promise<SystemModule[]>,
     enabled,
   });
 }
@@ -117,7 +90,7 @@ export function useSystemModules(enabled = true) {
 export function useAdminOverview(enabled = true) {
   return useQuery({
     queryKey: ["admin", "overview"],
-    queryFn: () => rpc<AdminOverview>("admin_overview"),
+    queryFn: () => getAdminData({ data: { section: "overview" } }) as Promise<AdminOverview>,
     enabled,
   });
 }
@@ -125,7 +98,7 @@ export function useAdminOverview(enabled = true) {
 export function useAdminUsers(search: string, enabled = true) {
   return useQuery({
     queryKey: ["admin", "users", search],
-    queryFn: () => rpc<AdminUser[]>("admin_list_users", { _search: search, _limit: 100 }),
+    queryFn: () => getAdminData({ data: { section: "users", search } }) as Promise<AdminUser[]>,
     enabled,
   });
 }
@@ -133,11 +106,7 @@ export function useAdminUsers(search: string, enabled = true) {
 export function useSystemSettings(enabled = true) {
   return useQuery({
     queryKey: ["admin", "settings"],
-    queryFn: async () => {
-      const { data, error } = await adminApi.from("system_settings").select("*").single();
-      if (error) throw error;
-      return data as SystemSettings;
-    },
+    queryFn: () => getAdminData({ data: { section: "settings" } }) as Promise<SystemSettings>,
     enabled,
   });
 }
@@ -145,17 +114,8 @@ export function useSystemSettings(enabled = true) {
 export function useAuditLogs(enabled = true) {
   return useQuery({
     queryKey: ["admin", "audit"],
-    queryFn: async () => {
-      const { data, error } = await adminApi
-        .from("admin_audit_logs")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(50);
-      if (error) throw error;
-      return data as AuditLog[];
-    },
+    queryFn: () => getAdminData({ data: { section: "audit" } }) as Promise<AuditLog[]>,
     enabled,
   });
 }
 
-export { rpc as adminRpc };
