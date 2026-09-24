@@ -7,6 +7,57 @@ import { enqueueInsert, isOffline } from "@/lib/offline-queue";
 // Cliente sem tipagem de schema para tabelas acessadas de forma dinâmica.
 const db = supabase as unknown as SupabaseClient;
 
+type RealtimeListener = () => void;
+
+type SharedRealtimeSubscription = {
+  channel: ReturnType<SupabaseClient["channel"]>;
+  listeners: Set<RealtimeListener>;
+  removalTimer: ReturnType<typeof setTimeout> | undefined;
+};
+
+const realtimeSubscriptions = new Map<string, SharedRealtimeSubscription>();
+
+function subscribeToTable(table: string, listener: RealtimeListener) {
+  let subscription = realtimeSubscriptions.get(table);
+
+  if (!subscription) {
+    const listeners = new Set<RealtimeListener>();
+    const uniqueChannelName = `${table}-live-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const channel = supabase
+      .channel(uniqueChannelName)
+      .on("postgres_changes", { event: "*", schema: "public", table }, () => {
+        listeners.forEach((notify) => notify());
+      })
+      .subscribe();
+
+    subscription = { channel, listeners, removalTimer: undefined };
+    realtimeSubscriptions.set(table, subscription);
+  }
+
+  if (subscription.removalTimer) {
+    clearTimeout(subscription.removalTimer);
+    subscription.removalTimer = undefined;
+  }
+
+  subscription.listeners.add(listener);
+
+  return () => {
+    const current = realtimeSubscriptions.get(table);
+    if (!current) return;
+
+    current.listeners.delete(listener);
+    if (current.listeners.size > 0) return;
+
+    current.removalTimer = setTimeout(() => {
+      const latest = realtimeSubscriptions.get(table);
+      if (latest !== current || latest.listeners.size > 0) return;
+
+      realtimeSubscriptions.delete(table);
+      void supabase.removeChannel(latest.channel);
+    }, 500);
+  };
+}
+
 export type Delivery = {
   id: string;
   app_name: string;
@@ -95,18 +146,9 @@ function useList<T>(key: string, table: string, orderCol: string) {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    const channel = supabase
-      .channel(`${table}-live`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table },
-        () => void queryClient.invalidateQueries({ queryKey: [key] }),
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
+    return subscribeToTable(table, () => {
+      void queryClient.invalidateQueries({ queryKey: [key] });
+    });
   }, [key, queryClient, table]);
 
   return useQuery({
@@ -156,18 +198,9 @@ export function useProfile(enabled = true) {
   useEffect(() => {
     if (!enabled) return;
 
-    const channel = supabase
-      .channel("profile-live")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "profiles" },
-        () => void queryClient.invalidateQueries({ queryKey: ["profile"] }),
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
+    return subscribeToTable("profiles", () => {
+      void queryClient.invalidateQueries({ queryKey: ["profile"] });
+    });
   }, [enabled, queryClient]);
 
   return useQuery({
