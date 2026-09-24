@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { BrandLoading } from "@/components/BrandLoader";
 import { useSystemAccess } from "@/lib/admin";
+import { useProfile } from "@/lib/data";
 
 const nav = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, module: "dashboard" },
@@ -41,6 +42,7 @@ export function AppShell({
   children: ReactNode;
 }) {
   const { session, loading } = useAuth();
+  const profile = useProfile(Boolean(session));
   const access = useSystemAccess(Boolean(session));
   const isSuperAdmin = access.data?.role === "super_admin";
   const visibleNav = nav.filter(
@@ -62,8 +64,8 @@ export function AppShell({
     setOpen(false);
   }, [pathname]);
 
-  if (loading || !session) {
-    return <BrandLoading />;
+  if (loading || !session || profile.isLoading) {
+    return <BrandLoading vehicle={profile.data?.vehicle} />;
   }
 
   return (

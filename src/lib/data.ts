@@ -150,10 +150,12 @@ export function useUpdate<T extends Record<string, unknown>>(table: string, key:
 
 export const useUpdateApp = () => useUpdate<{ fee_percent: number }>("apps", "apps");
 
-export function useProfile() {
+export function useProfile(enabled = true) {
   const queryClient = useQueryClient();
 
   useEffect(() => {
+    if (!enabled) return;
+
     const channel = supabase
       .channel("profile-live")
       .on(
@@ -166,10 +168,11 @@ export function useProfile() {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [queryClient]);
+  }, [enabled, queryClient]);
 
   return useQuery({
     queryKey: ["profile"],
+    enabled,
     queryFn: async () => {
       const { data, error } = await db.from("profiles").select("*").maybeSingle();
       if (error) throw error;
