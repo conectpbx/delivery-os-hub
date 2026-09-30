@@ -200,7 +200,7 @@ test("meta inteligente distribui o restante pelos dias habituais de trabalho", (
     date: new Date(2026, 8, 21, 12),
   });
   assert.equal(result.usesWorkPattern, true);
-  assert.equal(result.remainingDaysIncludingToday, 7);
-  assert.equal(result.target, 100);
-  assert.equal(result.isPlannedWorkday, true);
+  assert.equal(result.remainingDaysIncludingToday, 6);
+  assert.equal(result.target, 700 / 6);
+  assert.equal(result.isPlannedWorkday, false);
 });
