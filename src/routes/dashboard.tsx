@@ -137,13 +137,22 @@ function Dashboard() {
   const { grid, max } = useMemo(() => heatmap(deliveriesData), [deliveriesData]);
 
   const series = useMemo(() => {
+    const deliveriesByDay = new Map<string, typeof deliveriesData>();
+    for (const delivery of deliveriesData) {
+      const occurred = new Date(delivery.occurred_at);
+      const key = `${occurred.getFullYear()}-${occurred.getMonth()}-${occurred.getDate()}`;
+      const bucket = deliveriesByDay.get(key) ?? [];
+      bucket.push(delivery);
+      deliveriesByDay.set(key, bucket);
+    }
     const days: { day: string; receita: number; lucro: number }[] = [];
     const cursor = startOfDay(from);
     const last = startOfDay(to);
     while (cursor.getTime() <= last.getTime()) {
       const dayFrom = startOfDay(cursor);
       const dayTo = endOfDay(cursor);
-      const dd = deliveriesData.filter((x) => inRange(x.occurred_at, dayFrom, dayTo));
+      const dayKey = `${cursor.getFullYear()}-${cursor.getMonth()}-${cursor.getDate()}`;
+      const dd = deliveriesByDay.get(dayKey) ?? [];
       const sum = summarizeOperational(dd, expensesData, cpk, maintenanceReserve.costPerKm, {
         from: dayFrom,
         to: dayTo,
@@ -160,19 +169,27 @@ function Dashboard() {
     return days;
   }, [deliveriesData, expensesData, cpk, maintenanceReserve, from, to]);
 
-  const dailyGoalPlan = adaptiveDailyRevenueGoal({
-    deliveries: deliveriesData,
-    goals: goals.data ?? [],
-    profile: profile.data,
-    date: now,
-  });
+  const dailyGoalPlan = useMemo(
+    () =>
+      adaptiveDailyRevenueGoal({
+        deliveries: deliveriesData,
+        goals: goals.data ?? [],
+        profile: profile.data,
+        date: now,
+      }),
+    [deliveriesData, goals.data, profile.data, now],
+  );
   const dailyGoal = dailyGoalPlan.target || Number(profile.data?.daily_goal ?? 200);
-  const todayRevenue = summarize(
-    deliveriesData.filter((d) => inRange(d.occurred_at, startOfDay(now), endOfDay(now))),
-    [],
-    [],
-    cpk,
-  ).revenue;
+  const todayRevenue = useMemo(
+    () =>
+      summarize(
+        deliveriesData.filter((d) => inRange(d.occurred_at, startOfDay(now), endOfDay(now))),
+        [],
+        [],
+        cpk,
+      ).revenue,
+    [deliveriesData, now, cpk],
+  );
 
   useGoalCelebrations([
     {
@@ -267,7 +284,7 @@ function Dashboard() {
         <StatCard
           label="Meta de hoje"
           value={`${num((todayRevenue / dailyGoal) * 100, 0)}%`}
-          hint={`${brl(todayRevenue)} hoje${dailyGoalPlan.monthTarget > 0 ? ` · ${dailyGoalPlan.remainingDaysIncludingToday} dias para ${brl(dailyGoalPlan.monthTarget)}` : ""}`}
+          hint={`${brl(todayRevenue)} hoje${dailyGoalPlan.monthTarget > 0 ? ` · ${dailyGoalPlan.remainingDaysIncludingToday} ${dailyGoalPlan.usesWorkPattern ? "dias de trabalho" : "dias"} para ${brl(dailyGoalPlan.monthTarget)}` : ""}`}
         />
         <StatCard
           label="Reserva de manutenção"

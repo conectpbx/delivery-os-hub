@@ -3,3 +3,5 @@
 - [x] Corrigir divergência de dia no salvamento e exibição de datas
 - [x] Melhorar desempenho e fluidez do PWA em dispositivos móveis
 - [x] Validar, ativar e proteger o acesso à área administrativa
+- [x] Otimizar cálculos e persistência do PWA no celular
+- [x] Adaptar a meta diária aos dias habituais de trabalho

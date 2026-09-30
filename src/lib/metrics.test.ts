@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { Expense, Maintenance } from "./data";
+import type { Delivery, Expense, Goal, Maintenance, Profile } from "./data";
 import { buildMaintenanceAlerts } from "./alerts";
-import { maintenanceReservePerKm, nextMonthlyDueDate, proratedExpenseTotal } from "./metrics";
+import {
+  adaptiveDailyRevenueGoal,
+  maintenanceReservePerKm,
+  nextMonthlyDueDate,
+  proratedExpenseTotal,
+} from "./metrics";
 
 const maintenance = (values: Partial<Maintenance>): Maintenance => ({
   id: "id",
@@ -74,7 +79,10 @@ test("permite diluir qualquer categoria e mantém compatibilidade com novas cate
       amount: 310,
     }),
   ];
-  assert.equal(proratedExpenseTotal(expenses, new Date(2026, 8, 10), new Date(2026, 8, 10)), 10);
+  assert.equal(
+    proratedExpenseTotal(expenses, new Date(2026, 8, 10), new Date(2026, 8, 10)),
+    310 / 30,
+  );
 });
 
 test("permite lançar seguro integralmente quando o usuário escolher", () => {
@@ -133,4 +141,66 @@ test("encerra o alerta vencido quando o mesmo serviço foi realizado novamente",
     alerts.map((alert) => alert.id),
     ["manut-agendada-oleo-novo"],
   );
+});
+
+const goal = (month: string, target: number): Goal => ({
+  id: "goal-id",
+  month,
+  revenue_target: target,
+  profit_target: 0,
+  deliveries_target: 0,
+});
+
+const profile: Profile = {
+  id: "profile-id",
+  full_name: null,
+  vehicle: null,
+  fuel_efficiency: 12,
+  daily_goal: 200,
+  monthly_goal: 0,
+};
+
+const delivery = (id: string, occurredAt: string, earnings = 100): Delivery => ({
+  id,
+  app_name: "App",
+  earnings,
+  tip: 0,
+  distance_km: 5,
+  duration_min: 20,
+  payment_method: "pix",
+  idle_min: 0,
+  pickup_address: null,
+  dropoff_address: null,
+  lat: null,
+  lng: null,
+  occurred_at: occurredAt,
+});
+
+test("meta inteligente usa todos os dias restantes sem histórico suficiente", () => {
+  const result = adaptiveDailyRevenueGoal({
+    deliveries: [],
+    goals: [goal("2026-09-01", 1_100)],
+    profile,
+    date: new Date(2026, 8, 20, 12),
+  });
+  assert.equal(result.remainingDaysIncludingToday, 11);
+  assert.equal(result.target, 100);
+  assert.equal(result.usesWorkPattern, false);
+});
+
+test("meta inteligente distribui o restante pelos dias habituais de trabalho", () => {
+  const historical = [
+    "2026-07-07", "2026-07-08", "2026-07-09", "2026-07-10",
+    "2026-07-14", "2026-07-15", "2026-07-16", "2026-07-17",
+  ].map((date, index) => delivery(`history-${index}`, `${date}T12:00:00-03:00`));
+  const result = adaptiveDailyRevenueGoal({
+    deliveries: historical,
+    goals: [goal("2026-09-01", 700)],
+    profile,
+    date: new Date(2026, 8, 21, 12),
+  });
+  assert.equal(result.usesWorkPattern, true);
+  assert.equal(result.remainingDaysIncludingToday, 6);
+  assert.equal(result.target, 700 / 6);
+  assert.equal(result.isPlannedWorkday, false);
 });

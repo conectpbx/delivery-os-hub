@@ -156,7 +156,7 @@ export function buildAlerts(input: {
   // ---- Metas ----
   const dailyGoalPlan = adaptiveDailyRevenueGoal({ deliveries, goals, profile, date: now });
   const dailyGoal = dailyGoalPlan.target;
-  if (dailyGoal > 0) {
+  if (dailyGoal > 0 && dailyGoalPlan.isPlannedWorkday) {
     const pct = (sToday.revenue / dailyGoal) * 100;
     const hour = now.getHours();
     if (pct >= 100) {
