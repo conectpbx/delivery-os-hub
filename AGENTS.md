@@ -8,3 +8,6 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- A meta diária inteligente aprende os dias habituais de trabalho com oito datas ativas nos 56 dias anteriores; sem histórico suficiente, usa todos os dias restantes para evitar suposições frágeis.
+- A persistência offline do cache é agrupada antes da gravação no IndexedDB para reduzir trabalho na interface móvel sem perder dados.

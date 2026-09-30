@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Delivery } from "@/lib/data";
 import { fetchRouteWithFallback } from "@/lib/geo";
@@ -74,14 +75,17 @@ function haversine(a: [number, number], b: [number, number]) {
  * confirmada/salva até o último ponto informado.
  */
 export function useChainedDistance(deliveries: Delivery[]) {
-  const ordered = [...deliveries].sort(
-    (a, b) => new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime(),
-  );
-  const kmSum = ordered.reduce((s, d) => s + Number(d.distance_km), 0);
-
-  const chainPoints = orderedRoutePoints(ordered);
-
-  const chainKey = chainPoints.map(([a, b]) => `${a.toFixed(5)},${b.toFixed(5)}`).join("|");
+  const { chainKey, chainPoints, kmSum } = useMemo(() => {
+    const ordered = [...deliveries].sort(
+      (a, b) => new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime(),
+    );
+    const points = orderedRoutePoints(ordered);
+    return {
+      kmSum: ordered.reduce((sum, delivery) => sum + Number(delivery.distance_km), 0),
+      chainPoints: points,
+      chainKey: points.map(([lat, lng]) => `${lat.toFixed(5)},${lng.toFixed(5)}`).join("|"),
+    };
+  }, [deliveries]);
   const chained = useQuery({
     queryKey: ["chained-km", chainKey],
     enabled: chainPoints.length >= 2,

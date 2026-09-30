@@ -305,21 +305,23 @@ export function adaptiveDailyRevenueGoal(input: {
   const monthTarget = currentRevenueTarget(goals, profile, date);
   const manualDailyGoal = Number(profile?.daily_goal ?? 0);
 
+  const emptyPlan = {
+    target: manualDailyGoal,
+    monthTarget: 0,
+    revenueBeforeToday: 0,
+    remainingBeforeToday: 0,
+    remainingDaysIncludingToday: 0,
+    usesWorkPattern: false,
+    isPlannedWorkday: true,
+    isAdjusted: false,
+  };
+
   if (monthTarget <= 0) {
-    return {
-      target: manualDailyGoal,
-      monthTarget: 0,
-      revenueBeforeToday: 0,
-      remainingBeforeToday: 0,
-      remainingDaysIncludingToday: 0,
-      isAdjusted: false,
-    };
+    return emptyPlan;
   }
 
   const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
   const todayStart = startOfDay(date);
-  const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-  const remainingDaysIncludingToday = Math.max(1, daysInMonth - date.getDate() + 1);
   const revenueBeforeToday = deliveries
     .filter((d) => {
       const occurred = new Date(d.occurred_at);
@@ -327,6 +329,36 @@ export function adaptiveDailyRevenueGoal(input: {
     })
     .reduce((sum, d) => sum + Number(d.earnings) + Number(d.tip), 0);
   const remainingBeforeToday = Math.max(0, monthTarget - revenueBeforeToday);
+
+  // Aprende a rotina usando os últimos 56 dias anteriores ao mês atual. O padrão
+  // só é aplicado quando há histórico suficiente para não penalizar novos usuários.
+  const historyStart = new Date(monthStart);
+  historyStart.setDate(historyStart.getDate() - 56);
+  const workedDates = new Map<string, number>();
+  for (const delivery of deliveries) {
+    const occurred = new Date(delivery.occurred_at);
+    if (occurred < historyStart || occurred >= monthStart) continue;
+    const key = `${occurred.getFullYear()}-${occurred.getMonth()}-${occurred.getDate()}`;
+    workedDates.set(key, occurred.getDay());
+  }
+
+  const usesWorkPattern = workedDates.size >= 8;
+  const weekdayFrequency = new Map<number, number>();
+  for (const weekday of workedDates.values()) {
+    weekdayFrequency.set(weekday, (weekdayFrequency.get(weekday) ?? 0) + 1);
+  }
+  const plannedWeekdays = new Set(
+    [...weekdayFrequency.entries()]
+      .filter(([, activeDays]) => activeDays >= 2)
+      .map(([weekday]) => weekday),
+  );
+  const effectivePattern = usesWorkPattern && plannedWeekdays.size > 0;
+  const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+  let remainingDaysIncludingToday = 0;
+  for (const cursor = startOfDay(date); cursor <= monthEnd; cursor.setDate(cursor.getDate() + 1)) {
+    if (!effectivePattern || plannedWeekdays.has(cursor.getDay())) remainingDaysIncludingToday += 1;
+  }
+  remainingDaysIncludingToday = Math.max(1, remainingDaysIncludingToday);
   const adjustedTarget = remainingBeforeToday / remainingDaysIncludingToday;
 
   return {
@@ -335,6 +367,8 @@ export function adaptiveDailyRevenueGoal(input: {
     revenueBeforeToday,
     remainingBeforeToday,
     remainingDaysIncludingToday,
+    usesWorkPattern: effectivePattern,
+    isPlannedWorkday: !effectivePattern || plannedWeekdays.has(date.getDay()),
     isAdjusted: manualDailyGoal > 0 ? Math.abs(adjustedTarget - manualDailyGoal) >= 0.01 : true,
   };
 }

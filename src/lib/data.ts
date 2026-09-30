@@ -13,6 +13,7 @@ type SharedRealtimeSubscription = {
   channel: ReturnType<SupabaseClient["channel"]>;
   listeners: Set<RealtimeListener>;
   removalTimer: ReturnType<typeof setTimeout> | undefined;
+  notificationTimer: ReturnType<typeof setTimeout> | undefined;
 };
 
 const realtimeSubscriptions = new Map<string, SharedRealtimeSubscription>();
@@ -26,11 +27,16 @@ function subscribeToTable(table: string, listener: RealtimeListener) {
     const channel = supabase
       .channel(uniqueChannelName)
       .on("postgres_changes", { event: "*", schema: "public", table }, () => {
-        listeners.forEach((notify) => notify());
+        const current = realtimeSubscriptions.get(table);
+        if (!current || current.notificationTimer) return;
+        current.notificationTimer = setTimeout(() => {
+          current.notificationTimer = undefined;
+          listeners.forEach((notify) => notify());
+        }, 250);
       })
       .subscribe();
 
-    subscription = { channel, listeners, removalTimer: undefined };
+    subscription = { channel, listeners, removalTimer: undefined, notificationTimer: undefined };
     realtimeSubscriptions.set(table, subscription);
   }
 
@@ -52,6 +58,7 @@ function subscribeToTable(table: string, listener: RealtimeListener) {
       const latest = realtimeSubscriptions.get(table);
       if (latest !== current || latest.listeners.size > 0) return;
 
+      if (latest.notificationTimer) clearTimeout(latest.notificationTimer);
       realtimeSubscriptions.delete(table);
       void supabase.removeChannel(latest.channel);
     }, 500);
@@ -161,6 +168,7 @@ function useList<T>(key: string, table: string, orderCol: string) {
       if (error) throw error;
       return (data ?? []) as T[];
     },
+    staleTime: table === "apps" || table === "goals" ? 1000 * 60 * 5 : 1000 * 60,
   });
 }
 
@@ -211,6 +219,7 @@ export function useProfile(enabled = true) {
       if (error) throw error;
       return data as Profile | null;
     },
+    staleTime: 1000 * 60 * 5,
   });
 }
 

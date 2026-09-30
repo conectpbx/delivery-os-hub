@@ -59,17 +59,27 @@ function Metas() {
   const expenses = useExpenses();
   const fuelings = useFuelings();
 
-  const cpk = costPerKm(fuelings.data ?? [], profile.data);
-  const months = byMonth(deliveries.data ?? [], expenses.data ?? [], cpk);
+  const cpk = useMemo(
+    () => costPerKm(fuelings.data ?? [], profile.data),
+    [fuelings.data, profile.data],
+  );
+  const months = useMemo(
+    () => byMonth(deliveries.data ?? [], expenses.data ?? [], cpk),
+    [deliveries.data, expenses.data, cpk],
+  );
   const current = monthKey(now);
   const currentSummary = months.find((m) => m.month === current);
   const currentGoals = (goals.data ?? []).filter((goal) => goal.month.slice(0, 7) === current);
-  const dailyGoalPlan = adaptiveDailyRevenueGoal({
-    deliveries: deliveries.data ?? [],
-    goals: goals.data ?? [],
-    profile: profile.data,
-    date: now,
-  });
+  const dailyGoalPlan = useMemo(
+    () =>
+      adaptiveDailyRevenueGoal({
+        deliveries: deliveries.data ?? [],
+        goals: goals.data ?? [],
+        profile: profile.data,
+        date: now,
+      }),
+    [deliveries.data, goals.data, profile.data, now],
+  );
 
   const [form, setForm] = useState({
     month: current,
@@ -330,11 +340,12 @@ function Metas() {
                   {" "}
                   {dailyGoalPlan.remainingDaysIncludingToday}
                 </span>{" "}
-                dias.
+                {dailyGoalPlan.usesWorkPattern ? " dias de trabalho." : " dias."}
               </p>
               <p className="mt-2 text-xs text-muted-foreground">
                 O cálculo considera {brl(dailyGoalPlan.revenueBeforeToday)} já feitos antes de hoje
-                e redistribui o faltante automaticamente.
+                e redistribui o faltante automaticamente
+                {dailyGoalPlan.usesWorkPattern ? " conforme os dias em que você costuma trabalhar." : "."}
               </p>
             </div>
           ) : null}
