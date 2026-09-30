@@ -491,23 +491,25 @@ function Entregas() {
   todayStart.setHours(0, 0, 0, 0);
   const todayEnd = new Date(now);
   todayEnd.setHours(23, 59, 59, 999);
+  const todayStartTime = todayStart.getTime();
+  const todayEndTime = todayEnd.getTime();
   const rangeStart =
     histRange === "hoje"
-      ? todayStart.getTime()
+      ? todayStartTime
       : histRange === "7d"
-        ? todayEnd.getTime() - 7 * 86400000
+        ? todayEndTime - 7 * 86400000
         : histRange === "mes"
           ? new Date(now.getFullYear(), now.getMonth(), 1).getTime()
           : 0;
-  const rangeEnd = histRange === "mes" ? endOfMonth(now).getTime() : todayEnd.getTime();
+  const rangeEnd = histRange === "mes" ? endOfMonth(now).getTime() : todayEndTime;
   const all = useMemo(() => list.data ?? [], [list.data]);
   const today = useMemo(
     () =>
       all.filter((delivery) => {
         const time = new Date(delivery.occurred_at).getTime();
-        return time >= todayStart.getTime() && time <= todayEnd.getTime();
+        return time >= todayStartTime && time <= todayEndTime;
       }),
-    [all, todayStart.getTime(), todayEnd.getTime()],
+    [all, todayEndTime, todayStartTime],
   );
   const data = useMemo(
     () =>
@@ -521,12 +523,16 @@ function Entregas() {
   const total = today.reduce((s, d) => s + Number(d.earnings) + Number(d.tip), 0);
   const deliveryKmSum = today.reduce((s, d) => s + Number(d.distance_km), 0);
   const idle = today.reduce((s, d) => s + Number(d.idle_min), 0);
-  const dailyGoal = adaptiveDailyRevenueGoal({
-    deliveries: all,
-    goals: goals.data ?? [],
-    profile: profile.data,
-    date: now,
-  }).target;
+  const dailyGoal = useMemo(
+    () =>
+      adaptiveDailyRevenueGoal({
+        deliveries: all,
+        goals: goals.data ?? [],
+        profile: profile.data,
+        date: now,
+      }).target,
+    [all, goals.data, profile.data, now],
+  );
   const goalRemaining = Math.max(0, dailyGoal - total);
   const deliveryIntel = buildDeliveryInsights({
     all,
