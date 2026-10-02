@@ -1,6 +1,34 @@
 import type { Delivery, Expense, Fueling, Goal, Maintenance, Profile } from "./data";
 import { monthKey, parseDateValue } from "./format";
 
+const BUSINESS_TIME_ZONE = "America/Sao_Paulo";
+
+/** Converte um instante para a data/hora civil usada pelo negócio. */
+function operationalDate(value: string) {
+  const instant = parseDateValue(value);
+  if (!value.includes("T")) return instant;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: BUSINESS_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(instant);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((item) => item.type === type)?.value ?? 0);
+  return new Date(
+    part("year"),
+    part("month") - 1,
+    part("day"),
+    part("hour"),
+    part("minute"),
+    part("second"),
+  );
+}
+
 export function avgFuelPrice(fuelings: Fueling[]) {
   const valid = fuelings.filter((f) => Number(f.price_per_liter) > 0);
   if (!valid.length) return 6.1;
@@ -324,7 +352,7 @@ export function adaptiveDailyRevenueGoal(input: {
   const todayStart = startOfDay(date);
   const revenueBeforeToday = deliveries
     .filter((d) => {
-      const occurred = new Date(d.occurred_at);
+      const occurred = operationalDate(d.occurred_at);
       return occurred >= monthStart && occurred < todayStart;
     })
     .reduce((sum, d) => sum + Number(d.earnings) + Number(d.tip), 0);
@@ -336,7 +364,7 @@ export function adaptiveDailyRevenueGoal(input: {
   historyStart.setDate(historyStart.getDate() - 56);
   const workedDates = new Map<string, number>();
   for (const delivery of deliveries) {
-    const occurred = new Date(delivery.occurred_at);
+    const occurred = operationalDate(delivery.occurred_at);
     if (occurred < historyStart || occurred >= monthStart) continue;
     const key = `${occurred.getFullYear()}-${occurred.getMonth()}-${occurred.getDate()}`;
     workedDates.set(key, occurred.getDay());
@@ -370,6 +398,92 @@ export function adaptiveDailyRevenueGoal(input: {
     usesWorkPattern: effectivePattern,
     isPlannedWorkday: !effectivePattern || plannedWeekdays.has(date.getDay()),
     isAdjusted: manualDailyGoal > 0 ? Math.abs(adjustedTarget - manualDailyGoal) >= 0.01 : true,
+  };
+}
+
+export type GoalPerformanceAnalysis = {
+  currentRevenue: number;
+  projectedRevenue: number;
+  previousAverageRevenue: number;
+  changeVsPreviousPercent: number | null;
+  bestWeekday: string | null;
+  bestWeekdayAverage: number;
+  suggestedRevenueTarget: number;
+  completedMonths: number;
+};
+
+const WEEKDAY_LABELS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+
+/** Analisa somente meses civis concluídos e mantém o mês atual isolado na virada. */
+export function goalPerformanceAnalysis(
+  deliveries: Delivery[],
+  date = new Date(),
+): GoalPerformanceAnalysis {
+  const currentKey = monthKey(date);
+  const currentMonthDeliveries = deliveries.filter(
+    (delivery) => monthKey(operationalDate(delivery.occurred_at)) === currentKey,
+  );
+  const currentRevenue = currentMonthDeliveries.reduce(
+    (sum, delivery) => sum + Number(delivery.earnings) + Number(delivery.tip),
+    0,
+  );
+  const elapsedDays = Math.max(1, date.getDate());
+  const daysInCurrentMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  const projectedRevenue = (currentRevenue / elapsedDays) * daysInCurrentMonth;
+
+  const revenueByCompletedMonth = new Map<string, number>();
+  const weekdayRevenue = new Map<number, { revenue: number; activeDates: Set<string> }>();
+  for (const delivery of deliveries) {
+    const occurred = operationalDate(delivery.occurred_at);
+    const key = monthKey(occurred);
+    if (key >= currentKey) continue;
+    const revenue = Number(delivery.earnings) + Number(delivery.tip);
+    revenueByCompletedMonth.set(key, (revenueByCompletedMonth.get(key) ?? 0) + revenue);
+    const weekday = occurred.getDay();
+    const item = weekdayRevenue.get(weekday) ?? { revenue: 0, activeDates: new Set<string>() };
+    item.revenue += revenue;
+    item.activeDates.add(`${occurred.getFullYear()}-${occurred.getMonth()}-${occurred.getDate()}`);
+    weekdayRevenue.set(weekday, item);
+  }
+
+  const recentMonths = [...revenueByCompletedMonth.entries()]
+    .filter(([, revenue]) => revenue > 0)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(-3);
+  const previousAverageRevenue = recentMonths.length
+    ? recentMonths.reduce((sum, [, revenue]) => sum + revenue, 0) / recentMonths.length
+    : 0;
+  const comparisonRevenue = projectedRevenue || currentRevenue;
+  const changeVsPreviousPercent =
+    previousAverageRevenue > 0
+      ? ((comparisonRevenue - previousAverageRevenue) / previousAverageRevenue) * 100
+      : null;
+
+  const bestWeekdayEntry = [...weekdayRevenue.entries()]
+    .map(([weekday, item]) => ({
+      weekday,
+      average: item.activeDates.size ? item.revenue / item.activeDates.size : 0,
+    }))
+    .sort((a, b) => b.average - a.average)[0];
+  const targetMonthDays = daysInCurrentMonth;
+  const historicalDailyAverage = recentMonths.length
+    ? recentMonths.reduce((sum, [key, revenue]) => {
+        const [year, month] = key.split("-").map(Number);
+        const days = new Date(year ?? date.getFullYear(), month ?? 1, 0).getDate();
+        return sum + revenue / days;
+      }, 0) / recentMonths.length
+    : 0;
+
+  return {
+    currentRevenue,
+    projectedRevenue,
+    previousAverageRevenue,
+    changeVsPreviousPercent,
+    bestWeekday: bestWeekdayEntry ? (WEEKDAY_LABELS[bestWeekdayEntry.weekday] ?? null) : null,
+    bestWeekdayAverage: bestWeekdayEntry?.average ?? 0,
+    suggestedRevenueTarget:
+      historicalDailyAverage > 0 ? historicalDailyAverage * targetMonthDays * 1.1 : 0,
+    completedMonths: recentMonths.length,
   };
 }
 

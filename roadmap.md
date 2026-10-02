@@ -5,3 +5,5 @@
 - [x] Validar, ativar e proteger o acesso à área administrativa
 - [x] Otimizar cálculos e persistência do PWA no celular
 - [x] Adaptar a meta diária aos dias habituais de trabalho
+- [x] Exibir, editar e acompanhar todas as metas cadastradas
+- [x] Sugerir melhorias de desempenho sem misturar dados na virada do mês

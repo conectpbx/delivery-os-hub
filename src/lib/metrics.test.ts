@@ -4,6 +4,7 @@ import type { Delivery, Expense, Goal, Maintenance, Profile } from "./data";
 import { buildMaintenanceAlerts } from "./alerts";
 import {
   adaptiveDailyRevenueGoal,
+  goalPerformanceAnalysis,
   maintenanceReservePerKm,
   nextMonthlyDueDate,
   proratedExpenseTotal,
@@ -190,8 +191,14 @@ test("meta inteligente usa todos os dias restantes sem histórico suficiente", (
 
 test("meta inteligente distribui o restante pelos dias habituais de trabalho", () => {
   const historical = [
-    "2026-07-07", "2026-07-08", "2026-07-09", "2026-07-10",
-    "2026-07-14", "2026-07-15", "2026-07-16", "2026-07-17",
+    "2026-07-07",
+    "2026-07-08",
+    "2026-07-09",
+    "2026-07-10",
+    "2026-07-14",
+    "2026-07-15",
+    "2026-07-16",
+    "2026-07-17",
   ].map((date, index) => delivery(`history-${index}`, `${date}T12:00:00-03:00`));
   const result = adaptiveDailyRevenueGoal({
     deliveries: historical,
@@ -203,4 +210,32 @@ test("meta inteligente distribui o restante pelos dias habituais de trabalho", (
   assert.equal(result.remainingDaysIncludingToday, 6);
   assert.equal(result.target, 700 / 6);
   assert.equal(result.isPlannedWorkday, false);
+});
+
+test("meta inteligente reinicia o progresso na virada do mês", () => {
+  const result = adaptiveDailyRevenueGoal({
+    deliveries: [delivery("setembro", "2026-09-30T23:30:00-03:00", 900)],
+    goals: [goal("2026-10-01", 3_100)],
+    profile,
+    date: new Date(2026, 9, 1, 8),
+  });
+  assert.equal(result.revenueBeforeToday, 0);
+  assert.equal(result.remainingBeforeToday, 3_100);
+  assert.equal(result.remainingDaysIncludingToday, 31);
+  assert.equal(result.target, 100);
+});
+
+test("análise de desempenho não carrega receita do mês anterior", () => {
+  const result = goalPerformanceAnalysis(
+    [
+      delivery("agosto", "2026-08-15T12:00:00-03:00", 620),
+      delivery("setembro", "2026-09-30T23:30:00-03:00", 3_000),
+      delivery("outubro", "2026-10-01T08:00:00-03:00", 100),
+    ],
+    new Date(2026, 9, 1, 12),
+  );
+  assert.equal(result.currentRevenue, 100);
+  assert.equal(result.projectedRevenue, 3_100);
+  assert.equal(result.previousAverageRevenue, 1_810);
+  assert.equal(result.completedMonths, 2);
 });
