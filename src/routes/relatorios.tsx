@@ -1,13 +1,21 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Suspense, lazy, useMemo } from "react";
+import { Suspense, lazy, useMemo, useState } from "react";
 
 const MonthsBarChart = lazy(() => import("@/components/charts/MonthsBarChart"));
-import { FileDown, Printer } from "lucide-react";
+import { Clock3, FileDown, Gauge, PackageCheck, Printer, Route as RouteIcon } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
 import { Button } from "@/components/ui/button";
 import { useDeliveries, useExpenses, useFuelings, useMaintenances, useProfile } from "@/lib/data";
-import { brl, dateTimeLabel, downloadCsv, monthLabel, num, paymentMethodLabel } from "@/lib/format";
+import {
+  brl,
+  dateTimeLabel,
+  downloadCsv,
+  minutesLabel,
+  monthLabel,
+  num,
+  paymentMethodLabel,
+} from "@/lib/format";
 import {
   byApp,
   byMonth,
@@ -16,8 +24,10 @@ import {
   costsByCategory,
   filterByRange,
   maintenanceReservePerKm,
+  reportBreakdown,
   summarizeOperational,
   summarizeRecordedCosts,
+  type ReportGranularity,
 } from "@/lib/metrics";
 import { PeriodFilter, PeriodSummary, usePeriodSelection } from "@/components/PeriodFilter";
 
@@ -49,6 +59,7 @@ function Relatorios() {
   const maintenances = useMaintenances();
   const profile = useProfile();
   const period = usePeriodSelection(3);
+  const [granularity, setGranularity] = useState<ReportGranularity>("day");
 
   const deliveriesData = useMemo(() => deliveries.data ?? [], [deliveries.data]);
   const expensesData = useMemo(() => expenses.data ?? [], [expenses.data]);
@@ -106,6 +117,15 @@ function Relatorios() {
   );
   const categories = useMemo(() => costsByCategory(perExpenses), [perExpenses]);
   const totalCost = total.fuelCost + total.otherCost + total.maintenanceCost;
+  const totalMinutes = total.workedMin + total.idleMin;
+  const activeDays = useMemo(
+    () => new Set(perDeliveries.map((delivery) => delivery.occurred_at.slice(0, 10))).size,
+    [perDeliveries],
+  );
+  const breakdown = useMemo(
+    () => reportBreakdown(perDeliveries, perExpenses, perFuelings, perMaint, granularity),
+    [granularity, perDeliveries, perExpenses, perFuelings, perMaint],
+  );
   const chart = useMemo(
     () =>
       operationalMonths.map((m) => ({
@@ -171,6 +191,43 @@ function Relatorios() {
     ]);
   }
 
+  function exportBreakdown() {
+    downloadCsv(`detalhamento-${granularity}-delivery-os.csv`, [
+      [
+        "Período",
+        "Entregas",
+        "KM",
+        "Horas em entrega",
+        "Horas paradas",
+        "Receita",
+        "Combustível",
+        "Outros gastos",
+        "Manutenção",
+        "Custos totais",
+        "Lucro",
+        "Receita/KM",
+        "Custo/KM",
+        "Lucro/Hora",
+      ],
+      ...breakdown.map((row) => [
+        breakdownLabel(row.from, row.to, granularity),
+        row.count,
+        row.distance,
+        row.workedMin / 60,
+        row.idleMin / 60,
+        row.revenue,
+        row.fuelCost,
+        row.otherCost,
+        row.maintenanceCost,
+        row.totalCost,
+        row.profit,
+        row.revenuePerKm,
+        row.costPerKm,
+        row.profitPerHour,
+      ]),
+    ]);
+  }
+
   return (
     <AppShell
       title="Relatórios"
@@ -220,6 +277,121 @@ function Relatorios() {
           hint={`${brl(total.fuelCost)} combustível`}
         />
       </div>
+
+      <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Quilômetros rodados"
+          value={`${num(total.distance)} km`}
+          hint={`${activeDays} dia(s) com atividade`}
+          icon={<RouteIcon className="size-4" />}
+        />
+        <StatCard
+          label="Tempo total"
+          value={minutesLabel(totalMinutes)}
+          hint={`${minutesLabel(total.workedMin)} em entrega · ${minutesLabel(total.idleMin)} parado`}
+          icon={<Clock3 className="size-4" />}
+        />
+        <StatCard
+          label="Custo por km"
+          value={brl(total.distance ? totalCost / total.distance : 0)}
+          hint={`Receita ${brl(total.perKm)}/km`}
+          icon={<Gauge className="size-4" />}
+        />
+        <StatCard
+          label="Lucro por hora"
+          value={brl(totalMinutes ? total.profit / (totalMinutes / 60) : 0)}
+          hint={`${total.count} entregas · ${activeDays ? num(total.count / activeDays) : "0,0"}/dia`}
+          tone={total.profit >= 0 ? "success" : "destructive"}
+          icon={<PackageCheck className="size-4" />}
+        />
+      </div>
+
+      <SectionCard
+        className="mt-4"
+        title="Detalhamento da operação"
+        description="Veja quilômetros, horas, gastos e rentabilidade em cada período"
+        actions={
+          <div className="no-print flex flex-wrap items-center gap-2">
+            <div className="flex rounded-lg bg-muted p-1">
+              {(
+                [
+                  ["day", "Dia"],
+                  ["week", "Semana"],
+                  ["month", "Mês"],
+                ] as const
+              ).map(([value, label]) => (
+                <Button
+                  key={value}
+                  size="sm"
+                  variant={granularity === value ? "default" : "ghost"}
+                  className="h-7 px-3 text-xs"
+                  onClick={() => setGranularity(value)}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+            <Button variant="outline" size="sm" className="h-8 gap-2" onClick={exportBreakdown}>
+              <FileDown className="size-4" /> Exportar
+            </Button>
+          </div>
+        }
+      >
+        {breakdown.length ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[980px] text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                  <th className="pb-2 pr-4 font-medium">Período</th>
+                  <th className="px-2 pb-2 text-right font-medium">Entregas</th>
+                  <th className="px-2 pb-2 text-right font-medium">KM</th>
+                  <th className="px-2 pb-2 text-right font-medium">Tempo</th>
+                  <th className="px-2 pb-2 text-right font-medium">Receita</th>
+                  <th className="px-2 pb-2 text-right font-medium">Gastos</th>
+                  <th className="px-2 pb-2 text-right font-medium">Lucro</th>
+                  <th className="px-2 pb-2 text-right font-medium">R$/km</th>
+                  <th className="pl-2 pb-2 text-right font-medium">Lucro/h</th>
+                </tr>
+              </thead>
+              <tbody>
+                {breakdown.map((row) => (
+                  <tr key={row.key} className="border-b border-border/60 last:border-0">
+                    <td className="py-3 pr-4">
+                      <p className="font-medium">{breakdownLabel(row.from, row.to, granularity)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {brl(row.fuelCost)} combustível · {brl(row.otherCost)} outros
+                      </p>
+                    </td>
+                    <td className="px-2 py-3 text-right tabular-nums">{row.count}</td>
+                    <td className="px-2 py-3 text-right tabular-nums">{num(row.distance)}</td>
+                    <td className="px-2 py-3 text-right tabular-nums">
+                      <span>{minutesLabel(row.workedMin + row.idleMin)}</span>
+                      {row.idleMin > 0 ? (
+                        <span className="block text-xs text-muted-foreground">
+                          {minutesLabel(row.idleMin)} parado
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className="px-2 py-3 text-right tabular-nums">{brl(row.revenue)}</td>
+                    <td className="px-2 py-3 text-right tabular-nums text-destructive">
+                      {brl(row.totalCost)}
+                    </td>
+                    <td
+                      className={`px-2 py-3 text-right font-semibold tabular-nums ${row.profit >= 0 ? "text-success" : "text-destructive"}`}
+                    >
+                      {brl(row.profit)}
+                    </td>
+                    <td className="px-2 py-3 text-right tabular-nums">{brl(row.revenuePerKm)}</td>
+                    <td className="pl-2 py-3 text-right tabular-nums">{brl(row.profitPerHour)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyState>Nenhum lançamento encontrado neste período.</EmptyState>
+        )}
+      </SectionCard>
 
       <SectionCard
         className="mt-4"
@@ -321,4 +493,14 @@ function Relatorios() {
       </div>
     </AppShell>
   );
+}
+
+function breakdownLabel(from: Date, to: Date, granularity: ReportGranularity) {
+  if (granularity === "month") {
+    return from.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  }
+  const short = (date: Date) =>
+    date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  if (granularity === "week") return `${short(from)} — ${short(to)}`;
+  return from.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" });
 }

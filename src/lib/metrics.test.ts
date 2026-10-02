@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { Delivery, Expense, Goal, Maintenance, Profile } from "./data";
+import type { Delivery, Expense, Fueling, Goal, Maintenance, Profile } from "./data";
 import { buildMaintenanceAlerts } from "./alerts";
 import {
   adaptiveDailyRevenueGoal,
@@ -8,6 +8,7 @@ import {
   maintenanceReservePerKm,
   nextMonthlyDueDate,
   proratedExpenseTotal,
+  reportBreakdown,
 } from "./metrics";
 
 const maintenance = (values: Partial<Maintenance>): Maintenance => ({
@@ -238,4 +239,56 @@ test("análise de desempenho não carrega receita do mês anterior", () => {
   assert.equal(result.projectedRevenue, 3_100);
   assert.equal(result.previousAverageRevenue, 1_810);
   assert.equal(result.completedMonths, 2);
+});
+
+test("detalhamento diário reúne operação e custos pagos no mesmo dia", () => {
+  const deliveries = [
+    { ...delivery("uma", "2026-09-14T10:00:00-03:00", 100), distance_km: 20, duration_min: 90 },
+    { ...delivery("duas", "2026-09-14T18:00:00-03:00", 50), distance_km: 10, duration_min: 30 },
+  ];
+  const fuelings: Fueling[] = [
+    {
+      id: "fuel",
+      liters: 5,
+      price_per_liter: 6,
+      total: 30,
+      odometer: null,
+      station: null,
+      occurred_at: "2026-09-14T19:00:00-03:00",
+    },
+  ];
+
+  const [row] = reportBreakdown(
+    deliveries,
+    [expense({ category: "Pedágio", occurred_at: "2026-09-14", amount: 10 })],
+    fuelings,
+    [],
+    "day",
+  );
+
+  assert.equal(row?.count, 2);
+  assert.equal(row?.distance, 30);
+  assert.equal(row?.workedMin, 120);
+  assert.equal(row?.revenue, 150);
+  assert.equal(row?.totalCost, 40);
+  assert.equal(row?.profit, 110);
+  assert.equal(row?.costPerKm, 40 / 30);
+  assert.equal(row?.profitPerHour, 55);
+});
+
+test("detalhamento semanal começa na segunda e mantém semanas separadas", () => {
+  const rows = reportBreakdown(
+    [
+      delivery("domingo", "2026-09-20T12:00:00-03:00", 80),
+      delivery("segunda", "2026-09-21T12:00:00-03:00", 100),
+    ],
+    [],
+    [],
+    [],
+    "week",
+  );
+
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0]?.key, "2026-09-21");
+  assert.equal(rows[1]?.key, "2026-09-14");
 });

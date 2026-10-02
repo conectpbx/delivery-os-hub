@@ -228,6 +228,110 @@ export type Summary = {
   perHour: number;
 };
 
+export type ReportGranularity = "day" | "week" | "month";
+
+export type ReportBreakdownRow = {
+  key: string;
+  from: Date;
+  to: Date;
+  revenue: number;
+  fuelCost: number;
+  otherCost: number;
+  maintenanceCost: number;
+  totalCost: number;
+  profit: number;
+  distance: number;
+  workedMin: number;
+  idleMin: number;
+  count: number;
+  revenuePerKm: number;
+  profitPerHour: number;
+  costPerKm: number;
+};
+
+/**
+ * Consolida os lançamentos de caixa e a operação em dias, semanas civis ou meses.
+ * Semanas começam na segunda-feira; custos permanecem no período em que foram pagos.
+ */
+export function reportBreakdown(
+  deliveries: Delivery[],
+  expenses: Expense[],
+  fuelings: Fueling[],
+  maintenances: Maintenance[],
+  granularity: ReportGranularity,
+): ReportBreakdownRow[] {
+  type MutableRow = Omit<
+    ReportBreakdownRow,
+    "totalCost" | "profit" | "revenuePerKm" | "profitPerHour" | "costPerKm"
+  >;
+  const rows = new Map<string, MutableRow>();
+
+  const bucket = (value: string) => {
+    const occurred = operationalDate(value);
+    const from =
+      granularity === "month"
+        ? startOfMonth(occurred)
+        : granularity === "week"
+          ? startOfWeek(occurred)
+          : startOfDay(occurred);
+    const to =
+      granularity === "month"
+        ? endOfMonth(from)
+        : granularity === "week"
+          ? endOfWeek(from)
+          : endOfDay(from);
+    const key = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, "0")}-${String(from.getDate()).padStart(2, "0")}`;
+    let row = rows.get(key);
+    if (!row) {
+      row = {
+        key,
+        from,
+        to,
+        revenue: 0,
+        fuelCost: 0,
+        otherCost: 0,
+        maintenanceCost: 0,
+        distance: 0,
+        workedMin: 0,
+        idleMin: 0,
+        count: 0,
+      };
+      rows.set(key, row);
+    }
+    return row;
+  };
+
+  for (const delivery of deliveries) {
+    const row = bucket(delivery.occurred_at);
+    row.revenue += Number(delivery.earnings) + Number(delivery.tip);
+    row.distance += Number(delivery.distance_km);
+    row.workedMin += Number(delivery.duration_min);
+    row.idleMin += Number(delivery.idle_min);
+    row.count += 1;
+  }
+  for (const expense of expenses) bucket(expense.occurred_at).otherCost += Number(expense.amount);
+  for (const fueling of fuelings) bucket(fueling.occurred_at).fuelCost += Number(fueling.total);
+  for (const maintenance of maintenances) {
+    bucket(maintenance.performed_at).maintenanceCost += Number(maintenance.cost);
+  }
+
+  return [...rows.values()]
+    .map((row) => {
+      const totalCost = row.fuelCost + row.otherCost + row.maintenanceCost;
+      const profit = row.revenue - totalCost;
+      const totalHours = (row.workedMin + row.idleMin) / 60;
+      return {
+        ...row,
+        totalCost,
+        profit,
+        revenuePerKm: row.distance > 0 ? row.revenue / row.distance : 0,
+        profitPerHour: totalHours > 0 ? profit / totalHours : 0,
+        costPerKm: row.distance > 0 ? totalCost / row.distance : 0,
+      };
+    })
+    .sort((a, b) => b.from.getTime() - a.from.getTime());
+}
+
 export function summarize(
   deliveries: Delivery[],
   expenses: Expense[],
