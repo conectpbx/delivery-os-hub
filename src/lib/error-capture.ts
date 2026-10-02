@@ -72,7 +72,13 @@ console.error = (...args: unknown[]) => {
   // A browser navigation, refresh, or hot reload can close an in-flight SSR
   // request. Node reports that expected lifecycle event as `Error: aborted`;
   // do not promote it to editor runtime telemetry or a fatal error screen.
-  if (args.some(isExpectedRequestAbort)) return;
+  const abortedRequest = args.find(isExpectedRequestAbort);
+  if (abortedRequest !== undefined) {
+    // Keep it available for server.ts, which receives only h3's generic JSON
+    // response after the original error has been swallowed.
+    record(abortedRequest);
+    return;
+  }
   const expanded = args.map((arg) => {
     if (!isErrorLike(arg)) return arg;
     record(arg);
