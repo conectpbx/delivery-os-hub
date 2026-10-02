@@ -13,4 +13,5 @@
 
 - A meta diária inteligente aprende os dias habituais de trabalho com oito datas ativas nos 56 dias anteriores; sem histórico suficiente, usa todos os dias restantes para evitar suposições frágeis.
 - Goal performance analysis must isolate civil months and use only completed earlier months for historical comparisons, preventing rollover carryover.
+- Treat client-disconnected SSR requests as expected aborts and never promote them to fatal runtime screens or error telemetry.
 - A persistência offline do cache é agrupada antes da gravação no IndexedDB para reduzir trabalho na interface móvel sem perder dados.

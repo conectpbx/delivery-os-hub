@@ -49,11 +49,36 @@ function isErrorLike(value: unknown): value is Error {
   return value instanceof Error;
 }
 
+export function isExpectedRequestAbort(error: unknown): boolean {
+  if (error == null || typeof error !== "object") return false;
+  const value = error as { name?: unknown; message?: unknown; code?: unknown; cause?: unknown };
+  const name = typeof value.name === "string" ? value.name : "";
+  const message = typeof value.message === "string" ? value.message : "";
+  const code = typeof value.code === "string" ? value.code : "";
+  return (
+    name === "AbortError" ||
+    code === "ECONNRESET" ||
+    code === "ABORT_ERR" ||
+    /aborted|socket hang up|premature close/i.test(message) ||
+    (value.cause !== error && isExpectedRequestAbort(value.cause))
+  );
+}
+
 // Wrap console.error so errors logged by any layer — including h3's internal
 // unhandled-error logging, which this file cannot hook directly — are both
 // recorded for consumeLastCapturedError and expanded before serialization.
 const originalConsoleError = console.error.bind(console);
 console.error = (...args: unknown[]) => {
+  // A browser navigation, refresh, or hot reload can close an in-flight SSR
+  // request. Node reports that expected lifecycle event as `Error: aborted`;
+  // do not promote it to editor runtime telemetry or a fatal error screen.
+  const abortedRequest = args.find(isExpectedRequestAbort);
+  if (abortedRequest !== undefined) {
+    // Keep it available for server.ts, which receives only h3's generic JSON
+    // response after the original error has been swallowed.
+    record(abortedRequest);
+    return;
+  }
   const expanded = args.map((arg) => {
     if (!isErrorLike(arg)) return arg;
     record(arg);
