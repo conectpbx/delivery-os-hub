@@ -2,18 +2,8 @@ import { createStart, createMiddleware } from "@tanstack/react-start";
 import { createCsrfMiddleware } from "@tanstack/start-client-core";
 
 import { renderErrorPage } from "./lib/error-page";
+import { isExpectedRequestAbort } from "./lib/error-capture";
 import { attachSupabaseAuth } from "@/integrations/supabase/auth-attacher";
-
-const isAbortError = (error: unknown) => {
-  if (error == null || typeof error !== "object") return false;
-  const e = error as { name?: string; message?: string; code?: string };
-  return (
-    e.name === "AbortError" ||
-    e.code === "ECONNRESET" ||
-    e.code === "ABORT_ERR" ||
-    /aborted|socket hang up|premature close/i.test(e.message ?? "")
-  );
-};
 
 const errorMiddleware = createMiddleware().server(async ({ next }) => {
   try {
@@ -24,7 +14,7 @@ const errorMiddleware = createMiddleware().server(async ({ next }) => {
     }
     // The client closed the connection (navigation, refresh, HMR). Nothing to
     // render — surfacing a 500 page here causes a false blank screen.
-    if (isAbortError(error)) {
+    if (isExpectedRequestAbort(error)) {
       return new Response(null, { status: 499 });
     }
     console.error(error);
