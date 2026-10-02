@@ -191,8 +191,14 @@ test("meta inteligente usa todos os dias restantes sem histórico suficiente", (
 
 test("meta inteligente distribui o restante pelos dias habituais de trabalho", () => {
   const historical = [
-    "2026-07-07", "2026-07-08", "2026-07-09", "2026-07-10",
-    "2026-07-14", "2026-07-15", "2026-07-16", "2026-07-17",
+    "2026-07-07",
+    "2026-07-08",
+    "2026-07-09",
+    "2026-07-10",
+    "2026-07-14",
+    "2026-07-15",
+    "2026-07-16",
+    "2026-07-17",
   ].map((date, index) => delivery(`history-${index}`, `${date}T12:00:00-03:00`));
   const result = adaptiveDailyRevenueGoal({
     deliveries: historical,

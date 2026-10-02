@@ -415,7 +415,10 @@ export type GoalPerformanceAnalysis = {
 const WEEKDAY_LABELS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 
 /** Analisa somente meses civis concluídos e mantém o mês atual isolado na virada. */
-export function goalPerformanceAnalysis(deliveries: Delivery[], date = new Date()): GoalPerformanceAnalysis {
+export function goalPerformanceAnalysis(
+  deliveries: Delivery[],
+  date = new Date(),
+): GoalPerformanceAnalysis {
   const currentKey = monthKey(date);
   const currentMonthDeliveries = deliveries.filter(
     (delivery) => monthKey(operationalDate(delivery.occurred_at)) === currentKey,
@@ -439,9 +442,7 @@ export function goalPerformanceAnalysis(deliveries: Delivery[], date = new Date(
     const weekday = occurred.getDay();
     const item = weekdayRevenue.get(weekday) ?? { revenue: 0, activeDates: new Set<string>() };
     item.revenue += revenue;
-    item.activeDates.add(
-      `${occurred.getFullYear()}-${occurred.getMonth()}-${occurred.getDate()}`,
-    );
+    item.activeDates.add(`${occurred.getFullYear()}-${occurred.getMonth()}-${occurred.getDate()}`);
     weekdayRevenue.set(weekday, item);
   }
 
@@ -453,9 +454,10 @@ export function goalPerformanceAnalysis(deliveries: Delivery[], date = new Date(
     ? recentMonths.reduce((sum, [, revenue]) => sum + revenue, 0) / recentMonths.length
     : 0;
   const comparisonRevenue = projectedRevenue || currentRevenue;
-  const changeVsPreviousPercent = previousAverageRevenue > 0
-    ? ((comparisonRevenue - previousAverageRevenue) / previousAverageRevenue) * 100
-    : null;
+  const changeVsPreviousPercent =
+    previousAverageRevenue > 0
+      ? ((comparisonRevenue - previousAverageRevenue) / previousAverageRevenue) * 100
+      : null;
 
   const bestWeekdayEntry = [...weekdayRevenue.entries()]
     .map(([weekday, item]) => ({
@@ -477,11 +479,10 @@ export function goalPerformanceAnalysis(deliveries: Delivery[], date = new Date(
     projectedRevenue,
     previousAverageRevenue,
     changeVsPreviousPercent,
-    bestWeekday: bestWeekdayEntry ? WEEKDAY_LABELS[bestWeekdayEntry.weekday] ?? null : null,
+    bestWeekday: bestWeekdayEntry ? (WEEKDAY_LABELS[bestWeekdayEntry.weekday] ?? null) : null,
     bestWeekdayAverage: bestWeekdayEntry?.average ?? 0,
-    suggestedRevenueTarget: historicalDailyAverage > 0
-      ? historicalDailyAverage * targetMonthDays * 1.1
-      : 0,
+    suggestedRevenueTarget:
+      historicalDailyAverage > 0 ? historicalDailyAverage * targetMonthDays * 1.1 : 0,
     completedMonths: recentMonths.length,
   };
 }
