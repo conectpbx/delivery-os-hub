@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { CalendarClock, CheckCircle2, Sparkles, Target, Trash2 } from "lucide-react";
+import { CalendarClock, CheckCircle2, Pencil, Sparkles, Target, TrendingUp, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,12 @@ import {
 } from "@/lib/data";
 import { brl, dec, monthKey, monthLabel, num } from "@/lib/format";
 import { useGoalCelebrations } from "@/lib/celebrate";
-import { adaptiveDailyRevenueGoal, byMonth, costPerKm } from "@/lib/metrics";
+import {
+  adaptiveDailyRevenueGoal,
+  byMonth,
+  costPerKm,
+  goalPerformanceAnalysis,
+} from "@/lib/metrics";
 import { useCalendarNow } from "@/hooks/useCalendarNow";
 
 export const Route = createFileRoute("/metas")({
@@ -70,6 +75,14 @@ function Metas() {
   const current = monthKey(now);
   const currentSummary = months.find((m) => m.month === current);
   const currentGoals = (goals.data ?? []).filter((goal) => goal.month.slice(0, 7) === current);
+  const sortedGoals = useMemo(
+    () => [...(goals.data ?? [])].sort((a, b) => b.month.localeCompare(a.month)),
+    [goals.data],
+  );
+  const performance = useMemo(
+    () => goalPerformanceAnalysis(deliveries.data ?? [], now),
+    [deliveries.data, now],
+  );
   const dailyGoalPlan = useMemo(
     () =>
       adaptiveDailyRevenueGoal({
@@ -90,6 +103,7 @@ function Metas() {
   const [daily, setDaily] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const previousCurrent = useRef(current);
+  const formRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const previous = previousCurrent.current;
@@ -133,6 +147,16 @@ function Metas() {
     }));
   }
 
+  function editGoal(goal: (typeof sortedGoals)[number]) {
+    setForm({
+      month: goal.month.slice(0, 7),
+      revenue_target: String(Number(goal.revenue_target)),
+      profit_target: String(Number(goal.profit_target)),
+      deliveries_target: String(Number(goal.deliveries_target)),
+    });
+    requestAnimationFrame(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+
   useGoalCelebrations(
     currentGoals.flatMap((g) => {
       const key = g.month.slice(0, 7);
@@ -169,8 +193,9 @@ function Metas() {
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[400px_1fr]">
+        <div ref={formRef}>
         <SectionCard
-          title={existingGoal ? "Editar meta do mês" : "Nova meta mensal"}
+          title={existingGoal ? `Editar meta de ${monthLabel(form.month)}` : "Nova meta mensal"}
           description="Escolha o mês, defina a receita e o restante é sugerido automaticamente."
         >
           <form
@@ -247,6 +272,17 @@ function Metas() {
                     onClick={() => applyRevenue(history.revenue * 1.1)}
                   >
                     <Sparkles className="size-3" /> Sugerir (+10%)
+                  </Button>
+                ) : null}
+                {performance.suggestedRevenueTarget > 0 ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 gap-1 px-2 text-xs"
+                    onClick={() => applyRevenue(performance.suggestedRevenueTarget)}
+                  >
+                    <TrendingUp className="size-3" /> Meta pelo seu ritmo
                   </Button>
                 ) : null}
               </div>
@@ -350,11 +386,53 @@ function Metas() {
             </div>
           ) : null}
         </SectionCard>
+        </div>
 
-        <SectionCard title="Progresso das metas">
-          {currentGoals.length ? (
+        <div className="space-y-4">
+        <SectionCard
+          title="Análise de desempenho"
+          description="Projeção baseada nos registros disponíveis, sem misturar meses."
+        >
+          {performance.currentRevenue > 0 || performance.completedMonths > 0 ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg border border-border p-3">
+                <p className="text-xs text-muted-foreground">Projeção deste mês</p>
+                <p className="mt-1 text-lg font-semibold text-primary">{brl(performance.projectedRevenue)}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Mantendo o ritmo atual até o fim do mês.
+                </p>
+              </div>
+              <div className="rounded-lg border border-border p-3">
+                <p className="text-xs text-muted-foreground">Comparação histórica</p>
+                <p className="mt-1 text-lg font-semibold">
+                  {performance.changeVsPreviousPercent === null
+                    ? "Histórico em formação"
+                    : `${performance.changeVsPreviousPercent >= 0 ? "+" : ""}${num(performance.changeVsPreviousPercent, 0)}%`}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Média dos últimos {performance.completedMonths} meses: {brl(performance.previousAverageRevenue)}.
+                </p>
+              </div>
+              <div className="rounded-lg border border-border p-3 sm:col-span-2">
+                <p className="flex items-center gap-1 text-xs font-semibold text-foreground">
+                  <Sparkles className="size-3.5 text-primary" /> Sugestão para melhorar
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {performance.bestWeekday
+                    ? `Seu melhor dia histórico é ${performance.bestWeekday}, com média de ${brl(performance.bestWeekdayAverage)}. Priorize esse dia e use “Meta pelo seu ritmo” para planejar um avanço sustentável de 10%.`
+                    : "Continue registrando suas entregas. Assim que houver histórico suficiente, o sistema identificará seus melhores dias e sugerirá uma meta personalizada."}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <EmptyState>Registre entregas para receber projeções e sugestões personalizadas.</EmptyState>
+          )}
+        </SectionCard>
+
+        <SectionCard title="Metas cadastradas" description={`${sortedGoals.length} ${sortedGoals.length === 1 ? "meta cadastrada" : "metas cadastradas"}`}>
+          {sortedGoals.length ? (
             <ul className="space-y-5">
-              {currentGoals.map((g) => {
+              {sortedGoals.map((g) => {
                 const key = g.month.slice(0, 7);
                 const m = months.find((x) => x.month === key);
                 const rows = [
@@ -378,7 +456,10 @@ function Metas() {
                   },
                 ];
                 return (
-                  <li key={g.id} className="rounded-xl border border-border p-4">
+                  <li
+                    key={g.id}
+                    className={`rounded-lg border p-4 ${form.month === key ? "border-primary bg-primary/5" : "border-border"}`}
+                  >
                     <div className="mb-3 flex items-center justify-between gap-2">
                       <p className="text-sm font-semibold">
                         {monthLabel(key)}
@@ -387,21 +468,25 @@ function Metas() {
                             Mês atual
                           </span>
                         ) : null}
+                        {key < current ? (
+                          <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
+                            Encerrada
+                          </span>
+                        ) : null}
+                        {key > current ? (
+                          <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
+                            Planejada
+                          </span>
+                        ) : null}
                       </p>
                       <div className="flex items-center gap-1">
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() =>
-                            setForm({
-                              month: key,
-                              revenue_target: String(Number(g.revenue_target)),
-                              profit_target: String(Number(g.profit_target)),
-                              deliveries_target: String(Number(g.deliveries_target)),
-                            })
-                          }
+                          className="gap-1"
+                          onClick={() => editGoal(g)}
                         >
-                          Editar
+                          <Pencil className="size-3.5" /> Editar
                         </Button>
                         {confirmDelete === g.id ? (
                           <>
@@ -457,9 +542,10 @@ function Metas() {
               })}
             </ul>
           ) : (
-            <EmptyState>Nenhuma meta cadastrada para o mês atual.</EmptyState>
+            <EmptyState>Nenhuma meta cadastrada.</EmptyState>
           )}
         </SectionCard>
+        </div>
       </div>
     </AppShell>
   );
