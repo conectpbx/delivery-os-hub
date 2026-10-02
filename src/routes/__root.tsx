@@ -16,7 +16,6 @@ import { Toaster } from "@/components/ui/sonner";
 import { OfflineSync } from "@/lib/offline-sync";
 import { registerServiceWorker } from "@/lib/pwa";
 
-
 function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -83,10 +82,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Delivery OS" },
-      { name: "description", content: "Gestão completa para entregadores: GPS, lucro real, financeiro, manutenção e IA." },
+      {
+        name: "description",
+        content: "Gestão completa para entregadores: GPS, lucro real, financeiro, manutenção e IA.",
+      },
       { name: "author", content: "Lovable" },
       { property: "og:title", content: "Delivery OS" },
-      { property: "og:description", content: "Gestão completa para entregadores: GPS, lucro real, financeiro, manutenção e IA." },
+      {
+        property: "og:description",
+        content: "Gestão completa para entregadores: GPS, lucro real, financeiro, manutenção e IA.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:site", content: "@Lovable" },
@@ -143,4 +148,3 @@ function RootComponent() {
     </QueryClientProvider>
   );
 }
-
