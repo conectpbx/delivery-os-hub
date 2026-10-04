@@ -2,16 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Suspense, lazy, useMemo, useState } from "react";
 
 const MonthsBarChart = lazy(() => import("@/components/charts/MonthsBarChart"));
-import {
-  Clock3,
-  FileDown,
-  Gauge,
-  Lightbulb,
-  PackageCheck,
-  Printer,
-  Route as RouteIcon,
-  TrendingUp,
-} from "lucide-react";
+import { Clock3, FileDown, Gauge, PackageCheck, Printer, Route as RouteIcon } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
 import { Button } from "@/components/ui/button";
@@ -37,7 +28,6 @@ import {
   summarizeOperational,
   summarizeRecordedCosts,
   type ReportGranularity,
-  type ReportBreakdownRow,
 } from "@/lib/metrics";
 import { PeriodFilter, PeriodSummary, usePeriodSelection } from "@/components/PeriodFilter";
 
@@ -128,14 +118,10 @@ function Relatorios() {
   const categories = useMemo(() => costsByCategory(perExpenses), [perExpenses]);
   const totalCost = total.fuelCost + total.otherCost + total.maintenanceCost;
   const totalMinutes = total.workedMin + total.idleMin;
-  const dailyBreakdown = useMemo(
-    () => reportBreakdown(perDeliveries, perExpenses, perFuelings, perMaint, "day"),
-    [perDeliveries, perExpenses, perFuelings, perMaint],
+  const activeDays = useMemo(
+    () => new Set(perDeliveries.map((delivery) => delivery.occurred_at.slice(0, 10))).size,
+    [perDeliveries],
   );
-  const activeDays = dailyBreakdown.filter((row) => row.count > 0).length;
-  const bestDay = dailyBreakdown
-    .filter((row) => row.count > 0)
-    .sort((a, b) => b.profit - a.profit)[0];
   const breakdown = useMemo(
     () => reportBreakdown(perDeliveries, perExpenses, perFuelings, perMaint, granularity),
     [granularity, perDeliveries, perExpenses, perFuelings, perMaint],
@@ -322,44 +308,11 @@ function Relatorios() {
 
       <SectionCard
         className="mt-4"
-        title="Leitura rápida do período"
-        description="Indicadores para entender produtividade e aproveitar melhor o tempo na rua"
-      >
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <Insight
-            label="Média por dia ativo"
-            value={brl(activeDays ? total.revenue / activeDays : 0)}
-            detail={`${activeDays} dia(s) trabalhado(s)`}
-          />
-          <Insight
-            label="Ticket por entrega"
-            value={brl(total.count ? total.revenue / total.count : 0)}
-            detail={`${total.count} entrega(s) no período`}
-          />
-          <Insight
-            label="Tempo parado"
-            value={`${num(totalMinutes ? (total.idleMin / totalMinutes) * 100 : 0)}%`}
-            detail={`${minutesLabel(total.idleMin)} de ${minutesLabel(totalMinutes)}`}
-          />
-          <Insight
-            label="Melhor dia por lucro"
-            value={bestDay ? brl(bestDay.profit) : brl(0)}
-            detail={
-              bestDay
-                ? `${breakdownLabel(bestDay.from, bestDay.to, "day")} · ${bestDay.count} entrega(s)`
-                : "Sem entregas no período"
-            }
-          />
-        </div>
-      </SectionCard>
-
-      <SectionCard
-        className="mt-4"
         title="Detalhamento da operação"
         description="Veja quilômetros, horas, gastos e rentabilidade em cada período"
         actions={
-          <div className="no-print flex w-full flex-wrap items-center gap-2 sm:w-auto">
-            <div className="grid flex-1 grid-cols-3 rounded-lg bg-muted p-1 sm:flex sm:flex-none">
+          <div className="no-print flex flex-wrap items-center gap-2">
+            <div className="flex rounded-lg bg-muted p-1">
               {(
                 [
                   ["day", "Dia"],
@@ -373,85 +326,68 @@ function Relatorios() {
                   variant={granularity === value ? "default" : "ghost"}
                   className="h-7 px-3 text-xs"
                   onClick={() => setGranularity(value)}
-                  aria-pressed={granularity === value}
                 >
                   {label}
                 </Button>
               ))}
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 flex-1 gap-2 sm:flex-none"
-              onClick={exportBreakdown}
-            >
+            <Button variant="outline" size="sm" className="h-8 gap-2" onClick={exportBreakdown}>
               <FileDown className="size-4" /> Exportar
             </Button>
           </div>
         }
       >
         {breakdown.length ? (
-          <>
-            <div className="grid gap-3 md:hidden">
-              {breakdown.map((row) => (
-                <BreakdownMobileCard key={row.key} row={row} granularity={granularity} />
-              ))}
-            </div>
-            <div className="hidden overflow-x-auto md:block">
-              <table className="w-full min-w-[980px] text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                    <th className="pb-2 pr-4 font-medium">Período</th>
-                    <th className="px-2 pb-2 text-right font-medium">Entregas</th>
-                    <th className="px-2 pb-2 text-right font-medium">KM</th>
-                    <th className="px-2 pb-2 text-right font-medium">Tempo</th>
-                    <th className="px-2 pb-2 text-right font-medium">Receita</th>
-                    <th className="px-2 pb-2 text-right font-medium">Gastos</th>
-                    <th className="px-2 pb-2 text-right font-medium">Lucro</th>
-                    <th className="px-2 pb-2 text-right font-medium">R$/km</th>
-                    <th className="pl-2 pb-2 text-right font-medium">Lucro/h</th>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[980px] text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                  <th className="pb-2 pr-4 font-medium">Período</th>
+                  <th className="px-2 pb-2 text-right font-medium">Entregas</th>
+                  <th className="px-2 pb-2 text-right font-medium">KM</th>
+                  <th className="px-2 pb-2 text-right font-medium">Tempo</th>
+                  <th className="px-2 pb-2 text-right font-medium">Receita</th>
+                  <th className="px-2 pb-2 text-right font-medium">Gastos</th>
+                  <th className="px-2 pb-2 text-right font-medium">Lucro</th>
+                  <th className="px-2 pb-2 text-right font-medium">R$/km</th>
+                  <th className="pl-2 pb-2 text-right font-medium">Lucro/h</th>
+                </tr>
+              </thead>
+              <tbody>
+                {breakdown.map((row) => (
+                  <tr key={row.key} className="border-b border-border/60 last:border-0">
+                    <td className="py-3 pr-4">
+                      <p className="font-medium">{breakdownLabel(row.from, row.to, granularity)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {brl(row.fuelCost)} combustível · {brl(row.otherCost)} outros
+                      </p>
+                    </td>
+                    <td className="px-2 py-3 text-right tabular-nums">{row.count}</td>
+                    <td className="px-2 py-3 text-right tabular-nums">{num(row.distance)}</td>
+                    <td className="px-2 py-3 text-right tabular-nums">
+                      <span>{minutesLabel(row.workedMin + row.idleMin)}</span>
+                      {row.idleMin > 0 ? (
+                        <span className="block text-xs text-muted-foreground">
+                          {minutesLabel(row.idleMin)} parado
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className="px-2 py-3 text-right tabular-nums">{brl(row.revenue)}</td>
+                    <td className="px-2 py-3 text-right tabular-nums text-destructive">
+                      {brl(row.totalCost)}
+                    </td>
+                    <td
+                      className={`px-2 py-3 text-right font-semibold tabular-nums ${row.profit >= 0 ? "text-success" : "text-destructive"}`}
+                    >
+                      {brl(row.profit)}
+                    </td>
+                    <td className="px-2 py-3 text-right tabular-nums">{brl(row.revenuePerKm)}</td>
+                    <td className="pl-2 py-3 text-right tabular-nums">{brl(row.profitPerHour)}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {breakdown.map((row) => (
-                    <tr key={row.key} className="border-b border-border/60 last:border-0">
-                      <td className="py-3 pr-4">
-                        <p className="font-medium">
-                          {breakdownLabel(row.from, row.to, granularity)}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {brl(row.fuelCost)} combustível · {brl(row.otherCost)} outros
-                        </p>
-                      </td>
-                      <td className="px-2 py-3 text-right tabular-nums">{row.count}</td>
-                      <td className="px-2 py-3 text-right tabular-nums">{num(row.distance)}</td>
-                      <td className="px-2 py-3 text-right tabular-nums">
-                        <span>{minutesLabel(row.workedMin + row.idleMin)}</span>
-                        {row.idleMin > 0 ? (
-                          <span className="block text-xs text-muted-foreground">
-                            {minutesLabel(row.idleMin)} parado
-                          </span>
-                        ) : null}
-                      </td>
-                      <td className="px-2 py-3 text-right tabular-nums">{brl(row.revenue)}</td>
-                      <td className="px-2 py-3 text-right tabular-nums text-destructive">
-                        {brl(row.totalCost)}
-                      </td>
-                      <td
-                        className={`px-2 py-3 text-right font-semibold tabular-nums ${row.profit >= 0 ? "text-success" : "text-destructive"}`}
-                      >
-                        {brl(row.profit)}
-                      </td>
-                      <td className="px-2 py-3 text-right tabular-nums">{brl(row.revenuePerKm)}</td>
-                      <td className="pl-2 py-3 text-right tabular-nums">
-                        {brl(row.profitPerHour)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : (
           <EmptyState>Nenhum lançamento encontrado neste período.</EmptyState>
         )}
@@ -602,76 +538,4 @@ function breakdownLabel(from: Date, to: Date, granularity: ReportGranularity) {
     date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
   if (granularity === "week") return `${short(from)} — ${short(to)}`;
   return from.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" });
-}
-
-function Insight({ label, value, detail }: { label: string; value: string; detail: string }) {
-  return (
-    <div className="rounded-xl border border-border/70 bg-muted/30 p-3.5">
-      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-        <Lightbulb className="size-3.5 text-primary" />
-        {label}
-      </div>
-      <p className="mt-2 text-lg font-semibold tabular-nums">{value}</p>
-      <p className="mt-0.5 text-xs text-muted-foreground">{detail}</p>
-    </div>
-  );
-}
-
-function BreakdownMobileCard({
-  row,
-  granularity,
-}: {
-  row: ReportBreakdownRow;
-  granularity: ReportGranularity;
-}) {
-  return (
-    <article className="rounded-xl border border-border/70 p-3.5">
-      <div className="flex items-start justify-between gap-3 border-b border-border/60 pb-3">
-        <div>
-          <p className="text-sm font-semibold">{breakdownLabel(row.from, row.to, granularity)}</p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {row.count} entrega(s) · {num(row.distance)} km ·{" "}
-            {minutesLabel(row.workedMin + row.idleMin)}
-          </p>
-        </div>
-        <div className="shrink-0 text-right">
-          <p
-            className={
-              row.profit >= 0 ? "font-semibold text-success" : "font-semibold text-destructive"
-            }
-          >
-            {brl(row.profit)}
-          </p>
-          <p className="text-[11px] text-muted-foreground">lucro</p>
-        </div>
-      </div>
-      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
-        <div>
-          <dt className="text-muted-foreground">Receita</dt>
-          <dd className="mt-0.5 font-semibold tabular-nums">{brl(row.revenue)}</dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Gastos totais</dt>
-          <dd className="mt-0.5 font-semibold tabular-nums text-destructive">
-            {brl(row.totalCost)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Receita por km</dt>
-          <dd className="mt-0.5 font-semibold tabular-nums">{brl(row.revenuePerKm)}</dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Lucro por hora</dt>
-          <dd className="mt-0.5 font-semibold tabular-nums">{brl(row.profitPerHour)}</dd>
-        </div>
-      </dl>
-      <div className="mt-3 flex items-center gap-2 rounded-lg bg-muted/60 px-2.5 py-2 text-xs text-muted-foreground">
-        <TrendingUp className="size-3.5 shrink-0 text-primary" />
-        <span className="min-w-0">
-          {brl(row.fuelCost)} combustível · {brl(row.otherCost)} outros · {brl(row.maintenanceCost)}{" "}
-          manutenção
-        </span>
-      </div>
-    </article>
-  );
 }
