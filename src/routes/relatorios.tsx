@@ -1,13 +1,30 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Suspense, lazy, useMemo } from "react";
+import { Suspense, lazy, useMemo, useState } from "react";
 
 const MonthsBarChart = lazy(() => import("@/components/charts/MonthsBarChart"));
-import { FileDown, Printer } from "lucide-react";
+import {
+  Clock3,
+  FileDown,
+  Gauge,
+  Lightbulb,
+  PackageCheck,
+  Printer,
+  Route as RouteIcon,
+  TrendingUp,
+} from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
 import { Button } from "@/components/ui/button";
 import { useDeliveries, useExpenses, useFuelings, useMaintenances, useProfile } from "@/lib/data";
-import { brl, dateTimeLabel, downloadCsv, monthLabel, num, paymentMethodLabel } from "@/lib/format";
+import {
+  brl,
+  dateTimeLabel,
+  downloadCsv,
+  minutesLabel,
+  monthLabel,
+  num,
+  paymentMethodLabel,
+} from "@/lib/format";
 import {
   byApp,
   byMonth,
@@ -16,8 +33,11 @@ import {
   costsByCategory,
   filterByRange,
   maintenanceReservePerKm,
+  reportBreakdown,
   summarizeOperational,
   summarizeRecordedCosts,
+  type ReportGranularity,
+  type ReportBreakdownRow,
 } from "@/lib/metrics";
 import { PeriodFilter, PeriodSummary, usePeriodSelection } from "@/components/PeriodFilter";
 
@@ -49,6 +69,7 @@ function Relatorios() {
   const maintenances = useMaintenances();
   const profile = useProfile();
   const period = usePeriodSelection(3);
+  const [granularity, setGranularity] = useState<ReportGranularity>("day");
 
   const deliveriesData = useMemo(() => deliveries.data ?? [], [deliveries.data]);
   const expensesData = useMemo(() => expenses.data ?? [], [expenses.data]);
@@ -106,6 +127,19 @@ function Relatorios() {
   );
   const categories = useMemo(() => costsByCategory(perExpenses), [perExpenses]);
   const totalCost = total.fuelCost + total.otherCost + total.maintenanceCost;
+  const totalMinutes = total.workedMin + total.idleMin;
+  const dailyBreakdown = useMemo(
+    () => reportBreakdown(perDeliveries, perExpenses, perFuelings, perMaint, "day"),
+    [perDeliveries, perExpenses, perFuelings, perMaint],
+  );
+  const activeDays = dailyBreakdown.filter((row) => row.count > 0).length;
+  const bestDay = dailyBreakdown
+    .filter((row) => row.count > 0)
+    .sort((a, b) => b.profit - a.profit)[0];
+  const breakdown = useMemo(
+    () => reportBreakdown(perDeliveries, perExpenses, perFuelings, perMaint, granularity),
+    [granularity, perDeliveries, perExpenses, perFuelings, perMaint],
+  );
   const chart = useMemo(
     () =>
       operationalMonths.map((m) => ({
@@ -171,6 +205,43 @@ function Relatorios() {
     ]);
   }
 
+  function exportBreakdown() {
+    downloadCsv(`detalhamento-${granularity}-delivery-os.csv`, [
+      [
+        "Período",
+        "Entregas",
+        "KM",
+        "Horas em entrega",
+        "Horas paradas",
+        "Receita",
+        "Combustível",
+        "Outros gastos",
+        "Manutenção",
+        "Custos totais",
+        "Lucro",
+        "Receita/KM",
+        "Custo/KM",
+        "Lucro/Hora",
+      ],
+      ...breakdown.map((row) => [
+        breakdownLabel(row.from, row.to, granularity),
+        row.count,
+        row.distance,
+        row.workedMin / 60,
+        row.idleMin / 60,
+        row.revenue,
+        row.fuelCost,
+        row.otherCost,
+        row.maintenanceCost,
+        row.totalCost,
+        row.profit,
+        row.revenuePerKm,
+        row.costPerKm,
+        row.profitPerHour,
+      ]),
+    ]);
+  }
+
   return (
     <AppShell
       title="Relatórios"
@@ -221,27 +292,209 @@ function Relatorios() {
         />
       </div>
 
+      <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Quilômetros rodados"
+          value={`${num(total.distance)} km`}
+          hint={`${activeDays} dia(s) com atividade`}
+          icon={<RouteIcon className="size-4" />}
+        />
+        <StatCard
+          label="Tempo total"
+          value={minutesLabel(totalMinutes)}
+          hint={`${minutesLabel(total.workedMin)} em entrega · ${minutesLabel(total.idleMin)} parado`}
+          icon={<Clock3 className="size-4" />}
+        />
+        <StatCard
+          label="Custo por km"
+          value={brl(total.distance ? totalCost / total.distance : 0)}
+          hint={`Receita ${brl(total.perKm)}/km`}
+          icon={<Gauge className="size-4" />}
+        />
+        <StatCard
+          label="Lucro por hora"
+          value={brl(totalMinutes ? total.profit / (totalMinutes / 60) : 0)}
+          hint={`${total.count} entregas · ${activeDays ? num(total.count / activeDays) : "0,0"}/dia`}
+          tone={total.profit >= 0 ? "success" : "destructive"}
+          icon={<PackageCheck className="size-4" />}
+        />
+      </div>
+
+      <SectionCard
+        className="mt-4"
+        title="Leitura rápida do período"
+        description="Indicadores para entender produtividade e aproveitar melhor o tempo na rua"
+      >
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <Insight
+            label="Média por dia ativo"
+            value={brl(activeDays ? total.revenue / activeDays : 0)}
+            detail={`${activeDays} dia(s) trabalhado(s)`}
+          />
+          <Insight
+            label="Ticket por entrega"
+            value={brl(total.count ? total.revenue / total.count : 0)}
+            detail={`${total.count} entrega(s) no período`}
+          />
+          <Insight
+            label="Tempo parado"
+            value={`${num(totalMinutes ? (total.idleMin / totalMinutes) * 100 : 0)}%`}
+            detail={`${minutesLabel(total.idleMin)} de ${minutesLabel(totalMinutes)}`}
+          />
+          <Insight
+            label="Melhor dia por lucro"
+            value={bestDay ? brl(bestDay.profit) : brl(0)}
+            detail={
+              bestDay
+                ? `${breakdownLabel(bestDay.from, bestDay.to, "day")} · ${bestDay.count} entrega(s)`
+                : "Sem entregas no período"
+            }
+          />
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        className="mt-4"
+        title="Detalhamento da operação"
+        description="Veja quilômetros, horas, gastos e rentabilidade em cada período"
+        actions={
+          <div className="no-print flex w-full flex-wrap items-center gap-2 sm:w-auto">
+            <div className="grid flex-1 grid-cols-3 rounded-lg bg-muted p-1 sm:flex sm:flex-none">
+              {(
+                [
+                  ["day", "Dia"],
+                  ["week", "Semana"],
+                  ["month", "Mês"],
+                ] as const
+              ).map(([value, label]) => (
+                <Button
+                  key={value}
+                  size="sm"
+                  variant={granularity === value ? "default" : "ghost"}
+                  className="h-7 px-3 text-xs"
+                  onClick={() => setGranularity(value)}
+                  aria-pressed={granularity === value}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 flex-1 gap-2 sm:flex-none"
+              onClick={exportBreakdown}
+            >
+              <FileDown className="size-4" /> Exportar
+            </Button>
+          </div>
+        }
+      >
+        {breakdown.length ? (
+          <>
+            <div className="grid gap-3 md:hidden">
+              {breakdown.map((row) => (
+                <BreakdownMobileCard key={row.key} row={row} granularity={granularity} />
+              ))}
+            </div>
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full min-w-[980px] text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                    <th className="pb-2 pr-4 font-medium">Período</th>
+                    <th className="px-2 pb-2 text-right font-medium">Entregas</th>
+                    <th className="px-2 pb-2 text-right font-medium">KM</th>
+                    <th className="px-2 pb-2 text-right font-medium">Tempo</th>
+                    <th className="px-2 pb-2 text-right font-medium">Receita</th>
+                    <th className="px-2 pb-2 text-right font-medium">Gastos</th>
+                    <th className="px-2 pb-2 text-right font-medium">Lucro</th>
+                    <th className="px-2 pb-2 text-right font-medium">R$/km</th>
+                    <th className="pl-2 pb-2 text-right font-medium">Lucro/h</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {breakdown.map((row) => (
+                    <tr key={row.key} className="border-b border-border/60 last:border-0">
+                      <td className="py-3 pr-4">
+                        <p className="font-medium">
+                          {breakdownLabel(row.from, row.to, granularity)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {brl(row.fuelCost)} combustível · {brl(row.otherCost)} outros
+                        </p>
+                      </td>
+                      <td className="px-2 py-3 text-right tabular-nums">{row.count}</td>
+                      <td className="px-2 py-3 text-right tabular-nums">{num(row.distance)}</td>
+                      <td className="px-2 py-3 text-right tabular-nums">
+                        <span>{minutesLabel(row.workedMin + row.idleMin)}</span>
+                        {row.idleMin > 0 ? (
+                          <span className="block text-xs text-muted-foreground">
+                            {minutesLabel(row.idleMin)} parado
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="px-2 py-3 text-right tabular-nums">{brl(row.revenue)}</td>
+                      <td className="px-2 py-3 text-right tabular-nums text-destructive">
+                        {brl(row.totalCost)}
+                      </td>
+                      <td
+                        className={`px-2 py-3 text-right font-semibold tabular-nums ${row.profit >= 0 ? "text-success" : "text-destructive"}`}
+                      >
+                        {brl(row.profit)}
+                      </td>
+                      <td className="px-2 py-3 text-right tabular-nums">{brl(row.revenuePerKm)}</td>
+                      <td className="pl-2 py-3 text-right tabular-nums">
+                        {brl(row.profitPerHour)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : (
+          <EmptyState>Nenhum lançamento encontrado neste período.</EmptyState>
+        )}
+      </SectionCard>
+
       <SectionCard
         className="mt-4"
         title="Detalhamento dos custos"
         description={`Período: ${period.label}`}
       >
         {totalCost > 0 ? (
-          <ul className="divide-y divide-border">
+          <ul className="space-y-1">
             {costRows
               .filter((r) => r.value > 0)
               .map((r) => (
-                <li key={r.label} className="flex items-center justify-between gap-3 py-2.5">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{r.label}</p>
-                    {r.hint ? (
-                      <p className="truncate text-xs text-muted-foreground">{r.hint}</p>
-                    ) : null}
+                <li key={r.label} className="rounded-lg px-2 py-2.5 hover:bg-muted/50">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{r.label}</p>
+                      {r.hint ? (
+                        <p className="truncate text-xs text-muted-foreground">{r.hint}</p>
+                      ) : null}
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <span className="block text-sm font-semibold tabular-nums">
+                        {brl(r.value)}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {num(totalCost ? (r.value / totalCost) * 100 : 0)}%
+                      </span>
+                    </div>
                   </div>
-                  <span className="text-sm font-semibold tabular-nums">{brl(r.value)}</span>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-destructive/70"
+                      style={{
+                        width: `${Math.min(100, totalCost ? (r.value / totalCost) * 100 : 0)}%`,
+                      }}
+                    />
+                  </div>
                 </li>
               ))}
-            <li className="flex items-center justify-between gap-3 py-2.5">
+            <li className="mt-2 flex items-center justify-between gap-3 border-t border-border px-2 pt-3">
               <p className="text-sm font-semibold">Total considerado no lucro</p>
               <span className="text-sm font-semibold tabular-nums text-destructive">
                 {brl(totalCost)}
@@ -277,6 +530,8 @@ function Relatorios() {
                 <thead>
                   <tr className="border-b border-border text-left text-xs text-muted-foreground">
                     <th className="py-2">Mês</th>
+                    <th className="py-2 text-right">Entregas</th>
+                    <th className="py-2 text-right">KM</th>
                     <th className="py-2 text-right">Receita</th>
                     <th className="py-2 text-right">Custos</th>
                     <th className="py-2 text-right">Lucro</th>
@@ -286,6 +541,8 @@ function Relatorios() {
                   {[...months].reverse().map((m) => (
                     <tr key={m.month} className="border-b border-border/60">
                       <td className="py-2">{monthLabel(m.month)}</td>
+                      <td className="py-2 text-right tabular-nums">{m.count}</td>
+                      <td className="py-2 text-right tabular-nums">{num(m.km)}</td>
                       <td className="py-2 text-right tabular-nums">{brl(m.revenue)}</td>
                       <td className="py-2 text-right tabular-nums">{brl(m.cost)}</td>
                       <td className="py-2 text-right font-medium tabular-nums">{brl(m.profit)}</td>
@@ -301,16 +558,30 @@ function Relatorios() {
 
         <SectionCard title="Desempenho por aplicativo" description={`Período: ${period.label}`}>
           {ranking.length ? (
-            <ul className="space-y-3">
-              {ranking.map((r) => (
-                <li key={r.app} className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">{r.app}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {r.count} entregas · receita {brl(r.revenue)}
-                    </p>
+            <ul className="space-y-2">
+              {ranking.map((r, index) => (
+                <li key={r.app} className="rounded-lg border border-border/70 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold">
+                        <span className="mr-2 text-xs text-muted-foreground">#{index + 1}</span>
+                        {r.app}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {r.count} entregas · {num(r.km)} km · {brl(r.perKm)}/km
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <span className="block text-sm font-semibold tabular-nums text-success">
+                        {brl(r.profit)}
+                      </span>
+                      <span className="text-xs text-muted-foreground">lucro estimado</span>
+                    </div>
                   </div>
-                  <span className="text-sm font-semibold tabular-nums">{brl(r.profit)}</span>
+                  <div className="mt-3 flex items-center justify-between border-t border-border/60 pt-2 text-xs">
+                    <span className="text-muted-foreground">Receita</span>
+                    <span className="font-medium tabular-nums">{brl(r.revenue)}</span>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -320,5 +591,87 @@ function Relatorios() {
         </SectionCard>
       </div>
     </AppShell>
+  );
+}
+
+function breakdownLabel(from: Date, to: Date, granularity: ReportGranularity) {
+  if (granularity === "month") {
+    return from.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  }
+  const short = (date: Date) =>
+    date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  if (granularity === "week") return `${short(from)} — ${short(to)}`;
+  return from.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" });
+}
+
+function Insight({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return (
+    <div className="rounded-xl border border-border/70 bg-muted/30 p-3.5">
+      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+        <Lightbulb className="size-3.5 text-primary" />
+        {label}
+      </div>
+      <p className="mt-2 text-lg font-semibold tabular-nums">{value}</p>
+      <p className="mt-0.5 text-xs text-muted-foreground">{detail}</p>
+    </div>
+  );
+}
+
+function BreakdownMobileCard({
+  row,
+  granularity,
+}: {
+  row: ReportBreakdownRow;
+  granularity: ReportGranularity;
+}) {
+  return (
+    <article className="rounded-xl border border-border/70 p-3.5">
+      <div className="flex items-start justify-between gap-3 border-b border-border/60 pb-3">
+        <div>
+          <p className="text-sm font-semibold">{breakdownLabel(row.from, row.to, granularity)}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {row.count} entrega(s) · {num(row.distance)} km ·{" "}
+            {minutesLabel(row.workedMin + row.idleMin)}
+          </p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p
+            className={
+              row.profit >= 0 ? "font-semibold text-success" : "font-semibold text-destructive"
+            }
+          >
+            {brl(row.profit)}
+          </p>
+          <p className="text-[11px] text-muted-foreground">lucro</p>
+        </div>
+      </div>
+      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+        <div>
+          <dt className="text-muted-foreground">Receita</dt>
+          <dd className="mt-0.5 font-semibold tabular-nums">{brl(row.revenue)}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Gastos totais</dt>
+          <dd className="mt-0.5 font-semibold tabular-nums text-destructive">
+            {brl(row.totalCost)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Receita por km</dt>
+          <dd className="mt-0.5 font-semibold tabular-nums">{brl(row.revenuePerKm)}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Lucro por hora</dt>
+          <dd className="mt-0.5 font-semibold tabular-nums">{brl(row.profitPerHour)}</dd>
+        </div>
+      </dl>
+      <div className="mt-3 flex items-center gap-2 rounded-lg bg-muted/60 px-2.5 py-2 text-xs text-muted-foreground">
+        <TrendingUp className="size-3.5 shrink-0 text-primary" />
+        <span className="min-w-0">
+          {brl(row.fuelCost)} combustível · {brl(row.otherCost)} outros · {brl(row.maintenanceCost)}{" "}
+          manutenção
+        </span>
+      </div>
+    </article>
   );
 }
