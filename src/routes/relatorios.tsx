@@ -399,21 +399,38 @@ function Relatorios() {
         description={`Período: ${period.label}`}
       >
         {totalCost > 0 ? (
-          <ul className="divide-y divide-border">
+          <ul className="space-y-1">
             {costRows
               .filter((r) => r.value > 0)
               .map((r) => (
-                <li key={r.label} className="flex items-center justify-between gap-3 py-2.5">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{r.label}</p>
-                    {r.hint ? (
-                      <p className="truncate text-xs text-muted-foreground">{r.hint}</p>
-                    ) : null}
+                <li key={r.label} className="rounded-lg px-2 py-2.5 hover:bg-muted/50">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{r.label}</p>
+                      {r.hint ? (
+                        <p className="truncate text-xs text-muted-foreground">{r.hint}</p>
+                      ) : null}
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <span className="block text-sm font-semibold tabular-nums">
+                        {brl(r.value)}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {num(totalCost ? (r.value / totalCost) * 100 : 0)}%
+                      </span>
+                    </div>
                   </div>
-                  <span className="text-sm font-semibold tabular-nums">{brl(r.value)}</span>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-destructive/70"
+                      style={{
+                        width: `${Math.min(100, totalCost ? (r.value / totalCost) * 100 : 0)}%`,
+                      }}
+                    />
+                  </div>
                 </li>
               ))}
-            <li className="flex items-center justify-between gap-3 py-2.5">
+            <li className="mt-2 flex items-center justify-between gap-3 border-t border-border px-2 pt-3">
               <p className="text-sm font-semibold">Total considerado no lucro</p>
               <span className="text-sm font-semibold tabular-nums text-destructive">
                 {brl(totalCost)}
@@ -449,6 +466,8 @@ function Relatorios() {
                 <thead>
                   <tr className="border-b border-border text-left text-xs text-muted-foreground">
                     <th className="py-2">Mês</th>
+                    <th className="py-2 text-right">Entregas</th>
+                    <th className="py-2 text-right">KM</th>
                     <th className="py-2 text-right">Receita</th>
                     <th className="py-2 text-right">Custos</th>
                     <th className="py-2 text-right">Lucro</th>
@@ -458,6 +477,8 @@ function Relatorios() {
                   {[...months].reverse().map((m) => (
                     <tr key={m.month} className="border-b border-border/60">
                       <td className="py-2">{monthLabel(m.month)}</td>
+                      <td className="py-2 text-right tabular-nums">{m.count}</td>
+                      <td className="py-2 text-right tabular-nums">{num(m.km)}</td>
                       <td className="py-2 text-right tabular-nums">{brl(m.revenue)}</td>
                       <td className="py-2 text-right tabular-nums">{brl(m.cost)}</td>
                       <td className="py-2 text-right font-medium tabular-nums">{brl(m.profit)}</td>
@@ -473,16 +494,30 @@ function Relatorios() {
 
         <SectionCard title="Desempenho por aplicativo" description={`Período: ${period.label}`}>
           {ranking.length ? (
-            <ul className="space-y-3">
-              {ranking.map((r) => (
-                <li key={r.app} className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">{r.app}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {r.count} entregas · receita {brl(r.revenue)}
-                    </p>
+            <ul className="space-y-2">
+              {ranking.map((r, index) => (
+                <li key={r.app} className="rounded-lg border border-border/70 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold">
+                        <span className="mr-2 text-xs text-muted-foreground">#{index + 1}</span>
+                        {r.app}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {r.count} entregas · {num(r.km)} km · {brl(r.perKm)}/km
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <span className="block text-sm font-semibold tabular-nums text-success">
+                        {brl(r.profit)}
+                      </span>
+                      <span className="text-xs text-muted-foreground">lucro estimado</span>
+                    </div>
                   </div>
-                  <span className="text-sm font-semibold tabular-nums">{brl(r.profit)}</span>
+                  <div className="mt-3 flex items-center justify-between border-t border-border/60 pt-2 text-xs">
+                    <span className="text-muted-foreground">Receita</span>
+                    <span className="font-medium tabular-nums">{brl(r.revenue)}</span>
+                  </div>
                 </li>
               ))}
             </ul>
