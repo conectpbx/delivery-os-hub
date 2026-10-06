@@ -257,6 +257,95 @@ export type Database = {
         }
         Relationships: []
       }
+      gps_device_state: {
+        Row: {
+          accuracy_m: number
+          captured_at: string
+          latitude: number
+          longitude: number
+          received_at: string
+          sent_at: string
+          source: string
+          speed_kmh: number | null
+          token_id: string
+          total_km: number
+          trip_km: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          accuracy_m: number
+          captured_at: string
+          latitude: number
+          longitude: number
+          received_at?: string
+          sent_at: string
+          source: string
+          speed_kmh?: number | null
+          token_id: string
+          total_km: number
+          trip_km: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          accuracy_m?: number
+          captured_at?: string
+          latitude?: number
+          longitude?: number
+          received_at?: string
+          sent_at?: string
+          source?: string
+          speed_kmh?: number | null
+          token_id?: string
+          total_km?: number
+          trip_km?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gps_device_state_token_id_fkey"
+            columns: ["token_id"]
+            isOneToOne: true
+            referencedRelation: "gps_device_tokens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gps_device_tokens: {
+        Row: {
+          created_at: string
+          device_name: string
+          id: string
+          is_active: boolean
+          last_used_at: string | null
+          token_hash: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          device_name: string
+          id?: string
+          is_active?: boolean
+          last_used_at?: string | null
+          token_hash: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          device_name?: string
+          id?: string
+          is_active?: boolean
+          last_used_at?: string | null
+          token_hash?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       maintenances: {
         Row: {
           cost: number
@@ -472,8 +561,46 @@ export type Database = {
         }
       }
       consume_ai_scan_quota: { Args: { _limit: number }; Returns: number }
+      create_my_gps_device_token: {
+        Args: { _device_name: string }
+        Returns: {
+          created_at: string
+          device_name: string
+          id: string
+          token: string
+        }[]
+      }
       get_my_system_access: { Args: never; Returns: Json }
+      ingest_gps_device_state: {
+        Args: {
+          _accuracy_m: number
+          _captured_at: string
+          _latitude: number
+          _longitude: number
+          _sent_at: string
+          _source: string
+          _speed_kmh: number
+          _token_hash: string
+          _total_km: number
+          _trip_km: number
+        }
+        Returns: Json
+      }
       is_super_admin: { Args: { _user_id?: string }; Returns: boolean }
+      list_my_gps_devices: {
+        Args: never
+        Returns: {
+          created_at: string
+          device_name: string
+          id: string
+          is_active: boolean
+          last_used_at: string
+        }[]
+      }
+      revoke_my_gps_device_token: {
+        Args: { _token_id: string }
+        Returns: boolean
+      }
       super_admin_update_module: {
         Args: { _enabled: boolean; _key: string }
         Returns: undefined
