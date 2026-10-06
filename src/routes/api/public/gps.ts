@@ -41,7 +41,8 @@ export const Route = createFileRoute("/api/public/gps")({
       OPTIONS: async () => new Response(null, { status: 204, headers: corsHeaders }),
       POST: async ({ request }) => {
         const contentLength = Number(request.headers.get("content-length") ?? 0);
-        if (contentLength > 16_384) return json({ accepted: false, error: "payload_too_large" }, 413);
+        if (contentLength > 16_384)
+          return json({ accepted: false, error: "payload_too_large" }, 413);
 
         const authorization = request.headers.get("authorization") ?? "";
         const match = authorization.match(/^Bearer\s+(dos_gps_[a-f0-9]{64})$/i);
@@ -58,7 +59,8 @@ export const Route = createFileRoute("/api/public/gps")({
 
         const capturedAt = timestamp(parsed.data.captured_at);
         const sentAt = timestamp(parsed.data.sent_at);
-        if (!capturedAt || !sentAt) return json({ accepted: false, error: "invalid_timestamp" }, 400);
+        if (!capturedAt || !sentAt)
+          return json({ accepted: false, error: "invalid_timestamp" }, 400);
 
         const now = Date.now();
         const capturedMs = Date.parse(capturedAt);
@@ -85,8 +87,10 @@ export const Route = createFileRoute("/api/public/gps")({
         }
 
         const result = data as { accepted?: boolean; reason?: string } | null;
-        if (result?.reason === "unauthorized") return json({ accepted: false, error: "unauthorized" }, 401);
-        if (result?.reason === "stale") return json({ accepted: false, error: "stale_reading" }, 409);
+        if (result?.reason === "unauthorized")
+          return json({ accepted: false, error: "unauthorized" }, 401);
+        if (result?.reason === "stale")
+          return json({ accepted: false, error: "stale_reading" }, 409);
         return json({ accepted: true }, 202);
       },
     },

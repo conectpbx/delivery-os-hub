@@ -338,7 +338,10 @@ function Financeiro() {
             )}
 
             {(gpsDevices.data ?? []).map((device) => (
-              <div key={device.id} className="flex items-center gap-3 rounded-lg border border-border p-3">
+              <div
+                key={device.id}
+                className="flex items-center gap-3 rounded-lg border border-border p-3"
+              >
                 <Smartphone className="size-4 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{device.device_name}</p>
@@ -388,14 +391,18 @@ function Financeiro() {
                     : ""}
                 </p>
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Precisão {num(externalGps.data.accuracy_m, 0)} m · {dateLabel(externalGps.data.captured_at)}
+                  Precisão {num(externalGps.data.accuracy_m, 0)} m ·{" "}
+                  {dateLabel(externalGps.data.captured_at)}
                 </p>
                 <Button
                   type="button"
                   variant="secondary"
                   className="mt-3 w-full"
                   onClick={() => {
-                    setFuel((value) => ({ ...value, odometer: String(externalGps.data?.total_km ?? "") }));
+                    setFuel((value) => ({
+                      ...value,
+                      odometer: String(externalGps.data?.total_km ?? ""),
+                    }));
                     toast.success("Odômetro preenchido pelo aplicativo");
                   }}
                 >
