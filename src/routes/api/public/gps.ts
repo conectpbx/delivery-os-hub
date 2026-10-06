@@ -71,9 +71,9 @@ export const Route = createFileRoute("/api/public/gps")({
         let data: unknown;
         try {
           const { createClient } = await import("@supabase/supabase-js");
-          const url = process.env["SUPABASE_URL"] || import.meta.env.VITE_SUPABASE_URL;
+          const url = process.env["SUPABASE_URL"] || import.meta.env["VITE_SUPABASE_URL"];
           const key =
-            process.env["SUPABASE_PUBLISHABLE_KEY"] || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+            process.env["SUPABASE_PUBLISHABLE_KEY"] || import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"];
           if (!url || !key) throw new Error("SUPABASE_URL missing");
           const client = createClient(url, key, {
             auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
