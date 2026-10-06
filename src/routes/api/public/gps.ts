@@ -68,22 +68,40 @@ export const Route = createFileRoute("/api/public/gps")({
           return json({ accepted: false, error: "timestamp_out_of_range" }, 400);
         }
 
-        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-        const { data, error } = await supabaseAdmin.rpc("ingest_gps_device_state", {
-          _token_hash: await sha256(match[1]),
-          _source: parsed.data.source,
-          _latitude: parsed.data.latitude,
-          _longitude: parsed.data.longitude,
-          _accuracy_m: parsed.data.accuracy_m,
-          _speed_kmh: parsed.data.speed_kmh,
-          _trip_km: parsed.data.trip_km,
-          _total_km: parsed.data.total_km,
-          _captured_at: capturedAt,
-          _sent_at: sentAt,
-        });
-        if (error) {
-          console.error("GPS ingest failed", error.code);
-          return json({ accepted: false, error: "temporarily_unavailable" }, 503);
+        let data: unknown;
+        try {
+          const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+          const rpcResult = await supabaseAdmin.rpc("ingest_gps_device_state", {
+            _token_hash: await sha256(match[1]),
+            _source: parsed.data.source,
+            _latitude: parsed.data.latitude,
+            _longitude: parsed.data.longitude,
+            _accuracy_m: parsed.data.accuracy_m,
+            _speed_kmh: parsed.data.speed_kmh,
+            _trip_km: parsed.data.trip_km,
+            _total_km: parsed.data.total_km,
+            _captured_at: capturedAt,
+            _sent_at: sentAt,
+          });
+
+          if (rpcResult.error) {
+            console.error("GPS ingest failed", rpcResult.error.code);
+            return json({ accepted: false, error: "temporarily_unavailable" }, 503);
+          }
+
+          data = rpcResult.data;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          console.error("GPS server configuration failed", message);
+
+          if (
+            message.includes("SUPABASE_URL") ||
+            message.includes("SUPABASE_SERVICE_ROLE_KEY")
+          ) {
+            return json({ accepted: false, error: "server_misconfigured" }, 503);
+          }
+
+          return json({ accepted: false, error: "server_error" }, 503);
         }
 
         const result = data as { accepted?: boolean; reason?: string } | null;
