@@ -79,6 +79,31 @@ Gera a pasta `.output/`:
 - `.output/public/` — assets estáticos (JS, CSS, imagens, manifest do PWA)
 - `.output/server/index.mjs` — servidor Node (SSR + API routes)
 
+## Integração de GPS com app nativo
+
+O rastreador da jornada aceita pontos enviados por uma WebView Android/iOS. O app nativo pode
+usar `window.postMessage` ou disparar um `CustomEvent` chamado `deliveryos:gps` com este formato:
+
+```json
+{
+  "type": "deliveryos:gps",
+  "payload": {
+    "latitude": -23.55052,
+    "longitude": -46.633308,
+    "accuracy": 12,
+    "timestamp": 1791244800000
+  }
+}
+```
+
+Também são aceitos `lat`, `lng` e uma data ISO em `at`. Coordenadas, precisão e data são
+validadas antes do cálculo. Quando chega o primeiro ponto nativo válido, o GPS do navegador é
+desativado para impedir captura duplicada.
+
+Ao iniciar, finalizar ou zerar uma jornada, a aplicação envia ao host React Native uma mensagem
+com o tipo `deliveryos:trip-command` e os comandos `start`, `finish` ou `reset`. Os mesmos dados
+são publicados como `CustomEvent` para outros tipos de WebView.
+
 ## Como funcionam as atualizações
 
 ### Deploy do servidor (automático)
