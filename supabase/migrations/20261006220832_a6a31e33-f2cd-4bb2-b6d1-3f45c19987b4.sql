@@ -1,0 +1,1 @@
+GRANT EXECUTE ON FUNCTION public.ingest_gps_device_state(text,text,double precision,double precision,double precision,double precision,double precision,double precision,timestamptz,timestamptz) TO anon;
