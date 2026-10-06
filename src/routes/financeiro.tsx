@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useHydrated } from "@tanstack/react-router";
 import { useState } from "react";
 import { Copy, Link2, LocateFixed, Play, Smartphone, Square, Trash2, Unplug } from "lucide-react";
 import { toast } from "sonner";
@@ -67,6 +67,8 @@ export const Route = createFileRoute("/financeiro")({
 const CATEGORIES = ["Alimentação", "Aluguel de moto", "Seguro", "Multa", "Pedágio", "Outros"];
 
 function Financeiro() {
+  const hydrated = useHydrated();
+  const gpsEndpoint = hydrated ? `${window.location.origin}/api/public/gps` : "/api/public/gps";
   const fuelings = useFuelings();
   const expenses = useExpenses();
   const deliveries = useDeliveries();
@@ -269,14 +271,14 @@ function Financeiro() {
                 <Link2 className="size-4 text-primary" /> Endereço de envio
               </p>
               <div className="mt-2 flex gap-2">
-                <Input value={`${window.location.origin}/api/public/gps`} readOnly aria-label="Endereço da API GPS" />
+                <Input value={gpsEndpoint} readOnly aria-label="Endereço da API GPS" />
                 <Button
                   type="button"
                   variant="outline"
                   size="icon"
                   aria-label="Copiar endereço da API"
                   onClick={async () => {
-                    await navigator.clipboard.writeText(`${window.location.origin}/api/public/gps`);
+                    await navigator.clipboard.writeText(gpsEndpoint);
                     toast.success("Endereço copiado");
                   }}
                 >
