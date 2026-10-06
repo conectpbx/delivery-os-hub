@@ -19,6 +19,7 @@ import { Route as ManutencaoRouteImport } from './routes/manutencao'
 import { Route as MetasRouteImport } from './routes/metas'
 import { Route as RelatoriosRouteImport } from './routes/relatorios'
 import { Route as ScannerRouteImport } from './routes/scanner'
+import { Route as ApiPublicGpsRouteImport } from './routes/api/public/gps'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -70,6 +71,11 @@ const ScannerRoute = ScannerRouteImport.update({
   path: '/scanner',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicGpsRoute = ApiPublicGpsRouteImport.update({
+  id: '/api/public/gps',
+  path: '/api/public/gps',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -82,6 +88,7 @@ export interface FileRoutesByFullPath {
   '/metas': typeof MetasRoute
   '/relatorios': typeof RelatoriosRoute
   '/scanner': typeof ScannerRoute
+  '/api/public/gps': typeof ApiPublicGpsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -94,6 +101,7 @@ export interface FileRoutesByTo {
   '/metas': typeof MetasRoute
   '/relatorios': typeof RelatoriosRoute
   '/scanner': typeof ScannerRoute
+  '/api/public/gps': typeof ApiPublicGpsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -107,6 +115,7 @@ export interface FileRoutesById {
   '/metas': typeof MetasRoute
   '/relatorios': typeof RelatoriosRoute
   '/scanner': typeof ScannerRoute
+  '/api/public/gps': typeof ApiPublicGpsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -121,6 +130,7 @@ export interface FileRouteTypes {
     | '/metas'
     | '/relatorios'
     | '/scanner'
+    | '/api/public/gps'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -133,6 +143,7 @@ export interface FileRouteTypes {
     | '/metas'
     | '/relatorios'
     | '/scanner'
+    | '/api/public/gps'
   id:
     | '__root__'
     | '/'
@@ -145,6 +156,7 @@ export interface FileRouteTypes {
     | '/metas'
     | '/relatorios'
     | '/scanner'
+    | '/api/public/gps'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -158,6 +170,7 @@ export interface RootRouteChildren {
   MetasRoute: typeof MetasRoute
   RelatoriosRoute: typeof RelatoriosRoute
   ScannerRoute: typeof ScannerRoute
+  ApiPublicGpsRoute: typeof ApiPublicGpsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -232,6 +245,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ScannerRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/gps': {
+      id: '/api/public/gps'
+      path: '/api/public/gps'
+      fullPath: '/api/public/gps'
+      preLoaderRoute: typeof ApiPublicGpsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -246,6 +266,7 @@ const rootRouteChildren: RootRouteChildren = {
   MetasRoute: MetasRoute,
   RelatoriosRoute: RelatoriosRoute,
   ScannerRoute: ScannerRoute,
+  ApiPublicGpsRoute: ApiPublicGpsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

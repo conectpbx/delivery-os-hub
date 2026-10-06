@@ -15,3 +15,4 @@
 - Goal performance analysis must isolate civil months and use only completed earlier months for historical comparisons, preventing rollover carryover.
 - Treat client-disconnected SSR requests as expected aborts and never promote them to fatal runtime screens or error telemetry.
 - A persistência offline do cache é agrupada antes da gravação no IndexedDB para reduzir trabalho na interface móvel sem perder dados.
+- External GPS ingestion uses per-device opaque bearer tokens stored only as SHA-256 hashes; only newer captured readings replace device state.

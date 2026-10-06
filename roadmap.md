@@ -7,3 +7,4 @@
 - [x] Adaptar a meta diária aos dias habituais de trabalho
 - [x] Exibir, editar e acompanhar todas as metas cadastradas
 - [x] Sugerir melhorias de desempenho sem misturar dados na virada do mês
+- [x] Integrar o aplicativo PainelOverlay por API segura com token e odômetro sincronizado
