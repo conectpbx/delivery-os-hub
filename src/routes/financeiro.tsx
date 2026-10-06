@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { LocateFixed, Play, Square, Trash2 } from "lucide-react";
+import { Copy, Link2, LocateFixed, Play, Smartphone, Square, Trash2, Unplug } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
@@ -36,6 +36,12 @@ import {
 } from "@/lib/metrics";
 import { PeriodFilter, PeriodSummary, usePeriodSelection } from "@/components/PeriodFilter";
 import { usePersistentState } from "@/lib/persistent-state";
+import {
+  useCreateGpsDevice,
+  useGpsDevices,
+  useGpsDeviceState,
+  useRevokeGpsDevice,
+} from "@/lib/gps-integration";
 
 export const Route = createFileRoute("/financeiro")({
   head: () => ({
@@ -87,9 +93,15 @@ function Financeiro() {
     allocation_method: "immediate" as "immediate" | "monthly",
   });
   const [eff, setEff] = useState("");
+  const [deviceName, setDeviceName] = useState("PainelOverlay");
+  const [newGpsToken, setNewGpsToken] = useState<string | null>(null);
   const period = usePeriodSelection(3);
   const [gps, setGps] = useState(false);
-  const { trip, error: tripError, start, finish, reset, pushGps } = useTripTracker();
+  const { trip, error: tripError, start, finish, reset } = useTripTracker();
+  const gpsDevices = useGpsDevices();
+  const externalGps = useGpsDeviceState();
+  const createGpsDevice = useCreateGpsDevice();
+  const revokeGpsDevice = useRevokeGpsDevice();
 
   const cpk = costPerKm(fuelings.data ?? [], profile.data);
   const maintenanceReserve = maintenanceReservePerKm(maintenances.data ?? []);
@@ -243,6 +255,158 @@ function Financeiro() {
             : "Informe o odômetro em um abastecimento para servir de base ao cálculo."}
           {tripError ? ` · GPS: ${tripError}` : ""}
         </p>
+      </SectionCard>
+
+      <SectionCard
+        className="mt-4"
+        title="Aplicativo de odômetro"
+        description="Conecte o PainelOverlay para receber jornada, odômetro e localização em segundo plano"
+      >
+        <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+          <div className="space-y-3">
+            <div className="rounded-lg border border-border p-3">
+              <p className="flex items-center gap-2 text-sm font-semibold">
+                <Link2 className="size-4 text-primary" /> Endereço de envio
+              </p>
+              <div className="mt-2 flex gap-2">
+                <Input value={`${window.location.origin}/api/public/gps`} readOnly aria-label="Endereço da API GPS" />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label="Copiar endereço da API"
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(`${window.location.origin}/api/public/gps`);
+                    toast.success("Endereço copiado");
+                  }}
+                >
+                  <Copy className="size-4" />
+                </Button>
+              </div>
+            </div>
+
+            {newGpsToken ? (
+              <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
+                <p className="text-sm font-semibold">Token criado — copie agora</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Por segurança, ele não será exibido novamente.
+                </p>
+                <div className="mt-2 flex gap-2">
+                  <Input value={newGpsToken} readOnly aria-label="Token do aplicativo GPS" />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    aria-label="Copiar token"
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(newGpsToken);
+                      toast.success("Token copiado");
+                    }}
+                  >
+                    <Copy className="size-4" />
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Input
+                  value={deviceName}
+                  maxLength={80}
+                  aria-label="Nome do dispositivo"
+                  placeholder="Nome do dispositivo"
+                  onChange={(event) => setDeviceName(event.target.value)}
+                />
+                <Button
+                  type="button"
+                  disabled={!deviceName.trim() || createGpsDevice.isPending}
+                  onClick={async () => {
+                    try {
+                      const created = await createGpsDevice.mutateAsync(deviceName);
+                      setNewGpsToken(created.token);
+                      toast.success("Conexão criada");
+                    } catch {
+                      toast.error("Não foi possível criar a conexão");
+                    }
+                  }}
+                >
+                  <Smartphone className="mr-2 size-4" />
+                  {createGpsDevice.isPending ? "Criando..." : "Gerar token"}
+                </Button>
+              </div>
+            )}
+
+            {(gpsDevices.data ?? []).map((device) => (
+              <div key={device.id} className="flex items-center gap-3 rounded-lg border border-border p-3">
+                <Smartphone className="size-4 text-muted-foreground" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{device.device_name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {device.is_active
+                      ? device.last_used_at
+                        ? `Último envio: ${dateLabel(device.last_used_at)}`
+                        : "Aguardando o primeiro envio"
+                      : "Conexão revogada"}
+                  </p>
+                </div>
+                {device.is_active ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Revogar ${device.device_name}`}
+                    disabled={revokeGpsDevice.isPending}
+                    onClick={async () => {
+                      try {
+                        await revokeGpsDevice.mutateAsync(device.id);
+                        setNewGpsToken(null);
+                        toast.success("Conexão revogada");
+                      } catch {
+                        toast.error("Não foi possível revogar a conexão");
+                      }
+                    }}
+                  >
+                    <Unplug className="size-4" />
+                  </Button>
+                ) : null}
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-lg border border-border p-4">
+            <p className="text-xs text-muted-foreground">Última leitura externa</p>
+            {externalGps.data ? (
+              <>
+                <p className="mt-1 text-2xl font-semibold tabular-nums">
+                  {num(externalGps.data.total_km)} km
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Jornada {num(externalGps.data.trip_km)} km
+                  {externalGps.data.speed_kmh != null
+                    ? ` · ${num(externalGps.data.speed_kmh)} km/h`
+                    : ""}
+                </p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Precisão {num(externalGps.data.accuracy_m, 0)} m · {dateLabel(externalGps.data.captured_at)}
+                </p>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="mt-3 w-full"
+                  onClick={() => {
+                    setFuel((value) => ({ ...value, odometer: String(externalGps.data?.total_km ?? "") }));
+                    toast.success("Odômetro preenchido pelo aplicativo");
+                  }}
+                >
+                  Usar odômetro
+                </Button>
+              </>
+            ) : (
+              <p className="mt-2 text-sm text-muted-foreground">
+                Configure a URL e o token no PainelOverlay para receber a primeira leitura.
+              </p>
+            )}
+          </div>
+        </div>
       </SectionCard>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
