@@ -31,6 +31,10 @@ const POSITION_OPTIONS: PositionOptions = {
   maximumAge: 15000,
 };
 
+const POSITION_CACHE_MS = 10_000;
+let cachedPosition: { value: CurrentPosition; capturedAt: number } | null = null;
+let pendingPosition: Promise<CurrentPosition> | null = null;
+
 export function geolocationErrorMessage(error: GeolocationPositionError) {
   if (error.code === error.PERMISSION_DENIED) {
     return "Permissão de localização negada — libere o GPS nas configurações do navegador";
@@ -51,23 +55,47 @@ export function isGeolocationError(error: unknown): error is GeolocationPosition
 }
 
 export function getCurrentPosition(options: PositionOptions = POSITION_OPTIONS) {
-  return new Promise<CurrentPosition>((resolve, reject) => {
+  const usesDefaults = options === POSITION_OPTIONS;
+  if (
+    usesDefaults &&
+    cachedPosition &&
+    Date.now() - cachedPosition.capturedAt <= POSITION_CACHE_MS
+  ) {
+    return Promise.resolve(cachedPosition.value);
+  }
+  // Several address buttons can request the location almost simultaneously. Reuse the
+  // same native request instead of starting competing high-accuracy GPS acquisitions.
+  if (usesDefaults && pendingPosition) return pendingPosition;
+
+  const request = new Promise<CurrentPosition>((resolve, reject) => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       reject(new Error("GPS indisponível neste dispositivo"));
       return;
     }
 
     navigator.geolocation.getCurrentPosition(
-      (pos) =>
-        resolve({
+      (pos) => {
+        const value = {
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
           accuracy: Math.round(pos.coords.accuracy ?? 0),
-        }),
+        };
+        cachedPosition = { value, capturedAt: Date.now() };
+        resolve(value);
+      },
       reject,
       options,
     );
   });
+
+  if (!usesDefaults) return request;
+  pendingPosition = request;
+  void request
+    .finally(() => {
+      if (pendingPosition === request) pendingPosition = null;
+    })
+    .catch(() => undefined);
+  return request;
 }
 
 export function newStop(kind: Stop["kind"] = "entrega"): Stop {

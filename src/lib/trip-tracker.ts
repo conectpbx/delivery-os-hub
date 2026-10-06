@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { sendNativeTripCommand, subscribeNativeGps } from "@/lib/native-gps-bridge";
 
 const PREFIX = "deliveryos.trip:";
+const GPS_SAMPLE_INTERVAL_MS = 2_000;
+const STORAGE_WRITE_DELAY_MS = 3_000;
 
 export type GpsPoint = {
   lat: number;
@@ -77,8 +80,15 @@ function ingest(
   let add = 0;
   if (prev) {
     const d = haversineKm(prev, point);
-    // ignora ruído (<15m) e saltos absurdos (>2km entre leituras)
-    if (d >= 0.015 && d <= 2) add = d;
+    const elapsedHours =
+      prev.at && point.at
+        ? (new Date(point.at).getTime() - new Date(prev.at).getTime()) / 3_600_000
+        : 0;
+    // O limite cresce em capturas nativas espaçadas (por exemplo, após execução em segundo
+    // plano), mas nunca permite uma velocidade média acima de 180 km/h.
+    const maxDistanceKm = Math.max(2, elapsedHours * 180);
+    if (elapsedHours < 0) return { next: null, reason: "noise" };
+    if (d >= 0.015 && d <= maxDistanceKm) add = d;
     else if (d < 0.015) return { next: null, reason: "noise" };
     else return { next: null, reason: "jump" };
   }
@@ -106,12 +116,30 @@ export function useTripTracker() {
   const [error, setError] = useState<string | null>(null);
   const watchId = useRef<number | null>(null);
   const stateRef = useRef<TripState>(EMPTY);
+  const lastSampleAt = useRef(0);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const persistSoon = useCallback(() => {
+    if (!storageKey || saveTimer.current != null) return;
+    saveTimer.current = setTimeout(() => {
+      saveTimer.current = null;
+      save(storageKey, stateRef.current);
+    }, STORAGE_WRITE_DELAY_MS);
+  }, [storageKey]);
 
   const apply = useCallback(
     (next: TripState) => {
       stateRef.current = next;
       setState(next);
-      save(storageKey, next);
+      persistSoon();
+    },
+    [persistSoon],
+  );
+
+  useEffect(
+    () => () => {
+      if (saveTimer.current != null) clearTimeout(saveTimer.current);
+      save(storageKey, stateRef.current);
     },
     [storageKey],
   );
@@ -131,11 +159,15 @@ export function useTripTracker() {
     if (watchId.current != null) return;
     watchId.current = navigator.geolocation.watchPosition(
       (pos) => {
+        const now = Date.now();
+        if (now - lastSampleAt.current < GPS_SAMPLE_INTERVAL_MS) return;
+        lastSampleAt.current = now;
         const cur = stateRef.current;
         const point = {
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
           accuracy: pos.coords.accuracy ?? 999,
+          at: new Date(pos.timestamp || Date.now()).toISOString(),
         };
         const result = ingest(cur, point, 50);
         if (!result.next) return;
@@ -155,6 +187,7 @@ export function useTripTracker() {
       navigator.geolocation.clearWatch(watchId.current);
     }
     watchId.current = null;
+    lastSampleAt.current = 0;
   }, []);
 
   // Retoma a captura ao recarregar a página com jornada ativa (somente no browser).
@@ -167,26 +200,36 @@ export function useTripTracker() {
     (point: GpsPoint) => {
       const cur = stateRef.current;
       const result = ingest(cur, point, 60);
-      if (result.next) apply(result.next);
+      if (result.next) {
+        setError(null);
+        apply(result.next);
+      }
     },
     [apply],
   );
+
+  // O primeiro ponto nativo muda a fonte para "external" e desliga automaticamente
+  // o watchPosition do navegador, impedindo duas capturas simultâneas.
+  useEffect(() => subscribeNativeGps(pushGps), [pushGps]);
 
   const start = useCallback(() => {
     setError(null);
     const next = { ...EMPTY, active: true, startedAt: new Date().toISOString() };
     apply(next);
     startWatch();
+    sendNativeTripCommand("start");
   }, [apply, startWatch]);
 
   const finish = useCallback(() => {
     stopWatch();
     apply({ ...stateRef.current, active: false, endedAt: new Date().toISOString(), last: null });
+    sendNativeTripCommand("finish");
   }, [apply, stopWatch]);
 
   const reset = useCallback(() => {
     stopWatch();
     apply(EMPTY);
+    sendNativeTripCommand("reset");
   }, [apply, stopWatch]);
 
   return { trip: state, error, start, finish, reset, pushGps };
