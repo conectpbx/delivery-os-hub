@@ -70,8 +70,15 @@ export const Route = createFileRoute("/api/public/gps")({
 
         let data: unknown;
         try {
-          const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-          const rpcResult = await supabaseAdmin.rpc("ingest_gps_device_state", {
+          const { createClient } = await import("@supabase/supabase-js");
+          const url = process.env["SUPABASE_URL"] || import.meta.env["VITE_SUPABASE_URL"];
+          const key =
+            process.env["SUPABASE_PUBLISHABLE_KEY"] || import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"];
+          if (!url || !key) throw new Error("SUPABASE_URL missing");
+          const client = createClient(url, key, {
+            auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
+          });
+          const rpcResult = await client.rpc("ingest_gps_device_state", {
             _token_hash: await sha256(match[1]),
             _source: parsed.data.source,
             _latitude: parsed.data.latitude,
