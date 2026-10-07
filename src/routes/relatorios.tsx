@@ -265,9 +265,9 @@ function Relatorios() {
           tone={total.profit >= 0 ? "success" : "destructive"}
         />
         <StatCard
-          label="Lucro operacional"
+          label="Lucro operacional estimado"
           value={brl(operational.profit)}
-          hint={`Reserva ${brl(operational.maintenanceCost)} · ${brl(maintenanceReserve.costPerKm)}/km`}
+          hint={`Estimativa por km · reserva ${brl(operational.maintenanceCost)}`}
           tone={operational.profit >= 0 ? "success" : "destructive"}
         />
         <StatCard
@@ -338,55 +338,91 @@ function Relatorios() {
         }
       >
         {breakdown.length ? (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                  <th className="pb-2 pr-4 font-medium">Período</th>
-                  <th className="px-2 pb-2 text-right font-medium">Entregas</th>
-                  <th className="px-2 pb-2 text-right font-medium">KM</th>
-                  <th className="px-2 pb-2 text-right font-medium">Tempo</th>
-                  <th className="px-2 pb-2 text-right font-medium">Receita</th>
-                  <th className="px-2 pb-2 text-right font-medium">Gastos</th>
-                  <th className="px-2 pb-2 text-right font-medium">Lucro</th>
-                  <th className="px-2 pb-2 text-right font-medium">R$/km</th>
-                  <th className="pl-2 pb-2 text-right font-medium">Lucro/h</th>
-                </tr>
-              </thead>
-              <tbody>
-                {breakdown.map((row) => (
-                  <tr key={row.key} className="border-b border-border/60 last:border-0">
-                    <td className="py-3 pr-4">
-                      <p className="font-medium">{breakdownLabel(row.from, row.to, granularity)}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {brl(row.fuelCost)} combustível · {brl(row.otherCost)} outros
-                      </p>
-                    </td>
-                    <td className="px-2 py-3 text-right tabular-nums">{row.count}</td>
-                    <td className="px-2 py-3 text-right tabular-nums">{num(row.distance)}</td>
-                    <td className="px-2 py-3 text-right tabular-nums">
-                      <span>{minutesLabel(row.workedMin + row.idleMin)}</span>
-                      {row.idleMin > 0 ? (
-                        <span className="block text-xs text-muted-foreground">
-                          {minutesLabel(row.idleMin)} parado
-                        </span>
-                      ) : null}
-                    </td>
-                    <td className="px-2 py-3 text-right tabular-nums">{brl(row.revenue)}</td>
-                    <td className="px-2 py-3 text-right tabular-nums text-destructive">
-                      {brl(row.totalCost)}
-                    </td>
-                    <td
-                      className={`px-2 py-3 text-right font-semibold tabular-nums ${row.profit >= 0 ? "text-success" : "text-destructive"}`}
-                    >
-                      {brl(row.profit)}
-                    </td>
-                    <td className="px-2 py-3 text-right tabular-nums">{brl(row.revenuePerKm)}</td>
-                    <td className="pl-2 py-3 text-right tabular-nums">{brl(row.profitPerHour)}</td>
+          <div>
+            <div className="space-y-3 md:hidden print:hidden">
+              {breakdown.map((row) => (
+                <article key={row.key} className="min-w-0 rounded-lg border border-border p-3">
+                  <h3 className="break-words text-sm font-semibold">
+                    {breakdownLabel(row.from, row.to, granularity)}
+                  </h3>
+                  <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-3 text-sm">
+                    {[
+                      ["Entregas", String(row.count)],
+                      ["Quilômetros", `${num(row.distance)} km`],
+                      ["Tempo total", minutesLabel(row.workedMin + row.idleMin)],
+                      ["Tempo parado", minutesLabel(row.idleMin)],
+                      ["Receita", brl(row.revenue)],
+                      ["Gastos", brl(row.totalCost)],
+                      ["Combustível", brl(row.fuelCost)],
+                      ["Outros gastos", brl(row.otherCost)],
+                      ["Manutenção", brl(row.maintenanceCost)],
+                      ["Lucro", brl(row.profit)],
+                      ["Receita/km", brl(row.revenuePerKm)],
+                      ["Lucro/h", brl(row.profitPerHour)],
+                    ].map(([label, value]) => (
+                      <div key={label} className="min-w-0">
+                        <dt className="break-words text-xs text-muted-foreground">{label}</dt>
+                        <dd className="mt-1 break-words font-medium tabular-nums">{value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </article>
+              ))}
+            </div>
+            <div className="hidden overflow-x-auto md:block print:block">
+              <table className="w-full min-w-[980px] text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                    <th className="pb-2 pr-4 font-medium">Período</th>
+                    <th className="px-2 pb-2 text-right font-medium">Entregas</th>
+                    <th className="px-2 pb-2 text-right font-medium">KM</th>
+                    <th className="px-2 pb-2 text-right font-medium">Tempo</th>
+                    <th className="px-2 pb-2 text-right font-medium">Receita</th>
+                    <th className="px-2 pb-2 text-right font-medium">Gastos</th>
+                    <th className="px-2 pb-2 text-right font-medium">Lucro</th>
+                    <th className="px-2 pb-2 text-right font-medium">R$/km</th>
+                    <th className="pl-2 pb-2 text-right font-medium">Lucro/h</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {breakdown.map((row) => (
+                    <tr key={row.key} className="border-b border-border/60 last:border-0">
+                      <td className="py-3 pr-4">
+                        <p className="font-medium">
+                          {breakdownLabel(row.from, row.to, granularity)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {brl(row.fuelCost)} combustível · {brl(row.otherCost)} outros
+                        </p>
+                      </td>
+                      <td className="px-2 py-3 text-right tabular-nums">{row.count}</td>
+                      <td className="px-2 py-3 text-right tabular-nums">{num(row.distance)}</td>
+                      <td className="px-2 py-3 text-right tabular-nums">
+                        <span>{minutesLabel(row.workedMin + row.idleMin)}</span>
+                        {row.idleMin > 0 ? (
+                          <span className="block text-xs text-muted-foreground">
+                            {minutesLabel(row.idleMin)} parado
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="px-2 py-3 text-right tabular-nums">{brl(row.revenue)}</td>
+                      <td className="px-2 py-3 text-right tabular-nums text-destructive">
+                        {brl(row.totalCost)}
+                      </td>
+                      <td
+                        className={`px-2 py-3 text-right font-semibold tabular-nums ${row.profit >= 0 ? "text-success" : "text-destructive"}`}
+                      >
+                        {brl(row.profit)}
+                      </td>
+                      <td className="px-2 py-3 text-right tabular-nums">{brl(row.revenuePerKm)}</td>
+                      <td className="pl-2 py-3 text-right tabular-nums">
+                        {brl(row.profitPerHour)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         ) : (
           <EmptyState>Nenhum lançamento encontrado neste período.</EmptyState>

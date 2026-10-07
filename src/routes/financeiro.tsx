@@ -197,9 +197,9 @@ function Financeiro() {
           hint={`Média ${brl(avgFuelPrice(fuelings.data ?? []))}/L`}
         />
         <StatCard
-          label="Lucro operacional"
+          label="Lucro operacional estimado"
           value={brl(operational.profit)}
-          hint={`Custo ${brl(cpk + maintenanceReserve.costPerKm)}/km · reserva ${brl(operational.maintenanceCost)}`}
+          hint={`Custo estimado ${brl(cpk + maintenanceReserve.costPerKm)}/km · reserva ${brl(operational.maintenanceCost)}`}
           tone={operational.profit >= 0 ? "success" : "destructive"}
         />
       </div>

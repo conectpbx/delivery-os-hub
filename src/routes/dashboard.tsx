@@ -239,16 +239,16 @@ function Dashboard() {
           icon={<Banknote className="size-4" />}
         />
         <StatCard
-          label="Lucro operacional"
+          label="Lucro operacional estimado"
           value={brl(s.profit)}
-          hint={`Margem ${num(s.revenue ? (s.profit / s.revenue) * 100 : 0)}%`}
+          hint={`Estimativa por km · margem ${num(s.revenue ? (s.profit / s.revenue) * 100 : 0)}%`}
           tone={s.profit >= 0 ? "success" : "destructive"}
           icon={<TrendingUp className="size-4" />}
         />
         <StatCard
-          label="Custos operacionais"
-          value={brl(s.fuelCost + s.otherCost + s.maintenanceCost)}
-          hint={`Combustível ${brl(s.fuelCost)} · reserva ${brl(s.maintenanceCost)}`}
+          label="Custos registrados"
+          value={brl(cash.fuelCost + cash.otherCost + cash.maintenanceCost)}
+          hint={`Abastecimentos ${brl(cash.fuelCost)} · despesas e manutenção ${brl(cash.otherCost + cash.maintenanceCost)}`}
           tone="destructive"
           icon={<Fuel className="size-4" />}
         />

@@ -38,7 +38,6 @@ export function StatCard({
   );
 }
 
-
 export function SectionCard({
   title,
   description,
@@ -54,18 +53,17 @@ export function SectionCard({
 }) {
   return (
     <section className={cn("surface-card min-w-0 p-4 sm:p-5", className)}>
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+      <div className="mb-4 flex flex-col items-start justify-between gap-3 sm:flex-row sm:flex-wrap">
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold">{title}</h2>
           {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
         </div>
-        {actions ? <div className="shrink-0">{actions}</div> : null}
+        {actions ? <div className="w-full min-w-0 sm:w-auto sm:shrink-0">{actions}</div> : null}
       </div>
       <div className="min-w-0">{children}</div>
     </section>
   );
 }
-
 
 export function EmptyState({ children }: { children: ReactNode }) {
   return (

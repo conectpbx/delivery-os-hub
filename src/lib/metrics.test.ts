@@ -9,6 +9,8 @@ import {
   nextMonthlyDueDate,
   proratedExpenseTotal,
   reportBreakdown,
+  summarizeOperational,
+  summarizeRecordedCosts,
 } from "./metrics";
 
 const maintenance = (values: Partial<Maintenance>): Maintenance => ({
@@ -291,4 +293,52 @@ test("detalhamento semanal começa na segunda e mantém semanas separadas", () =
   assert.equal(rows.length, 2);
   assert.equal(rows[0]?.key, "2026-09-21");
   assert.equal(rows[1]?.key, "2026-09-14");
+});
+
+test("abastecimento registrado de R$ 30 não é substituído pela estimativa de R$ 50", () => {
+  const deliveries = [
+    { ...delivery("entrega", "2026-09-14T10:00:00-03:00", 100), distance_km: 100 },
+  ];
+  const fuelings: Fueling[] = [
+    {
+      id: "abastecimento",
+      liters: 5,
+      price_per_liter: 6,
+      total: 30,
+      odometer: null,
+      station: null,
+      occurred_at: "2026-09-14T19:00:00-03:00",
+    },
+  ];
+  const recorded = summarizeRecordedCosts(deliveries, [], [], fuelings);
+  const estimated = summarizeOperational(deliveries, [], 0.5, 0);
+  const [report] = reportBreakdown(deliveries, [], fuelings, [], "day");
+
+  assert.equal(recorded.fuelCost, 30);
+  assert.equal(recorded.profit, 70);
+  assert.equal(estimated.fuelCost, 50);
+  assert.equal(report?.fuelCost, recorded.fuelCost);
+  assert.equal(report?.totalCost, 30);
+});
+
+test("custos registrados incluem abastecimentos mesmo sem entregas", () => {
+  const recorded = summarizeRecordedCosts(
+    [],
+    [],
+    [],
+    [
+      {
+        id: "abastecimento",
+        liters: 5,
+        price_per_liter: 6,
+        total: 30,
+        odometer: null,
+        station: null,
+        occurred_at: "2026-09-14T19:00:00-03:00",
+      },
+    ],
+  );
+
+  assert.equal(recorded.fuelCost, 30);
+  assert.equal(recorded.profit, -30);
 });
