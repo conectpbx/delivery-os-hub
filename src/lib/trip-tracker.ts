@@ -79,6 +79,9 @@ function ingest(
   const prev = cur.last;
   let add = 0;
   if (prev) {
+    if (prev.at && point.at && new Date(point.at).getTime() <= new Date(prev.at).getTime()) {
+      return { next: null, reason: "noise" };
+    }
     const d = haversineKm(prev, point);
     const elapsedHours =
       prev.at && point.at
@@ -212,13 +215,17 @@ export function useTripTracker() {
   // o watchPosition do navegador, impedindo duas capturas simultâneas.
   useEffect(() => subscribeNativeGps(pushGps), [pushGps]);
 
-  const start = useCallback(() => {
-    setError(null);
-    const next = { ...EMPTY, active: true, startedAt: new Date().toISOString() };
-    apply(next);
-    startWatch();
-    sendNativeTripCommand("start");
-  }, [apply, startWatch]);
+  const start = useCallback(
+    (source: TripSource = "browser") => {
+      setError(null);
+      const next = { ...EMPTY, source, active: true, startedAt: new Date().toISOString() };
+      apply(next);
+      if (source === "browser") startWatch();
+      else stopWatch();
+      sendNativeTripCommand("start");
+    },
+    [apply, startWatch, stopWatch],
+  );
 
   const finish = useCallback(() => {
     stopWatch();

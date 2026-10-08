@@ -37,7 +37,7 @@ export function useGpsDevices() {
   });
 }
 
-export function useGpsDeviceState() {
+export function useGpsDeviceState(tracking = false) {
   return useQuery({
     queryKey: ["gps-device-state"],
     queryFn: async () => {
@@ -52,7 +52,8 @@ export function useGpsDeviceState() {
       if (error) throw error;
       return data as GpsDeviceState | null;
     },
-    refetchInterval: 10_000,
+    refetchInterval: tracking ? 2_000 : 10_000,
+    refetchIntervalInBackground: tracking,
     staleTime: 5_000,
   });
 }

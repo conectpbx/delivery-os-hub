@@ -1,5 +1,5 @@
 import { createFileRoute, useHydrated } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Copy, Link2, LocateFixed, Play, Smartphone, Square, Trash2, Unplug } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
@@ -26,6 +26,7 @@ import {
   reverseGeocodeAddress,
 } from "@/lib/geo";
 import { useTripTracker } from "@/lib/trip-tracker";
+import { integratedGpsPoint } from "@/lib/integrated-gps-point";
 import {
   avgFuelPrice,
   costPerKm,
@@ -99,9 +100,15 @@ function Financeiro() {
   const [newGpsToken, setNewGpsToken] = useState<string | null>(null);
   const period = usePeriodSelection(3);
   const [gps, setGps] = useState(false);
-  const { trip, error: tripError, start, finish, reset } = useTripTracker();
+  const { trip, error: tripError, start, finish, reset, pushGps } = useTripTracker();
   const gpsDevices = useGpsDevices();
-  const externalGps = useGpsDeviceState();
+  const externalGps = useGpsDeviceState(trip.active);
+
+  useEffect(() => {
+    if (!trip.active || !trip.startedAt || !externalGps.data) return;
+    const point = integratedGpsPoint(externalGps.data, trip.startedAt);
+    if (point) pushGps(point);
+  }, [externalGps.data, trip.active, trip.startedAt, pushGps]);
   const createGpsDevice = useCreateGpsDevice();
   const revokeGpsDevice = useRevokeGpsDevice();
 
@@ -214,7 +221,7 @@ function Financeiro() {
             <p className="text-2xl font-semibold tabular-nums">{num(trip.distanceKm)} km</p>
             <p className="truncate text-xs text-muted-foreground">
               {trip.active
-                ? `Capturando ${trip.source === "external" ? "via app nativo" : "via GPS do navegador"} desde ${dateLabel(trip.startedAt ?? new Date().toISOString())} · ${trip.points} pontos`
+                ? `${trip.points ? "Capturando" : "Aguardando sinal"} ${trip.source === "external" ? "via GPS integrado" : "via GPS do navegador"} desde ${dateLabel(trip.startedAt ?? new Date().toISOString())} · ${trip.points} pontos`
                 : trip.endedAt
                   ? `Jornada finalizada · ${trip.points} pontos`
                   : "Nenhuma jornada em andamento"}
@@ -226,7 +233,13 @@ function Financeiro() {
                 <Square className="mr-2 size-4" /> Finalizar
               </Button>
             ) : (
-              <Button onClick={start}>
+              <Button
+                onClick={() => {
+                  const integrated = gpsDevices.data?.some((device) => device.is_active);
+                  start(integrated ? "external" : "browser");
+                  void externalGps.refetch();
+                }}
+              >
                 <Play className="mr-2 size-4" /> Iniciar jornada
               </Button>
             )}
