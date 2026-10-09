@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { sendNativeTripCommand, subscribeNativeGps } from "@/lib/native-gps-bridge";
+import type { GpsDeviceState } from "./gps-integration";
+import {
+  accumulateIntegratedTrip,
+  gpsCounterBaseline,
+  type IntegratedBaseline,
+} from "./integrated-trip";
 
 const PREFIX = "deliveryos.trip:";
 const GPS_SAMPLE_INTERVAL_MS = 2_000;
@@ -23,6 +29,7 @@ export type TripState = {
   distanceKm: number;
   points: number;
   last: GpsPoint | null;
+  integratedBaseline?: IntegratedBaseline;
 };
 
 const EMPTY: TripState = {
@@ -148,6 +155,12 @@ export function useTripTracker() {
   );
 
   useEffect(() => {
+    const flush = () => save(storageKey, stateRef.current);
+    window.addEventListener("pagehide", flush);
+    return () => window.removeEventListener("pagehide", flush);
+  }, [storageKey]);
+
+  useEffect(() => {
     if (loading || !storageKey) return;
     const loaded = load(storageKey);
     stateRef.current = loaded;
@@ -202,6 +215,7 @@ export function useTripTracker() {
   const pushGps = useCallback(
     (point: GpsPoint) => {
       const cur = stateRef.current;
+      if (cur.integratedBaseline) return;
       const result = ingest(cur, point, 60);
       if (result.next) {
         setError(null);
@@ -215,10 +229,28 @@ export function useTripTracker() {
   // o watchPosition do navegador, impedindo duas capturas simultâneas.
   useEffect(() => subscribeNativeGps(pushGps), [pushGps]);
 
+  const pushIntegratedGps = useCallback(
+    (reading: GpsDeviceState) => {
+      const next = accumulateIntegratedTrip(stateRef.current, reading);
+      if (next) {
+        setError(null);
+        apply(next);
+      }
+    },
+    [apply],
+  );
+
   const start = useCallback(
-    (source: TripSource = "browser") => {
+    (source: TripSource = "browser", reading?: GpsDeviceState | null) => {
       setError(null);
-      const next = { ...EMPTY, source, active: true, startedAt: new Date().toISOString() };
+      const baseline = source === "external" && reading ? gpsCounterBaseline(reading) : null;
+      const next = {
+        ...EMPTY,
+        source,
+        active: true,
+        startedAt: new Date().toISOString(),
+        ...(baseline ? { integratedBaseline: baseline } : {}),
+      };
       apply(next);
       if (source === "browser") startWatch();
       else stopWatch();
@@ -239,5 +271,5 @@ export function useTripTracker() {
     sendNativeTripCommand("reset");
   }, [apply, stopWatch]);
 
-  return { trip: state, error, start, finish, reset, pushGps };
+  return { trip: state, error, start, finish, reset, pushGps, pushIntegratedGps };
 }

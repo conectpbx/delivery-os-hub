@@ -34,6 +34,7 @@ import {
   byMonth,
   costPerKm,
   goalPerformanceAnalysis,
+  savedRevenueGoal,
 } from "@/lib/metrics";
 import { useCalendarNow } from "@/hooks/useCalendarNow";
 
@@ -83,6 +84,7 @@ function Metas() {
   const current = monthKey(now);
   const currentSummary = months.find((m) => m.month === current);
   const currentGoals = (goals.data ?? []).filter((goal) => goal.month.slice(0, 7) === current);
+  const referenceGoal = savedRevenueGoal(goals.data ?? [], now);
   const sortedGoals = useMemo(
     () => [...(goals.data ?? [])].sort((a, b) => b.month.localeCompare(a.month)),
     [goals.data],
@@ -109,6 +111,7 @@ function Metas() {
     deliveries_target: "",
   });
   const [daily, setDaily] = useState("");
+  const [formDirty, setFormDirty] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const previousCurrent = useRef(current);
   const formRef = useRef<HTMLDivElement>(null);
@@ -116,12 +119,27 @@ function Metas() {
   useEffect(() => {
     const previous = previousCurrent.current;
     if (previous !== current) {
-      setForm((value) => (value.month === previous ? { ...value, month: current } : value));
+      setForm((value) =>
+        value.month === previous
+          ? { month: current, revenue_target: "", profit_target: "", deliveries_target: "" }
+          : value,
+      );
+      setFormDirty(false);
       previousCurrent.current = current;
     }
   }, [current]);
 
   const existingGoal = (goals.data ?? []).find((g) => g.month.slice(0, 7) === form.month);
+
+  useEffect(() => {
+    if (formDirty || !goals.data) return;
+    setForm((f) => ({
+      ...f,
+      revenue_target: existingGoal ? String(existingGoal.revenue_target) : "",
+      profit_target: existingGoal ? String(existingGoal.profit_target) : "",
+      deliveries_target: existingGoal ? String(existingGoal.deliveries_target) : "",
+    }));
+  }, [existingGoal, form.month, formDirty, goals.data]);
 
   const history = useMemo(() => {
     const past = months.filter((m) => m.month < current && m.revenue > 0).slice(-3);
@@ -142,9 +160,17 @@ function Metas() {
   const perDayDeliveries = deliveriesValue > 0 ? deliveriesValue / daysInMonth : 0;
 
   const invalidProfit = revenueValue > 0 && profitValue > revenueValue;
-  const canSubmit = revenueValue > 0 && !invalidProfit && !add.isPending && !update.isPending;
+  const canSubmit =
+    formDirty &&
+    !goals.isPending &&
+    !goals.isError &&
+    revenueValue > 0 &&
+    !invalidProfit &&
+    !add.isPending &&
+    !update.isPending;
 
   function applyRevenue(value: number) {
+    setFormDirty(true);
     const margin = history?.margin ?? 0.7;
     const ticket = history && history.count > 0 ? history.revenue / history.count : 12;
     setForm((f) => ({
@@ -156,6 +182,7 @@ function Metas() {
   }
 
   function editGoal(goal: (typeof sortedGoals)[number]) {
+    setFormDirty(false);
     setForm({
       month: goal.month.slice(0, 7),
       revenue_target: String(Number(goal.revenue_target)),
@@ -226,12 +253,7 @@ function Metas() {
                     await add.mutateAsync({ month: `${form.month}-01`, ...values });
                     toast.success(`Meta de ${monthLabel(form.month)} criada`);
                   }
-                  setForm((f) => ({
-                    ...f,
-                    revenue_target: "",
-                    profit_target: "",
-                    deliveries_target: "",
-                  }));
+                  setFormDirty(false);
                 } catch {
                   toast.error("Não foi possível salvar a meta");
                 }
@@ -242,7 +264,15 @@ function Metas() {
                 <Input
                   type="month"
                   value={form.month}
-                  onChange={(e) => setForm({ ...form, month: e.target.value })}
+                  onChange={(e) => {
+                    setFormDirty(false);
+                    setForm({
+                      month: e.target.value,
+                      revenue_target: "",
+                      profit_target: "",
+                      deliveries_target: "",
+                    });
+                  }}
                 />
                 {existingGoal ? (
                   <p className="flex items-center gap-1 text-xs text-primary">
@@ -258,7 +288,10 @@ function Metas() {
                   inputMode="decimal"
                   placeholder="Ex.: 6.000"
                   value={form.revenue_target}
-                  onChange={(e) => setForm({ ...form, revenue_target: e.target.value })}
+                  onChange={(e) => {
+                    setFormDirty(true);
+                    setForm({ ...form, revenue_target: e.target.value });
+                  }}
                 />
                 <div className="flex flex-wrap gap-1.5">
                   {REVENUE_PRESETS.map((v) => (
@@ -273,17 +306,6 @@ function Metas() {
                       {brl(v)}
                     </Button>
                   ))}
-                  {history ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-7 gap-1 px-2 text-xs"
-                      onClick={() => applyRevenue(history.revenue * 1.1)}
-                    >
-                      <Sparkles className="size-3" /> Sugerir (+10%)
-                    </Button>
-                  ) : null}
                   {performance.suggestedRevenueTarget > 0 ? (
                     <Button
                       type="button"
@@ -292,7 +314,8 @@ function Metas() {
                       className="h-7 gap-1 px-2 text-xs"
                       onClick={() => applyRevenue(performance.suggestedRevenueTarget)}
                     >
-                      <TrendingUp className="size-3" /> Meta pelo seu ritmo
+                      <TrendingUp className="size-3" /> Usar sugestão:{" "}
+                      {brl(performance.suggestedRevenueTarget)}
                     </Button>
                   ) : null}
                 </div>
@@ -305,7 +328,10 @@ function Metas() {
                     inputMode="decimal"
                     placeholder="Ex.: 4.200"
                     value={form.profit_target}
-                    onChange={(e) => setForm({ ...form, profit_target: e.target.value })}
+                    onChange={(e) => {
+                      setFormDirty(true);
+                      setForm({ ...form, profit_target: e.target.value });
+                    }}
                   />
                   {invalidProfit ? (
                     <p className="text-xs text-destructive">O lucro não pode superar a receita.</p>
@@ -317,7 +343,10 @@ function Metas() {
                     inputMode="numeric"
                     placeholder="Ex.: 420"
                     value={form.deliveries_target}
-                    onChange={(e) => setForm({ ...form, deliveries_target: e.target.value })}
+                    onChange={(e) => {
+                      setFormDirty(true);
+                      setForm({ ...form, deliveries_target: e.target.value });
+                    }}
                   />
                 </div>
               </div>
@@ -334,6 +363,14 @@ function Metas() {
                 </div>
               ) : null}
 
+              <p className="text-xs text-muted-foreground">
+                Sugestões preenchem o formulário. A meta cadastrada só muda ao salvar.
+              </p>
+              {goals.isError ? (
+                <p className="text-xs text-destructive">
+                  Não foi possível carregar suas metas. Aguarde a conexão antes de salvar.
+                </p>
+              ) : null}
               <Button type="submit" className="w-full" disabled={!canSubmit}>
                 {add.isPending || update.isPending
                   ? "Salvando..."
@@ -369,12 +406,15 @@ function Metas() {
               </p>
             </form>
 
-            {dailyGoalPlan.monthTarget > 0 ? (
+            {goals.isSuccess && dailyGoalPlan.monthTarget > 0 ? (
               <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm">
                 <p className="flex items-center gap-1 font-semibold text-foreground">
                   <CalendarClock className="size-4" /> Meta diária inteligente
                 </p>
                 <p className="mt-1 text-muted-foreground">
+                  {referenceGoal && referenceGoal.month.slice(0, 7) !== current
+                    ? `Referência: meta de ${monthLabel(referenceGoal.month.slice(0, 7))}, mantida até você cadastrar a deste mês. `
+                    : ""}
                   Para compensar dias abaixo da meta e ainda bater {brl(dailyGoalPlan.monthTarget)}{" "}
                   no mês, mire em
                   <span className="font-semibold text-foreground">
@@ -433,9 +473,12 @@ function Metas() {
                     <Sparkles className="size-3.5 text-primary" /> Sugestão para melhorar
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
+                    {performance.suggestedRevenueTarget > 0
+                      ? `Meta possível sugerida: ${brl(performance.suggestedRevenueTarget)}. ${performance.suggestionBasis === "combined" ? "Combina o ritmo deste mês com os últimos meses concluídos." : performance.suggestionBasis === "current" ? `Baseada em ${performance.currentActiveDays} dias com entregas neste mês.` : `Baseada nos últimos ${performance.completedMonths} meses concluídos, ajustados ao tamanho do mês.`} É uma estimativa; não altera sua meta cadastrada.`
+                      : "Registre pelo menos oito dias com entregas neste mês, ou um mês concluído, para receber uma sugestão baseada no seu histórico."}
                     {performance.bestWeekday
-                      ? `Seu melhor dia histórico é ${performance.bestWeekday}, com média de ${brl(performance.bestWeekdayAverage)}. Priorize esse dia e use “Meta pelo seu ritmo” para planejar um avanço sustentável de 10%.`
-                      : "Continue registrando suas entregas. Assim que houver histórico suficiente, o sistema identificará seus melhores dias e sugerirá uma meta personalizada."}
+                      ? ` Seu melhor dia histórico é ${performance.bestWeekday}, com média de ${brl(performance.bestWeekdayAverage)}.`
+                      : ""}
                   </p>
                 </div>
               </div>

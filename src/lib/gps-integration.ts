@@ -37,15 +37,17 @@ export function useGpsDevices() {
   });
 }
 
-export function useGpsDeviceState(tracking = false) {
+export function useGpsDeviceState(tracking = false, tokenId?: string) {
   return useQuery({
-    queryKey: ["gps-device-state"],
+    queryKey: ["gps-device-state", tokenId ?? "latest"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("gps_device_state")
         .select(
           "token_id,source,latitude,longitude,accuracy_m,speed_kmh,trip_km,total_km,captured_at,sent_at,received_at",
-        )
+        );
+      if (tokenId) query = query.eq("token_id", tokenId);
+      const { data, error } = await query
         .order("updated_at", { ascending: false })
         .limit(1)
         .maybeSingle();

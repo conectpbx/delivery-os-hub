@@ -11,6 +11,7 @@ import {
   reportBreakdown,
   summarizeOperational,
   summarizeRecordedCosts,
+  currentRevenueTarget,
 } from "./metrics";
 
 const maintenance = (values: Partial<Maintenance>): Maintenance => ({
@@ -341,4 +342,53 @@ test("custos registrados incluem abastecimentos mesmo sem entregas", () => {
 
   assert.equal(recorded.fuelCost, 30);
   assert.equal(recorded.profit, -30);
+});
+
+test("preserva última meta de R$ 3000 na virada do mês em vez do padrão de R$ 5000", () => {
+  const goals = [goal("2026-09-01", 3000), goal("2026-11-01", 9000)];
+  assert.equal(
+    currentRevenueTarget(goals, { ...profile, monthly_goal: 5000 }, new Date(2026, 9, 8)),
+    3000,
+  );
+  assert.equal(
+    currentRevenueTarget([...goals, goal("2026-10-01", 3500)], profile, new Date(2026, 9, 8)),
+    3500,
+  );
+});
+
+test("meta zero cadastrada não é substituída pelo padrão do perfil", () => {
+  assert.equal(
+    currentRevenueTarget(
+      [goal("2026-10-01", 0)],
+      { ...profile, monthly_goal: 5000 },
+      new Date(2026, 9, 8),
+    ),
+    0,
+  );
+});
+
+test("sugestão usa ritmo atual somente após oito dias ativos", () => {
+  const deliveries = Array.from({ length: 8 }, (_, i) =>
+    delivery(`d${i}`, `2026-10-${String(i + 1).padStart(2, "0")}T10:00:00`, 100),
+  );
+  const result = goalPerformanceAnalysis(deliveries, new Date(2026, 9, 8, 12));
+  assert.equal(result.suggestedRevenueTarget, 3100);
+  assert.equal(result.suggestionBasis, "current");
+  assert.equal(
+    goalPerformanceAnalysis(deliveries.slice(0, 7), new Date(2026, 9, 8, 12))
+      .suggestedRevenueTarget,
+    0,
+  );
+});
+
+test("sugestão combina meses concluídos com ritmo atual sem aumentar 10% automaticamente", () => {
+  const deliveries = Array.from({ length: 8 }, (_, i) =>
+    delivery(`d${i}`, `2026-10-${String(i + 1).padStart(2, "0")}T10:00:00`, 100),
+  );
+  const result = goalPerformanceAnalysis(
+    [delivery("past", "2026-09-15T12:00:00", 3000), ...deliveries],
+    new Date(2026, 9, 8, 12),
+  );
+  assert.equal(result.suggestionBasis, "combined");
+  assert.equal(result.suggestedRevenueTarget, 3100);
 });

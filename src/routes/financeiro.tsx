@@ -26,7 +26,6 @@ import {
   reverseGeocodeAddress,
 } from "@/lib/geo";
 import { useTripTracker } from "@/lib/trip-tracker";
-import { integratedGpsPoint } from "@/lib/integrated-gps-point";
 import {
   avgFuelPrice,
   costPerKm,
@@ -100,15 +99,17 @@ function Financeiro() {
   const [newGpsToken, setNewGpsToken] = useState<string | null>(null);
   const period = usePeriodSelection(3);
   const [gps, setGps] = useState(false);
-  const { trip, error: tripError, start, finish, reset, pushGps } = useTripTracker();
+  const { trip, error: tripError, start, finish, reset, pushIntegratedGps } = useTripTracker();
   const gpsDevices = useGpsDevices();
-  const externalGps = useGpsDeviceState(trip.active);
+  const externalGps = useGpsDeviceState(
+    trip.active,
+    trip.integratedBaseline?.tokenId ?? gpsDevices.data?.find((device) => device.is_active)?.id,
+  );
 
   useEffect(() => {
     if (!trip.active || !trip.startedAt || !externalGps.data) return;
-    const point = integratedGpsPoint(externalGps.data, trip.startedAt);
-    if (point) pushGps(point);
-  }, [externalGps.data, trip.active, trip.startedAt, pushGps]);
+    pushIntegratedGps(externalGps.data);
+  }, [externalGps.data, trip.active, trip.startedAt, pushIntegratedGps]);
   const createGpsDevice = useCreateGpsDevice();
   const revokeGpsDevice = useRevokeGpsDevice();
 
@@ -218,7 +219,7 @@ function Financeiro() {
       >
         <div className="flex flex-wrap items-center gap-3">
           <div className="min-w-0">
-            <p className="text-2xl font-semibold tabular-nums">{num(trip.distanceKm)} km</p>
+            <p className="text-2xl font-semibold tabular-nums">{num(trip.distanceKm, 3)} km</p>
             <p className="truncate text-xs text-muted-foreground">
               {trip.active
                 ? `${trip.points ? "Capturando" : "Aguardando sinal"} ${trip.source === "external" ? "via GPS integrado" : "via GPS do navegador"} desde ${dateLabel(trip.startedAt ?? new Date().toISOString())} · ${trip.points} pontos`
@@ -236,7 +237,7 @@ function Financeiro() {
               <Button
                 onClick={() => {
                   const integrated = gpsDevices.data?.some((device) => device.is_active);
-                  start(integrated ? "external" : "browser");
+                  start(integrated ? "external" : "browser", externalGps.data);
                   void externalGps.refetch();
                 }}
               >
@@ -269,6 +270,12 @@ function Financeiro() {
             ? `Base: ${num(Number(lastOdometer))} km do último abastecimento → estimativa ${num(estimatedOdometer ?? 0)} km.`
             : "Informe o odômetro em um abastecimento para servir de base ao cálculo."}
           {tripError ? ` · GPS: ${tripError}` : ""}
+          {externalGps.isError && trip.active
+            ? " · Não foi possível consultar o GPS integrado. Verifique a conexão."
+            : ""}
+          {trip.active && trip.source === "external"
+            ? " · O app integrado deve continuar enviando leituras; deixe esta tela aberta para acompanhar."
+            : ""}
         </p>
       </SectionCard>
 

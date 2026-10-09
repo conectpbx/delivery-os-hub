@@ -416,14 +416,20 @@ export function summarizeOperational(
   };
 }
 
+export function savedRevenueGoal(goals: Goal[], date = new Date()) {
+  const key = monthKey(date);
+  return [...goals]
+    .filter((goal) => goal.month.slice(0, 7) <= key)
+    .sort((a, b) => b.month.localeCompare(a.month))[0];
+}
+
 export function currentRevenueTarget(
   goals: Goal[],
   profile: Profile | null | undefined,
   date = new Date(),
 ) {
-  const key = monthKey(date);
-  const monthlyGoal = goals.find((g) => g.month.slice(0, 7) === key);
-  return Number(monthlyGoal?.revenue_target ?? 0) || Number(profile?.monthly_goal ?? 0);
+  const monthlyGoal = savedRevenueGoal(goals, date);
+  return monthlyGoal ? Number(monthlyGoal.revenue_target) : Number(profile?.monthly_goal ?? 0);
 }
 
 export function adaptiveDailyRevenueGoal(input: {
@@ -514,6 +520,8 @@ export type GoalPerformanceAnalysis = {
   bestWeekdayAverage: number;
   suggestedRevenueTarget: number;
   completedMonths: number;
+  suggestionBasis: "history" | "current" | "combined" | "insufficient";
+  currentActiveDays: number;
 };
 
 const WEEKDAY_LABELS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
@@ -525,7 +533,9 @@ export function goalPerformanceAnalysis(
 ): GoalPerformanceAnalysis {
   const currentKey = monthKey(date);
   const currentMonthDeliveries = deliveries.filter(
-    (delivery) => monthKey(operationalDate(delivery.occurred_at)) === currentKey,
+    (delivery) =>
+      monthKey(operationalDate(delivery.occurred_at)) === currentKey &&
+      operationalDate(delivery.occurred_at).getTime() <= date.getTime(),
   );
   const currentRevenue = currentMonthDeliveries.reduce(
     (sum, delivery) => sum + Number(delivery.earnings) + Number(delivery.tip),
@@ -578,6 +588,27 @@ export function goalPerformanceAnalysis(
       }, 0) / recentMonths.length
     : 0;
 
+  const currentActiveDays = new Set(
+    currentMonthDeliveries.map((d) => {
+      const at = operationalDate(d.occurred_at);
+      return `${at.getFullYear()}-${at.getMonth()}-${at.getDate()}`;
+    }),
+  ).size;
+  const enoughCurrentData = currentActiveDays >= 8 && elapsedDays >= 8;
+  const historicalProjection = historicalDailyAverage * targetMonthDays;
+  const suggestionBasis = enoughCurrentData
+    ? historicalProjection > 0
+      ? "combined"
+      : "current"
+    : historicalProjection > 0
+      ? "history"
+      : "insufficient";
+  const feasibleRevenue = enoughCurrentData
+    ? historicalProjection > 0
+      ? (historicalProjection + projectedRevenue) / 2
+      : projectedRevenue
+    : historicalProjection;
+
   return {
     currentRevenue,
     projectedRevenue,
@@ -585,8 +616,9 @@ export function goalPerformanceAnalysis(
     changeVsPreviousPercent,
     bestWeekday: bestWeekdayEntry ? (WEEKDAY_LABELS[bestWeekdayEntry.weekday] ?? null) : null,
     bestWeekdayAverage: bestWeekdayEntry?.average ?? 0,
-    suggestedRevenueTarget:
-      historicalDailyAverage > 0 ? historicalDailyAverage * targetMonthDays * 1.1 : 0,
+    suggestedRevenueTarget: Math.round(feasibleRevenue),
+    suggestionBasis,
+    currentActiveDays,
     completedMonths: recentMonths.length,
   };
 }
