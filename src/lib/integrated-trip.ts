@@ -1,11 +1,13 @@
 import type { GpsDeviceState } from "./gps-integration";
 import type { TripState } from "./trip-tracker";
+import { haversineKm } from "./gps-distance";
 
 export type IntegratedBaseline = {
   tokenId: string;
   totalKm: number;
   tripKm: number;
   capturedAt: string;
+  distanceMode?: "counter" | "coordinates";
 };
 
 export function gpsCounterBaseline(
@@ -46,13 +48,28 @@ export function accumulateIntegratedTrip(
   const next = gpsCounterBaseline(reading, now);
   if (!next) return null;
   const previous = trip.integratedBaseline;
+  const point =
+    Number.isFinite(reading.latitude) &&
+    Math.abs(reading.latitude) <= 90 &&
+    Number.isFinite(reading.longitude) &&
+    Math.abs(reading.longitude) <= 180 &&
+    Number.isFinite(reading.accuracy_m) &&
+    reading.accuracy_m >= 0 &&
+    reading.accuracy_m <= 60
+      ? {
+          lat: reading.latitude,
+          lng: reading.longitude,
+          accuracy: reading.accuracy_m,
+          at: reading.captured_at,
+        }
+      : null;
   if (!previous) {
     if (Date.parse(next.capturedAt) < Date.parse(trip.startedAt)) return null;
     return {
       ...trip,
       source: "external",
       integratedBaseline: next,
-      last: null,
+      last: point,
       points: trip.points + 1,
     };
   }
@@ -64,13 +81,27 @@ export function accumulateIntegratedTrip(
   const totalDelta = next.totalKm - previous.totalKm;
   const delta = totalDelta === 0 ? next.tripKm - previous.tripKm : totalDelta;
   const elapsedHours = (Date.parse(next.capturedAt) - Date.parse(previous.capturedAt)) / 3_600_000;
-  // Uma reinicialização do contador não reduz a jornada. Saltos não viram quilômetros.
-  const distance = delta >= 0 && delta <= Math.max(0.2, elapsedHours * 180) ? delta : 0;
+  const maxDistance = Math.max(0.2, elapsedHours * 180);
+  const coordinateDelta = point && trip.last ? haversineKm(trip.last, point) : 0;
+  const mode =
+    previous.distanceMode ??
+    (delta > 0 ? "counter" : coordinateDelta >= 0.015 ? "coordinates" : undefined);
+  // Mantém uma única fonte de distância por jornada para não somar o mesmo trecho duas vezes.
+  // Contadores arredondados precisam de tempo suficiente: um salto rejeitado não apaga a base.
+  if (mode !== "coordinates" && delta > maxDistance) return null;
+  const distance =
+    mode === "coordinates"
+      ? coordinateDelta >= 0.015 && coordinateDelta <= maxDistance
+        ? coordinateDelta
+        : 0
+      : delta >= 0
+        ? delta
+        : 0;
   return {
     ...trip,
     source: "external",
-    integratedBaseline: next,
-    last: null,
+    integratedBaseline: { ...next, ...(mode ? { distanceMode: mode } : {}) },
+    last: mode === "coordinates" && coordinateDelta < 0.015 ? (trip.last ?? point) : point,
     distanceKm: Math.round((trip.distanceKm + distance) * 1000) / 1000,
     points: trip.points + 1,
   };

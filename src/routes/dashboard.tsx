@@ -69,7 +69,7 @@ const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
 function Dashboard() {
   const now = useCalendarNow();
-  const [range, setRange] = useState<(typeof RANGES)[number]>(RANGES[0]);
+  const [range, setRange] = useState<(typeof RANGES)[number]>(RANGES[2]);
   const deliveries = useDeliveries();
   const fuelings = useFuelings();
   const expenses = useExpenses();
@@ -248,7 +248,7 @@ function Dashboard() {
         <StatCard
           label="Custos registrados"
           value={brl(cash.fuelCost + cash.otherCost + cash.maintenanceCost)}
-          hint={`Abastecimentos ${brl(cash.fuelCost)} · despesas e manutenção ${brl(cash.otherCost + cash.maintenanceCost)}`}
+          hint={`${range.label}: abastecimentos ${brl(cash.fuelCost)} · despesas e manutenção ${brl(cash.otherCost + cash.maintenanceCost)}`}
           tone="destructive"
           icon={<Fuel className="size-4" />}
         />

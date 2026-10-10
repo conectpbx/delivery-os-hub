@@ -17,7 +17,7 @@ import {
   useRemove,
   useUpsertProfile,
 } from "@/lib/data";
-import { brl, dateLabel, dec, localDateValue, num } from "@/lib/format";
+import { brl, dateLabel, dateTimeLabel, dec, localDateValue, num } from "@/lib/format";
 import {
   geolocationErrorMessage,
   getCurrentPosition,
@@ -103,7 +103,8 @@ function Financeiro() {
   const gpsDevices = useGpsDevices();
   const externalGps = useGpsDeviceState(
     trip.active,
-    trip.integratedBaseline?.tokenId ?? gpsDevices.data?.find((device) => device.is_active)?.id,
+    trip.integratedBaseline?.tokenId,
+    gpsDevices.data?.filter((device) => device.is_active).map((device) => device.id),
   );
 
   useEffect(() => {
@@ -399,6 +400,11 @@ function Financeiro() {
 
           <div className="rounded-lg border border-border p-4">
             <p className="text-xs text-muted-foreground">Última leitura externa</p>
+            {externalGps.isError ? (
+              <p className="mt-2 text-sm text-destructive">
+                Falha ao consultar o GPS integrado. Verifique a conexão e sua sessão.
+              </p>
+            ) : null}
             {externalGps.data ? (
               <>
                 <p className="mt-1 text-2xl font-semibold tabular-nums">
@@ -412,7 +418,10 @@ function Financeiro() {
                 </p>
                 <p className="mt-2 text-xs text-muted-foreground">
                   Precisão {num(externalGps.data.accuracy_m, 0)} m ·{" "}
-                  {dateLabel(externalGps.data.captured_at)}
+                  {dateTimeLabel(externalGps.data.captured_at)}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Recebida em {dateTimeLabel(externalGps.data.received_at)}
                 </p>
                 <Button
                   type="button"
@@ -421,7 +430,7 @@ function Financeiro() {
                   onClick={() => {
                     setFuel((value) => ({
                       ...value,
-                      odometer: String(externalGps.data?.total_km ?? ""),
+                      odometer: String(Math.round(Number(externalGps.data?.total_km ?? 0))),
                     }));
                     toast.success("Odômetro preenchido pelo aplicativo");
                   }}
@@ -434,6 +443,15 @@ function Financeiro() {
                 Configure a URL e o token no PainelOverlay para receber a primeira leitura.
               </p>
             )}
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-3 w-full"
+              disabled={externalGps.isFetching}
+              onClick={() => void externalGps.refetch()}
+            >
+              {externalGps.isFetching ? "Consultando..." : "Atualizar leitura"}
+            </Button>
           </div>
         </div>
       </SectionCard>

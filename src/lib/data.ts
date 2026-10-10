@@ -169,6 +169,8 @@ function useList<T>(key: string, table: string, orderCol: string) {
       return (data ?? []) as T[];
     },
     staleTime: table === "apps" || table === "goals" ? 1000 * 60 * 5 : 1000 * 60,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: "always",
   });
 }
 

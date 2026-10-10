@@ -37,9 +37,9 @@ export function useGpsDevices() {
   });
 }
 
-export function useGpsDeviceState(tracking = false, tokenId?: string) {
+export function useGpsDeviceState(tracking = false, tokenId?: string, activeTokenIds?: string[]) {
   return useQuery({
-    queryKey: ["gps-device-state", tokenId ?? "latest"],
+    queryKey: ["gps-device-state", tokenId ?? "latest", activeTokenIds ?? null],
     queryFn: async () => {
       let query = supabase
         .from("gps_device_state")
@@ -47,6 +47,7 @@ export function useGpsDeviceState(tracking = false, tokenId?: string) {
           "token_id,source,latitude,longitude,accuracy_m,speed_kmh,trip_km,total_km,captured_at,sent_at,received_at",
         );
       if (tokenId) query = query.eq("token_id", tokenId);
+      if (activeTokenIds?.length) query = query.in("token_id", activeTokenIds);
       const { data, error } = await query
         .order("updated_at", { ascending: false })
         .limit(1)
@@ -57,6 +58,8 @@ export function useGpsDeviceState(tracking = false, tokenId?: string) {
     refetchInterval: tracking ? 2_000 : 10_000,
     refetchIntervalInBackground: tracking,
     staleTime: 5_000,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: "always",
   });
 }
 

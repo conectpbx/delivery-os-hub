@@ -66,10 +66,7 @@ test("reset e saltos do contador não inflam nem reduzem a jornada", () => {
   assert.equal(reset.distanceKm, 2);
   const moving = accumulateIntegratedTrip(reset, reading(120, 0.5), start + 120_000)!;
   assert.equal(moving.distanceKm, 2.5);
-  assert.equal(
-    accumulateIntegratedTrip(moving, reading(122, 1000), start + 122_000)?.distanceKm,
-    2.5,
-  );
+  assert.equal(accumulateIntegratedTrip(moving, reading(122, 1000), start + 122_000), null);
 });
 
 test("usa contador de jornada quando o odômetro total permanece fixo", () => {
@@ -85,4 +82,30 @@ test("ignora leituras após finalizar e leituras antigas", () => {
     null,
   );
   assert.equal(accumulateIntegratedTrip(state(), reading(60, 1001), start + 400_000), null);
+});
+
+test("contador arredondado pode avançar após tempo suficiente sem perder a base", () => {
+  const trip = state();
+  assert.equal(accumulateIntegratedTrip(trip, reading(2, 1001), start + 2000), null);
+  assert.equal(accumulateIntegratedTrip(trip, reading(30, 1001), start + 30_000)?.distanceKm, 1);
+});
+
+test("GPS integrado sem contadores usa coordenadas sem duplicar trechos quando contador voltar", () => {
+  const trip = {
+    ...state(),
+    last: { lat: -23.55, lng: -46.63, at: new Date(start).toISOString() },
+  };
+  const first = accumulateIntegratedTrip(
+    trip,
+    { ...reading(20), accuracy_m: 10, latitude: -23.5494 },
+    start + 20_000,
+  )!;
+  assert.ok(first.distanceKm > 0.06);
+  assert.equal(first.integratedBaseline?.distanceMode, "coordinates");
+  const second = accumulateIntegratedTrip(
+    first,
+    { ...reading(40, 1001), accuracy_m: 10, latitude: -23.5488 },
+    start + 40_000,
+  )!;
+  assert.ok(second.distanceKm > 0.12 && second.distanceKm < 0.15);
 });
