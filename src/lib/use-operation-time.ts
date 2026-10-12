@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useDeliveries, useJourneys } from "./data";
 import { operationTime, type WorkJourney } from "./operation-time";
@@ -46,7 +46,7 @@ export function useOperationTime(from: Date, to: Date) {
     };
   }, [user?.id]);
   const rows = journeys.data ?? [];
-  const records = active && !rows.some((j) => j.id === active.id) ? [...rows, active] : rows;
+  const records = useMemo(() => active ? [...rows.filter((j) => j.id !== active.id), active] : rows, [journeys.data, active]);
   return {
     ...operationTime(deliveries.data ?? [], records, from, to, now ?? from),
     records,
