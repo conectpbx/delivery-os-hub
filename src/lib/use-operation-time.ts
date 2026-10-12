@@ -46,7 +46,10 @@ export function useOperationTime(from: Date, to: Date) {
     };
   }, [user?.id]);
   const rows = journeys.data ?? [];
-  const records = useMemo(() => active ? [...rows.filter((j) => j.id !== active.id), active] : rows, [journeys.data, active]);
+  const records = useMemo(
+    () => (active ? [...rows.filter((j) => j.id !== active.id), active] : rows),
+    [journeys.data, active],
+  );
   return {
     ...operationTime(deliveries.data ?? [], records, from, to, now ?? from),
     records,
