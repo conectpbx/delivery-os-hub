@@ -68,7 +68,9 @@ export async function flushQueue(db: SupabaseClient, userId: string): Promise<st
 
   for (const item of items) {
     try {
-      const { error } = await db.from(item.table).insert(item.values);
+      const { error } = await (item.table === "work_journeys"
+        ? db.from(item.table).upsert(item.values, { onConflict: "id" })
+        : db.from(item.table).insert(item.values));
       if (error) remaining.push(item);
       else synced.add(item.cacheKey);
     } catch {

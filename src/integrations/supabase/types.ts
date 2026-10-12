@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.15"
   }
   public: {
     Tables: {
@@ -103,6 +103,8 @@ export type Database = {
           dropoff_address: string | null
           duration_min: number
           earnings: number
+          ended_at: string | null
+          estimated_duration_min: number | null
           fee_percent: number
           gross_earnings: number
           id: string
@@ -112,6 +114,7 @@ export type Database = {
           occurred_at: string
           payment_method: string
           pickup_address: string | null
+          started_at: string | null
           status: string
           stops: Json
           tip: number
@@ -124,6 +127,8 @@ export type Database = {
           dropoff_address?: string | null
           duration_min?: number
           earnings?: number
+          ended_at?: string | null
+          estimated_duration_min?: number | null
           fee_percent?: number
           gross_earnings?: number
           id?: string
@@ -133,6 +138,7 @@ export type Database = {
           occurred_at?: string
           payment_method?: string
           pickup_address?: string | null
+          started_at?: string | null
           status?: string
           stops?: Json
           tip?: number
@@ -145,6 +151,8 @@ export type Database = {
           dropoff_address?: string | null
           duration_min?: number
           earnings?: number
+          ended_at?: string | null
+          estimated_duration_min?: number | null
           fee_percent?: number
           gross_earnings?: number
           id?: string
@@ -154,6 +162,7 @@ export type Database = {
           occurred_at?: string
           payment_method?: string
           pickup_address?: string | null
+          started_at?: string | null
           status?: string
           stops?: Json
           tip?: number
@@ -504,6 +513,36 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      work_journeys: {
+        Row: {
+          created_at: string
+          distance_km: number
+          ended_at: string
+          id: string
+          source: string
+          started_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          distance_km?: number
+          ended_at: string
+          id?: string
+          source?: string
+          started_at: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          distance_km?: number
+          ended_at?: string
+          id?: string
+          source?: string
+          started_at?: string
           user_id?: string
         }
         Relationships: []

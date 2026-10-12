@@ -4,6 +4,9 @@ import { Suspense, lazy, useMemo, useState } from "react";
 const MonthsBarChart = lazy(() => import("@/components/charts/MonthsBarChart"));
 import { Clock3, FileDown, Gauge, PackageCheck, Printer, Route as RouteIcon } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { OperationTimeStats } from "@/components/OperationTimeStats";
+import { useOperationTime } from "@/lib/use-operation-time";
+import { deliveryMinutes } from "@/lib/operation-time";
 import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
 import { Button } from "@/components/ui/button";
 import { useDeliveries, useExpenses, useFuelings, useMaintenances, useProfile } from "@/lib/data";
@@ -59,6 +62,7 @@ function Relatorios() {
   const maintenances = useMaintenances();
   const profile = useProfile();
   const period = usePeriodSelection(3);
+  const time = useOperationTime(period.fromDate, period.toDate);
   const [granularity, setGranularity] = useState<ReportGranularity>("day");
 
   const deliveriesData = useMemo(() => deliveries.data ?? [], [deliveries.data]);
@@ -117,14 +121,34 @@ function Relatorios() {
   );
   const categories = useMemo(() => costsByCategory(perExpenses), [perExpenses]);
   const totalCost = total.fuelCost + total.otherCost + total.maintenanceCost;
-  const totalMinutes = total.workedMin + total.idleMin;
+  const totalMinutes = time.totalMin;
   const activeDays = useMemo(
     () => new Set(perDeliveries.map((delivery) => delivery.occurred_at.slice(0, 10))).size,
     [perDeliveries],
   );
   const breakdown = useMemo(
-    () => reportBreakdown(perDeliveries, perExpenses, perFuelings, perMaint, granularity),
-    [granularity, perDeliveries, perExpenses, perFuelings, perMaint],
+    () =>
+      reportBreakdown(
+        perDeliveries,
+        perExpenses,
+        perFuelings,
+        perMaint,
+        granularity,
+        time.records,
+        time.now,
+        { from: period.fromDate, to: period.toDate },
+      ).filter((row) => row.from <= period.toDate && row.to >= period.fromDate),
+    [
+      granularity,
+      deliveriesData,
+      perExpenses,
+      perFuelings,
+      perMaint,
+      time.records,
+      time.now,
+      period.fromDate,
+      period.toDate,
+    ],
   );
   const chart = useMemo(
     () =>
@@ -161,6 +185,9 @@ function Relatorios() {
         "Duração (min)",
         "Parado (min)",
         "Destino",
+        "Início da entrega",
+        "Término da entrega",
+        "Estimativa da rota (min)",
       ],
       ...perDeliveries.map((d) => [
         dateTimeLabel(d.occurred_at),
@@ -169,9 +196,12 @@ function Relatorios() {
         Number(d.earnings),
         Number(d.tip),
         Number(d.distance_km),
-        Number(d.duration_min),
+        deliveryMinutes(d, time.now),
         Number(d.idle_min),
         d.dropoff_address ?? "",
+        d.started_at ? dateTimeLabel(d.started_at) : "",
+        d.ended_at ? dateTimeLabel(d.ended_at) : "",
+        d.estimated_duration_min ?? "",
       ]),
     ]);
   }
@@ -199,6 +229,9 @@ function Relatorios() {
         "KM",
         "Horas em entrega",
         "Horas paradas",
+        "Horas de jornada registrada",
+        "Horas totais consideradas",
+        "Horas fora das entregas",
         "Receita",
         "Combustível",
         "Outros gastos",
@@ -215,6 +248,9 @@ function Relatorios() {
         row.distance,
         row.workedMin / 60,
         row.idleMin / 60,
+        row.journeyMin / 60,
+        row.totalMin / 60,
+        row.unassignedMin / 60,
         row.revenue,
         row.fuelCost,
         row.otherCost,
@@ -225,6 +261,26 @@ function Relatorios() {
         row.costPerKm,
         row.profitPerHour,
       ]),
+    ]);
+  }
+
+  function exportJourneys() {
+    downloadCsv("jornadas-delivery-os.csv", [
+      ["Início", "Término", "Duração (min)", "KM", "Fonte"],
+      ...time.records
+        .filter(
+          (j) =>
+            Date.parse(j.started_at) <= period.toDate.getTime() &&
+            Date.parse(j.ended_at ?? time.now.toISOString()) >= period.fromDate.getTime(),
+        )
+        .map((j) => [
+          dateTimeLabel(j.started_at),
+          j.ended_at ? dateTimeLabel(j.ended_at) : "Em andamento",
+          ((j.ended_at ? Date.parse(j.ended_at) : time.now.getTime()) - Date.parse(j.started_at)) /
+            60000,
+          j.distance_km,
+          j.source,
+        ]),
     ]);
   }
 
@@ -246,6 +302,9 @@ function Relatorios() {
           </Button>
           <Button size="sm" className="gap-2" onClick={() => window.print()}>
             <Printer className="size-4" /> Gerar PDF
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={exportJourneys}>
+            <FileDown className="size-4" /> Jornadas (Excel)
           </Button>
         </div>
       }
@@ -286,9 +345,9 @@ function Relatorios() {
           icon={<RouteIcon className="size-4" />}
         />
         <StatCard
-          label="Tempo total"
+          label="Tempo total considerado"
           value={minutesLabel(totalMinutes)}
-          hint={`${minutesLabel(total.workedMin)} em entrega · ${minutesLabel(total.idleMin)} parado`}
+          hint={`${minutesLabel(time.deliveryMin)} em entregas · ${minutesLabel(time.unassignedMin)} fora das entregas`}
           icon={<Clock3 className="size-4" />}
         />
         <StatCard
@@ -306,6 +365,7 @@ function Relatorios() {
         />
       </div>
 
+      <OperationTimeStats from={period.fromDate} to={period.toDate} />
       <SectionCard
         className="mt-4"
         title="Detalhamento da operação"
@@ -349,8 +409,10 @@ function Relatorios() {
                     {[
                       ["Entregas", String(row.count)],
                       ["Quilômetros", `${num(row.distance)} km`],
-                      ["Tempo total", minutesLabel(row.workedMin + row.idleMin)],
-                      ["Tempo parado", minutesLabel(row.idleMin)],
+                      ["Jornada registrada", minutesLabel(row.journeyMin)],
+                      ["Tempo total", minutesLabel(row.totalMin)],
+                      ["Entregas/rotas", minutesLabel(row.workedMin)],
+                      ["Fora das entregas", minutesLabel(row.unassignedMin)],
                       ["Receita", brl(row.revenue)],
                       ["Gastos", brl(row.totalCost)],
                       ["Combustível", brl(row.fuelCost)],
@@ -398,10 +460,13 @@ function Relatorios() {
                       <td className="px-2 py-3 text-right tabular-nums">{row.count}</td>
                       <td className="px-2 py-3 text-right tabular-nums">{num(row.distance)}</td>
                       <td className="px-2 py-3 text-right tabular-nums">
-                        <span>{minutesLabel(row.workedMin + row.idleMin)}</span>
-                        {row.idleMin > 0 ? (
+                        <span>{minutesLabel(row.totalMin)}</span>
+                        <span className="block text-xs text-muted-foreground">
+                          {minutesLabel(row.workedMin)} em entregas
+                        </span>
+                        {row.unassignedMin > 0 ? (
                           <span className="block text-xs text-muted-foreground">
-                            {minutesLabel(row.idleMin)} parado
+                            {minutesLabel(row.unassignedMin)} fora das entregas
                           </span>
                         ) : null}
                       </td>

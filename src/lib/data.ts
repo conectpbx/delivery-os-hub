@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { enqueueInsert, isOffline } from "@/lib/offline-queue";
+import type { WorkJourney } from "./operation-time";
 
 // Cliente sem tipagem de schema para tabelas acessadas de forma dinâmica.
 const db = supabase as unknown as SupabaseClient;
@@ -80,6 +81,9 @@ export type Delivery = {
   lng: number | null;
   occurred_at: string;
   status?: "em_rota" | "concluida";
+  started_at?: string | null;
+  ended_at?: string | null;
+  estimated_duration_min?: number | null;
   stops?: DeliveryStop[];
 };
 
@@ -181,6 +185,8 @@ export const useMaintenances = () =>
 export const useExpenses = () => useList<Expense>("expenses", "expenses", "occurred_at");
 export const useGoals = () => useList<Goal>("goals", "goals", "month");
 export const useApps = () => useList<App>("apps", "apps", "name");
+export const useJourneys = () =>
+  useList<WorkJourney>("work_journeys", "work_journeys", "started_at");
 
 export const useInsertApp = () => useInsert<{ name: string; fee_percent: number }>("apps", "apps");
 
@@ -229,16 +235,22 @@ export function useInsert<T extends Record<string, unknown>>(table: string, key:
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (values: T) => {
-      const { data: auth } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
+      const auth = isOffline()
+        ? { user: (await supabase.auth.getSession()).data.session?.user ?? null }
+        : (await supabase.auth.getUser()).data;
       if (!auth.user) throw new Error("Sessão expirada. Entre novamente para salvar.");
       const payload = { ...values, user_id: auth.user.id };
 
       if (isOffline()) {
         const queued = await enqueueInsert(table, key, payload, auth.user.id);
-        return { id: queued.id, occurred_at: queued.createdAt, ...payload };
+        return { id: payload["id"] ?? queued.id, occurred_at: queued.createdAt, ...payload };
       }
 
-      const { data, error } = await db.from(table).insert(payload).select("*").single();
+      const write =
+        table === "work_journeys"
+          ? db.from(table).upsert(payload, { onConflict: "id" })
+          : db.from(table).insert(payload);
+      const { data, error } = await write.select("*").single();
       if (error) throw error;
       return data as Record<string, unknown>;
     },

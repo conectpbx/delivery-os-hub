@@ -4,6 +4,8 @@ import { Suspense, lazy, useMemo, useState } from "react";
 const RevenueAreaChart = lazy(() => import("@/components/charts/RevenueAreaChart"));
 import { Banknote, Fuel, Gauge, Timer, TrendingUp } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { OperationTimeStats } from "@/components/OperationTimeStats";
+import { useOperationTime } from "@/lib/use-operation-time";
 import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
 import { SmartAlerts } from "@/components/SmartAlerts";
 import { Button } from "@/components/ui/button";
@@ -97,6 +99,8 @@ function Dashboard() {
       to: endOfDay(now),
     };
   }, [now, range.days, range.monthOffset]);
+  const time = useOperationTime(from, to);
+  const todayTime = useOperationTime(startOfDay(now), endOfDay(now));
 
   const periodDeliveries = useMemo(
     () => deliveriesData.filter((d) => inRange(d.occurred_at, from, to)),
@@ -208,6 +212,7 @@ function Dashboard() {
     goals: goals.data ?? [],
     profile: profile.data,
     date: now,
+    operationTime: todayTime,
   });
 
   return (
@@ -234,7 +239,7 @@ function Dashboard() {
         <StatCard
           label="Receita do período"
           value={brl(s.revenue)}
-          hint={`${s.count} entregas · ${brl(s.perHour)}/hora`}
+          hint={`${s.count} entregas · ${brl(time.totalMin > 0 ? s.revenue / (time.totalMin / 60) : 0)}/hora`}
           tone="primary"
           icon={<Banknote className="size-4" />}
         />
@@ -269,9 +274,9 @@ function Dashboard() {
 
       <div className="mt-3 grid grid-cols-2 gap-3 xl:grid-cols-4">
         <StatCard
-          label="Tempo parado"
-          value={minutesLabel(s.idleMin)}
-          hint={`Rodando ${minutesLabel(s.workedMin)}`}
+          label="Tempo fora das entregas"
+          value={minutesLabel(time.unassignedMin)}
+          hint={`Entregas/rotas ${minutesLabel(time.deliveryMin)}`}
           tone="warning"
           icon={<Timer className="size-4" />}
         />
@@ -293,6 +298,7 @@ function Dashboard() {
         />
       </div>
 
+      <OperationTimeStats from={from} to={to} />
       <div className="mt-4">
         <SmartAlerts alerts={smartAlerts} />
       </div>

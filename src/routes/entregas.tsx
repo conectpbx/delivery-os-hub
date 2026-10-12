@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
+import { OperationTimeStats } from "@/components/OperationTimeStats";
+import { deliveryMinutes } from "@/lib/operation-time";
 import { BrandSpinner } from "@/components/BrandLoader";
 
 import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
@@ -171,6 +173,10 @@ function Entregas() {
   } | null>("entregas.finishing", null);
   const [finishGeo, setFinishGeo] = useState<string | null>(null);
   const [histRange, setHistRange] = useState<"hoje" | "7d" | "mes" | "tudo">("hoje");
+  const [deliveryStartedAt, setDeliveryStartedAt] = usePersistentState<string | null>(
+    "entregas.started-at",
+    null,
+  );
 
   const [form, setForm] = usePersistentState("entregas.form", {
     app_name: "",
@@ -450,13 +456,19 @@ function Entregas() {
         tip: dec(form.tip),
         payment_method: form.payment_method ?? "credito",
         distance_km: dec(form.distance_km),
-        duration_min: Math.round(dec(form.duration_min)),
+        duration_min:
+          finalized && deliveryStartedAt
+            ? Math.max(0, Math.round((Date.now() - Date.parse(deliveryStartedAt)) / 60000))
+            : Math.round(dec(form.duration_min)),
         idle_min: Math.round(dec(form.idle_min)),
         pickup_address: first?.address || null,
         dropoff_address: finalized ? last?.address || null : null,
         lat: first?.lat ?? null,
         lng: first?.lng ?? null,
         status: finalized ? "concluida" : "em_rota",
+        started_at: deliveryStartedAt ?? (finalized ? null : new Date().toISOString()),
+        ended_at: finalized && deliveryStartedAt ? new Date().toISOString() : null,
+        estimated_duration_min: route?.durationMin ?? null,
         stops: recordedStops(
           filled.map((s) => ({
             kind: s.kind,
@@ -480,6 +492,7 @@ function Entregas() {
         idle_min: "",
       }));
       setStops([newStop("coleta"), newStop("entrega")]);
+      setDeliveryStartedAt(null);
       setRoute(null);
       setShowRoute(false);
     } catch {
@@ -574,6 +587,7 @@ function Entregas() {
         <StatCard label="Tempo parado" value={minutesLabel(idle)} tone="warning" />
       </div>
 
+      <OperationTimeStats from={todayStart} to={todayEnd} />
       {deliveryIntel ? (
         <SectionCard
           title="Inteligência de entregas"
@@ -723,13 +737,37 @@ function Entregas() {
                 onChange={(v) => set("distance_km", v)}
               />
               <Field
-                label="Duração (min)"
+                label="Duração informada/estimada (min)"
                 value={form.duration_min}
                 onChange={(v) => set("duration_min", v)}
               />
-              <p className="col-span-2 text-xs text-muted-foreground">
-                Distância e duração são preenchidas automaticamente ao capturar os pontos pelo GPS.
-              </p>
+              <div className="col-span-2 flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!!deliveryStartedAt}
+                  onClick={() => setDeliveryStartedAt(new Date().toISOString())}
+                >
+                  Iniciar entrega
+                </Button>
+                {deliveryStartedAt ? (
+                  <>
+                    <span className="text-xs text-muted-foreground">
+                      Início: {dateTimeLabel(deliveryStartedAt)}
+                    </span>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      aria-label="Cancelar captura do tempo da entrega"
+                      onClick={() => setDeliveryStartedAt(null)}
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </>
+                ) : null}
+              </div>
               <Field
                 label="Tempo parado (min)"
                 value={form.idle_min}
@@ -1035,10 +1073,15 @@ function Entregas() {
                           </p>
                           <p className="text-xs text-muted-foreground">
                             {dateTimeLabel(d.occurred_at)} · {paymentMethodLabel(d.payment_method)}{" "}
-                            · {num(Number(d.distance_km))} km ·{" "}
-                            {minutesLabel(Number(d.duration_min))} rodando ·{" "}
-                            {minutesLabel(Number(d.idle_min))} parado
+                            · {num(Number(d.distance_km))} km · {minutesLabel(deliveryMinutes(d))}{" "}
+                            em entrega · {minutesLabel(Number(d.idle_min))} parado
                           </p>
+                          {d.started_at ? (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Início: {dateTimeLabel(d.started_at)} · Término:{" "}
+                              {d.ended_at ? dateTimeLabel(d.ended_at) : "Em andamento"}
+                            </p>
+                          ) : null}
                         </div>
                         {nav ? (
                           <Button asChild variant="ghost" size="icon" aria-label="Navegar">
@@ -1254,7 +1297,11 @@ function Entregas() {
                                     if (totals) {
                                       routed = totals.pts as typeof allPts;
                                       extra.distance_km = totals.distanceKm;
-                                      extra.duration_min = totals.durationMin;
+                                      extra.duration_min = d.started_at
+                                        ? Math.round(
+                                            (Date.now() - Date.parse(d.started_at)) / 60000,
+                                          )
+                                        : totals.durationMin;
                                     } else {
                                       toast.error(
                                         "Não foi possível calcular a distância desta entrega — verifique se os pontos têm endereço ou GPS preenchido e tente novamente.",
@@ -1265,6 +1312,9 @@ function Entregas() {
                                       values: {
                                         dropoff_address: last?.address ?? "",
                                         status: "concluida",
+                                        ended_at: new Date().toISOString(),
+                                        estimated_duration_min:
+                                          totals?.durationMin ?? d.estimated_duration_min ?? null,
                                         stops: routed,
                                         ...extra,
                                       },

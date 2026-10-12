@@ -8,3 +8,7 @@
 - [x] Exibir, editar e acompanhar todas as metas cadastradas
 - [x] Sugerir melhorias de desempenho sem misturar dados na virada do mês
 - [x] Integrar o aplicativo PainelOverlay por API segura com token e odômetro sincronizado
+- [x] Registrar início, término e duração das jornadas e entregas
+- [x] Unificar tempos, ganho/hora e exportações nos módulos consumidores
+- [x] Validar cálculos de jornada, intervalos simultâneos e virada do mês (39 testes aprovados)
+- [ ] Validar fluxo autenticado completo de jornada no preview (sem sessão disponível nesta rodada)

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { useInsert } from "./data";
 import { sendNativeTripCommand, subscribeNativeGps } from "@/lib/native-gps-bridge";
 import type { GpsDeviceState } from "./gps-integration";
 import {
@@ -33,6 +34,8 @@ export type TripState = {
   points: number;
   last: GpsPoint | null;
   integratedBaseline?: IntegratedBaseline;
+  journeyId?: string;
+  pendingSave?: boolean;
 };
 
 const EMPTY: TripState = {
@@ -61,6 +64,7 @@ function save(key: string | null, state: TripState) {
   try {
     // Persiste somente o resumo da jornada. O último ponto GPS vive apenas em memória.
     window.localStorage.setItem(key, JSON.stringify({ ...state, last: null }));
+    window.dispatchEvent(new Event("deliveryos:trip-changed"));
   } catch {
     /* storage indisponível */
   }
@@ -113,6 +117,7 @@ function ingest(
  */
 export function useTripTracker() {
   const { user, loading } = useAuth();
+  const addJourney = useInsert("work_journeys", "work_journeys");
   const storageKey = user ? `${PREFIX}${user.id}` : null;
   const [state, setState] = useState<TripState>(EMPTY);
   const [error, setError] = useState<string | null>(null);
@@ -234,6 +239,7 @@ export function useTripTracker() {
 
   const start = useCallback(
     (source: TripSource = "browser", reading?: GpsDeviceState | null) => {
+      if (stateRef.current.active || stateRef.current.pendingSave) return;
       setError(null);
       const baseline = source === "external" && reading ? gpsCounterBaseline(reading) : null;
       const next = {
@@ -241,27 +247,64 @@ export function useTripTracker() {
         source,
         active: true,
         startedAt: new Date().toISOString(),
+        journeyId: crypto.randomUUID(),
         ...(baseline ? { integratedBaseline: baseline } : {}),
       };
       apply(next);
+      save(storageKey, next);
       if (source === "browser") startWatch();
       else stopWatch();
       sendNativeTripCommand("start");
     },
-    [apply, startWatch, stopWatch],
+    [apply, startWatch, stopWatch, storageKey],
   );
 
-  const finish = useCallback(() => {
+  const finish = async () => {
+    const current = stateRef.current;
+    if (!current.startedAt || (!current.active && !current.pendingSave)) return;
     stopWatch();
-    apply({ ...stateRef.current, active: false, endedAt: new Date().toISOString(), last: null });
+    const next = {
+      ...current,
+      journeyId: current.journeyId ?? crypto.randomUUID(),
+      active: false,
+      pendingSave: true,
+      endedAt: current.endedAt ?? new Date().toISOString(),
+      last: null,
+    };
+    apply(next);
+    save(storageKey, next);
     sendNativeTripCommand("finish");
-  }, [apply, stopWatch]);
+    try {
+      await addJourney.mutateAsync({
+        id: next.journeyId,
+        started_at: next.startedAt,
+        ended_at: next.endedAt,
+        distance_km: next.distanceKm,
+        source: next.source,
+      });
+      const saved = { ...stateRef.current, pendingSave: false };
+      apply(saved);
+      save(storageKey, saved);
+    } catch {
+      setError("Jornada preservada neste dispositivo. Tente salvar novamente.");
+    }
+  };
 
   const reset = useCallback(() => {
+    if (stateRef.current.active || stateRef.current.pendingSave) return;
     stopWatch();
     apply(EMPTY);
     sendNativeTripCommand("reset");
   }, [apply, stopWatch]);
 
-  return { trip: state, error, start, finish, reset, pushGps, pushIntegratedGps };
+  return {
+    trip: state,
+    error,
+    start,
+    finish,
+    reset,
+    pushGps,
+    pushIntegratedGps,
+    saving: addJourney.isPending,
+  };
 }

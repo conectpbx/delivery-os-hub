@@ -16,3 +16,4 @@
 - Treat client-disconnected SSR requests as expected aborts and never promote them to fatal runtime screens or error telemetry.
 - A persistência offline do cache é agrupada antes da gravação no IndexedDB para reduzir trabalho na interface móvel sem perder dados.
 - External GPS ingestion uses per-device opaque bearer tokens stored only as SHA-256 hashes; only newer captured readings replace device state.
+- Persist completed work journeys independently of delivery rows; use shared interval-based operation-time calculations for all time and hourly indicators to avoid overlapping routes or month-boundary double counting.
