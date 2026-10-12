@@ -245,7 +245,8 @@ export function useInsert<T extends Record<string, unknown>>(table: string, key:
         return { id: queued.id, occurred_at: queued.createdAt, ...payload };
       }
 
-      const { data, error } = await db.from(table).insert(payload).select("*").single();
+      const write = table === "work_journeys" ? db.from(table).upsert(payload, { onConflict: "id" }) : db.from(table).insert(payload);
+      const { data, error } = await write.select("*").single();
       if (error) throw error;
       return data as Record<string, unknown>;
     },

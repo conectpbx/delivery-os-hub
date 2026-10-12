@@ -2,6 +2,7 @@ import { useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import type { Delivery, Expense, Fueling, Goal, Maintenance, Profile } from "./data";
 import { brl, localDateValue, num, parseDateValue } from "./format";
+import type { operationTime } from "./operation-time";
 import {
   adaptiveDailyRevenueGoal,
   costPerKm,
@@ -139,6 +140,7 @@ export function buildAlerts(input: {
   goals: Goal[];
   profile: Profile | null | undefined;
   date?: Date;
+  operationTime?: ReturnType<typeof operationTime>;
 }): SmartAlert[] {
   const { deliveries, fuelings, maintenances, expenses, goals, profile } = input;
   const alerts: SmartAlert[] = [];
@@ -154,6 +156,10 @@ export function buildAlerts(input: {
   );
 
   // ---- Metas ----
+  const elapsed = input.operationTime;
+  const outsideMin = elapsed?.unassignedMin ?? sToday.idleMin;
+  const deliveryMin = elapsed?.deliveryMin ?? sToday.workedMin;
+  const perHour = elapsed ? (elapsed.totalMin > 0 ? sToday.revenue / (elapsed.totalMin / 60) : 0) : sToday.perHour;
   const dailyGoalPlan = adaptiveDailyRevenueGoal({ deliveries, goals, profile, date: now });
   const dailyGoal = dailyGoalPlan.target;
   if (dailyGoal > 0 && dailyGoalPlan.isPlannedWorkday) {
@@ -289,13 +295,13 @@ export function buildAlerts(input: {
         )}/km. Priorize corridas acima de ${brl(cpk * 3)}/km.`,
       });
     }
-    if (sToday.idleMin > sToday.workedMin * 0.5 && sToday.idleMin > 60) {
+    if (outsideMin > deliveryMin * 0.5 && outsideMin > 60) {
       alerts.push({
         id: "tempo-parado-alto",
         kind: "aviso",
         severity: "warning",
-        title: "Muito tempo parado",
-        message: `${Math.round(sToday.idleMin)} min ociosos hoje. Testar outra região ou horário pode elevar o ganho/hora.`,
+        title: "Tempo fora das entregas elevado",
+        message: `${Math.round(outsideMin)} min fora das entregas hoje, incluindo espera, pausas e deslocamentos. Avalie a região e o horário.`,
       });
     }
     alerts.push({
@@ -303,7 +309,7 @@ export function buildAlerts(input: {
       kind: "dica",
       severity: "info",
       title: `Ticket médio de ${brl(ticket)}`,
-      message: `Com ${sToday.count} entregas e ${brl(sToday.perHour)}/hora hoje.`,
+      message: `Com ${sToday.count} entregas e ${brl(perHour)}/hora hoje.`,
     });
   }
 
@@ -359,6 +365,7 @@ export function useSmartAlerts(input: Parameters<typeof buildAlerts>[0]) {
       input.goals,
       input.profile,
       input.date,
+      input.operationTime,
     ],
   );
 

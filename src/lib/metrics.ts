@@ -1,5 +1,6 @@
 import type { Delivery, Expense, Fueling, Goal, Maintenance, Profile } from "./data";
 import { monthKey, parseDateValue } from "./format";
+import { deliveryMinutes, operationTime, type WorkJourney } from "./operation-time";
 
 const BUSINESS_TIME_ZONE = "America/Sao_Paulo";
 
@@ -245,6 +246,9 @@ export type ReportBreakdownRow = {
   idleMin: number;
   count: number;
   revenuePerKm: number;
+  totalMin: number;
+  journeyMin: number;
+  unassignedMin: number;
   profitPerHour: number;
   costPerKm: number;
 };
@@ -259,10 +263,12 @@ export function reportBreakdown(
   fuelings: Fueling[],
   maintenances: Maintenance[],
   granularity: ReportGranularity,
+  journeys: WorkJourney[] = [],
+  now = new Date(),
 ): ReportBreakdownRow[] {
   type MutableRow = Omit<
     ReportBreakdownRow,
-    "totalCost" | "profit" | "revenuePerKm" | "profitPerHour" | "costPerKm"
+    "totalCost" | "profit" | "revenuePerKm" | "profitPerHour" | "costPerKm" | "totalMin" | "journeyMin" | "unassignedMin"
   >;
   const rows = new Map<string, MutableRow>();
 
@@ -305,7 +311,7 @@ export function reportBreakdown(
     const row = bucket(delivery.occurred_at);
     row.revenue += Number(delivery.earnings) + Number(delivery.tip);
     row.distance += Number(delivery.distance_km);
-    row.workedMin += Number(delivery.duration_min);
+    row.workedMin += deliveryMinutes(delivery, now);
     row.idleMin += Number(delivery.idle_min);
     row.count += 1;
   }
@@ -314,14 +320,27 @@ export function reportBreakdown(
   for (const maintenance of maintenances) {
     bucket(maintenance.performed_at).maintenanceCost += Number(maintenance.cost);
   }
+  for (const journey of journeys) {
+    const cursor = startOfDay(operationalDate(journey.started_at));
+    const last = operationalDate(journey.ended_at ?? now.toISOString());
+    while (cursor <= last) {
+      bucket(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`);
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  }
 
   return [...rows.values()]
     .map((row) => {
       const totalCost = row.fuelCost + row.otherCost + row.maintenanceCost;
       const profit = row.revenue - totalCost;
-      const totalHours = (row.workedMin + row.idleMin) / 60;
+      const time = operationTime(deliveries, journeys, row.from, row.to, now);
+      const totalHours = time.totalMin / 60;
       return {
         ...row,
+        workedMin: time.deliveryMin,
+        totalMin: time.totalMin,
+        journeyMin: time.journeyMin,
+        unassignedMin: time.unassignedMin,
         totalCost,
         profit,
         revenuePerKm: row.distance > 0 ? row.revenue / row.distance : 0,
@@ -340,7 +359,7 @@ export function summarize(
 ): Summary {
   const revenue = deliveries.reduce((s, d) => s + Number(d.earnings) + Number(d.tip), 0);
   const distance = deliveries.reduce((s, d) => s + Number(d.distance_km), 0);
-  const workedMin = deliveries.reduce((s, d) => s + Number(d.duration_min), 0);
+  const workedMin = deliveries.reduce((s, d) => s + deliveryMinutes(d), 0);
   const idleMin = deliveries.reduce((s, d) => s + Number(d.idle_min), 0);
   const fuelCost = distance * cpk;
   const otherCost = expenses.reduce((s, e) => s + Number(e.amount), 0);
