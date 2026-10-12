@@ -101,12 +101,26 @@ test("preserves historical manual durations without inventing journey timestamps
   assert.equal(time.totalMin, 45);
 });
 test("manual deliveries inside a recorded shift do not add hours on top of the shift", () => {
-  const result = operationTime([delivery({ started_at: null, ended_at: null, duration_min: 30, idle_min: 15 })], [journey], from, to, now);
+  const result = operationTime(
+    [delivery({ started_at: null, ended_at: null, duration_min: 30, idle_min: 15 })],
+    [journey],
+    from,
+    to,
+    now,
+  );
   assert.equal(result.totalMin, 480);
   assert.equal(result.deliveryMin, 30);
 });
 test("monthly report splits the journey at São Paulo midnight and uses journey hours for profit", () => {
-  const rows = reportBreakdown([], [], [], [], "month", [{ ...journey, started_at: "2026-10-01T02:00:00Z", ended_at: "2026-10-01T04:00:00Z" }], now);
+  const rows = reportBreakdown(
+    [],
+    [],
+    [],
+    [],
+    "month",
+    [{ ...journey, started_at: "2026-10-01T02:00:00Z", ended_at: "2026-10-01T04:00:00Z" }],
+    now,
+  );
   assert.equal(rows.find((r) => r.key === "2026-09-01")?.journeyMin, 60);
   assert.equal(rows.find((r) => r.key === "2026-10-01")?.journeyMin, 60);
   const daily = reportBreakdown([delivery()], [], [], [], "day", [journey], now);

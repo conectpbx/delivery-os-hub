@@ -93,7 +93,9 @@ export function operationTime(
   const totalMin = hasJourney
     ? journeyMin + unionMinutes(outsideRoutes) + outsideLegacyMin + outsideIdleMin
     : measuredDeliveryMin + legacyDeliveryMin + recordedIdleMin;
-  const deliveryMin = hasJourney ? Math.min(totalMin, measuredDeliveryMin + legacyDeliveryMin) : measuredDeliveryMin + legacyDeliveryMin;
+  const deliveryMin = hasJourney
+    ? Math.min(totalMin, measuredDeliveryMin + legacyDeliveryMin)
+    : measuredDeliveryMin + legacyDeliveryMin;
   return {
     journeyMin,
     deliveryMin,

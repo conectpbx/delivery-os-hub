@@ -173,7 +173,10 @@ function Entregas() {
   } | null>("entregas.finishing", null);
   const [finishGeo, setFinishGeo] = useState<string | null>(null);
   const [histRange, setHistRange] = useState<"hoje" | "7d" | "mes" | "tudo">("hoje");
-  const [deliveryStartedAt, setDeliveryStartedAt] = usePersistentState<string | null>("entregas.started-at", null);
+  const [deliveryStartedAt, setDeliveryStartedAt] = usePersistentState<string | null>(
+    "entregas.started-at",
+    null,
+  );
 
   const [form, setForm] = usePersistentState("entregas.form", {
     app_name: "",
@@ -453,7 +456,10 @@ function Entregas() {
         tip: dec(form.tip),
         payment_method: form.payment_method ?? "credito",
         distance_km: dec(form.distance_km),
-        duration_min: finalized && deliveryStartedAt ? Math.max(0, Math.round((Date.now() - Date.parse(deliveryStartedAt)) / 60000)) : Math.round(dec(form.duration_min)),
+        duration_min:
+          finalized && deliveryStartedAt
+            ? Math.max(0, Math.round((Date.now() - Date.parse(deliveryStartedAt)) / 60000))
+            : Math.round(dec(form.duration_min)),
         idle_min: Math.round(dec(form.idle_min)),
         pickup_address: first?.address || null,
         dropoff_address: finalized ? last?.address || null : null,
@@ -736,8 +742,31 @@ function Entregas() {
                 onChange={(v) => set("duration_min", v)}
               />
               <div className="col-span-2 flex flex-wrap items-center gap-2">
-                <Button type="button" variant="outline" size="sm" disabled={!!deliveryStartedAt} onClick={() => setDeliveryStartedAt(new Date().toISOString())}>Iniciar entrega</Button>
-                {deliveryStartedAt ? <><span className="text-xs text-muted-foreground">Início: {dateTimeLabel(deliveryStartedAt)}</span><Button type="button" size="icon" variant="ghost" aria-label="Cancelar captura do tempo da entrega" onClick={() => setDeliveryStartedAt(null)}><X className="size-4" /></Button></> : null}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!!deliveryStartedAt}
+                  onClick={() => setDeliveryStartedAt(new Date().toISOString())}
+                >
+                  Iniciar entrega
+                </Button>
+                {deliveryStartedAt ? (
+                  <>
+                    <span className="text-xs text-muted-foreground">
+                      Início: {dateTimeLabel(deliveryStartedAt)}
+                    </span>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      aria-label="Cancelar captura do tempo da entrega"
+                      onClick={() => setDeliveryStartedAt(null)}
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </>
+                ) : null}
               </div>
               <Field
                 label="Tempo parado (min)"

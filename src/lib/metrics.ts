@@ -347,7 +347,13 @@ export function reportBreakdown(
       const businessStart = new Date(`${row.key}T00:00:00-03:00`);
       const endKey = `${row.to.getFullYear()}-${String(row.to.getMonth() + 1).padStart(2, "0")}-${String(row.to.getDate()).padStart(2, "0")}`;
       const businessEnd = new Date(`${endKey}T23:59:59.999-03:00`);
-      const time = operationTime(deliveries, journeys, range ? new Date(Math.max(businessStart.getTime(), range.from.getTime())) : businessStart, range ? new Date(Math.min(businessEnd.getTime(), range.to.getTime())) : businessEnd, now);
+      const time = operationTime(
+        deliveries,
+        journeys,
+        range ? new Date(Math.max(businessStart.getTime(), range.from.getTime())) : businessStart,
+        range ? new Date(Math.min(businessEnd.getTime(), range.to.getTime())) : businessEnd,
+        now,
+      );
       const totalHours = time.totalMin / 60;
       return {
         ...row,
