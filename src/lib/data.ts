@@ -185,7 +185,8 @@ export const useMaintenances = () =>
 export const useExpenses = () => useList<Expense>("expenses", "expenses", "occurred_at");
 export const useGoals = () => useList<Goal>("goals", "goals", "month");
 export const useApps = () => useList<App>("apps", "apps", "name");
-export const useJourneys = () => useList<WorkJourney>("work_journeys", "work_journeys", "started_at");
+export const useJourneys = () =>
+  useList<WorkJourney>("work_journeys", "work_journeys", "started_at");
 
 export const useInsertApp = () => useInsert<{ name: string; fee_percent: number }>("apps", "apps");
 
@@ -245,7 +246,10 @@ export function useInsert<T extends Record<string, unknown>>(table: string, key:
         return { id: queued.id, occurred_at: queued.createdAt, ...payload };
       }
 
-      const write = table === "work_journeys" ? db.from(table).upsert(payload, { onConflict: "id" }) : db.from(table).insert(payload);
+      const write =
+        table === "work_journeys"
+          ? db.from(table).upsert(payload, { onConflict: "id" })
+          : db.from(table).insert(payload);
       const { data, error } = await write.select("*").single();
       if (error) throw error;
       return data as Record<string, unknown>;

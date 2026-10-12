@@ -22,17 +22,32 @@ function unionMinutes(intervals: Interval[]) {
 
 export function deliveryMinutes(delivery: Delivery, now = new Date()) {
   if (delivery.started_at && (delivery.ended_at || delivery.status === "em_rota")) {
-    return Math.max(0, ((delivery.ended_at ? Date.parse(delivery.ended_at) : now.getTime()) - Date.parse(delivery.started_at)) / 60000) || 0;
+    return (
+      Math.max(
+        0,
+        ((delivery.ended_at ? Date.parse(delivery.ended_at) : now.getTime()) -
+          Date.parse(delivery.started_at)) /
+          60000,
+      ) || 0
+    );
   }
   return Math.max(0, Number(delivery.duration_min) || 0);
 }
 
 /** Elapsed time is independent of GPS and overlapping routes are never double-counted. */
-export function operationTime(deliveries: Delivery[], journeys: WorkJourney[], from: Date, to: Date, now = new Date()) {
+export function operationTime(
+  deliveries: Delivery[],
+  journeys: WorkJourney[],
+  from: Date,
+  to: Date,
+  now = new Date(),
+) {
   const lower = from.getTime();
   const upper = Math.min(to.getTime() + 1, now.getTime());
   const clip = (a: number, b: number): Interval => [Math.max(lower, a), Math.min(upper, b)];
-  const journeyIntervals = journeys.map((j) => clip(Date.parse(j.started_at), j.ended_at ? Date.parse(j.ended_at) : now.getTime()));
+  const journeyIntervals = journeys.map((j) =>
+    clip(Date.parse(j.started_at), j.ended_at ? Date.parse(j.ended_at) : now.getTime()),
+  );
   const routeIntervals: Interval[] = [];
   let legacyDeliveryMin = 0;
   let recordedIdleMin = 0;
@@ -41,7 +56,12 @@ export function operationTime(deliveries: Delivery[], journeys: WorkJourney[], f
     const inPeriod = occurred >= lower && occurred <= upper;
     if (inPeriod) recordedIdleMin += Math.max(0, Number(delivery.idle_min) || 0);
     if (delivery.started_at && (delivery.ended_at || delivery.status === "em_rota")) {
-      routeIntervals.push(clip(Date.parse(delivery.started_at), delivery.ended_at ? Date.parse(delivery.ended_at) : now.getTime()));
+      routeIntervals.push(
+        clip(
+          Date.parse(delivery.started_at),
+          delivery.ended_at ? Date.parse(delivery.ended_at) : now.getTime(),
+        ),
+      );
     } else if (inPeriod) legacyDeliveryMin += deliveryMinutes(delivery, now);
   }
   const deliveryMin = unionMinutes(routeIntervals) + legacyDeliveryMin;
@@ -52,13 +72,26 @@ export function operationTime(deliveries: Delivery[], journeys: WorkJourney[], f
   for (const [a, b] of routeIntervals) {
     let fragments: Interval[] = [[a, b]];
     for (const [start, end] of journeyIntervals) {
-      fragments = fragments.flatMap(([x, y]) => end <= x || start >= y ? [[x, y] as Interval] : [[x, Math.min(y, start)], [Math.max(x, end), y]] as Interval[]);
+      fragments = fragments.flatMap(([x, y]) =>
+        end <= x || start >= y
+          ? [[x, y] as Interval]
+          : ([
+              [x, Math.min(y, start)],
+              [Math.max(x, end), y],
+            ] as Interval[]),
+      );
     }
     outsideRoutes.push(...fragments);
   }
-  const totalMin = hasJourney ? journeyMin + unionMinutes(outsideRoutes) + legacyDeliveryMin : deliveryMin + recordedIdleMin;
+  const totalMin = hasJourney
+    ? journeyMin + unionMinutes(outsideRoutes) + legacyDeliveryMin
+    : deliveryMin + recordedIdleMin;
   return {
-    journeyMin, deliveryMin, totalMin, recordedIdleMin, hasJourney,
+    journeyMin,
+    deliveryMin,
+    totalMin,
+    recordedIdleMin,
+    hasJourney,
     unassignedMin: hasJourney ? Math.max(0, totalMin - deliveryMin) : recordedIdleMin,
   };
 }

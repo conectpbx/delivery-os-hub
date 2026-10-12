@@ -263,12 +263,25 @@ export function useTripTracker() {
     const current = stateRef.current;
     if (!current.startedAt || (!current.active && !current.pendingSave)) return;
     stopWatch();
-    const next = { ...current, journeyId: current.journeyId ?? crypto.randomUUID(), active: false, pendingSave: true, endedAt: current.endedAt ?? new Date().toISOString(), last: null };
+    const next = {
+      ...current,
+      journeyId: current.journeyId ?? crypto.randomUUID(),
+      active: false,
+      pendingSave: true,
+      endedAt: current.endedAt ?? new Date().toISOString(),
+      last: null,
+    };
     apply(next);
     save(storageKey, next);
     sendNativeTripCommand("finish");
     try {
-      await addJourney.mutateAsync({ id: next.journeyId, started_at: next.startedAt, ended_at: next.endedAt, distance_km: next.distanceKm, source: next.source });
+      await addJourney.mutateAsync({
+        id: next.journeyId,
+        started_at: next.startedAt,
+        ended_at: next.endedAt,
+        distance_km: next.distanceKm,
+        source: next.source,
+      });
       const saved = { ...stateRef.current, pendingSave: false };
       apply(saved);
       save(storageKey, saved);
@@ -284,5 +297,14 @@ export function useTripTracker() {
     sendNativeTripCommand("reset");
   }, [apply, stopWatch]);
 
-  return { trip: state, error, start, finish, reset, pushGps, pushIntegratedGps, saving: addJourney.isPending };
+  return {
+    trip: state,
+    error,
+    start,
+    finish,
+    reset,
+    pushGps,
+    pushIntegratedGps,
+    saving: addJourney.isPending,
+  };
 }

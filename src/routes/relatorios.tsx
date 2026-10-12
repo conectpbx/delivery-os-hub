@@ -127,8 +127,27 @@ function Relatorios() {
     [perDeliveries],
   );
   const breakdown = useMemo(
-    () => reportBreakdown(deliveriesData, perExpenses, perFuelings, perMaint, granularity, time.records, time.now).filter((row) => row.from <= period.toDate && row.to >= period.fromDate),
-    [granularity, deliveriesData, perExpenses, perFuelings, perMaint, time.records, time.now, period.fromDate, period.toDate],
+    () =>
+      reportBreakdown(
+        deliveriesData,
+        perExpenses,
+        perFuelings,
+        perMaint,
+        granularity,
+        time.records,
+        time.now,
+      ).filter((row) => row.from <= period.toDate && row.to >= period.fromDate),
+    [
+      granularity,
+      deliveriesData,
+      perExpenses,
+      perFuelings,
+      perMaint,
+      time.records,
+      time.now,
+      period.fromDate,
+      period.toDate,
+    ],
   );
   const chart = useMemo(
     () =>
@@ -247,7 +266,20 @@ function Relatorios() {
   function exportJourneys() {
     downloadCsv("jornadas-delivery-os.csv", [
       ["Início", "Término", "Duração (min)", "KM", "Fonte"],
-      ...time.records.filter((j) => Date.parse(j.started_at) <= period.toDate.getTime() && Date.parse(j.ended_at ?? time.now.toISOString()) >= period.fromDate.getTime()).map((j) => [dateTimeLabel(j.started_at), j.ended_at ? dateTimeLabel(j.ended_at) : "Em andamento", ((j.ended_at ? Date.parse(j.ended_at) : time.now.getTime()) - Date.parse(j.started_at)) / 60000, j.distance_km, j.source]),
+      ...time.records
+        .filter(
+          (j) =>
+            Date.parse(j.started_at) <= period.toDate.getTime() &&
+            Date.parse(j.ended_at ?? time.now.toISOString()) >= period.fromDate.getTime(),
+        )
+        .map((j) => [
+          dateTimeLabel(j.started_at),
+          j.ended_at ? dateTimeLabel(j.ended_at) : "Em andamento",
+          ((j.ended_at ? Date.parse(j.ended_at) : time.now.getTime()) - Date.parse(j.started_at)) /
+            60000,
+          j.distance_km,
+          j.source,
+        ]),
     ]);
   }
 
@@ -270,7 +302,9 @@ function Relatorios() {
           <Button size="sm" className="gap-2" onClick={() => window.print()}>
             <Printer className="size-4" /> Gerar PDF
           </Button>
-          <Button variant="outline" size="sm" className="gap-2" onClick={exportJourneys}><FileDown className="size-4" /> Jornadas (Excel)</Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={exportJourneys}>
+            <FileDown className="size-4" /> Jornadas (Excel)
+          </Button>
         </div>
       }
     >
@@ -426,7 +460,9 @@ function Relatorios() {
                       <td className="px-2 py-3 text-right tabular-nums">{num(row.distance)}</td>
                       <td className="px-2 py-3 text-right tabular-nums">
                         <span>{minutesLabel(row.totalMin)}</span>
-                        <span className="block text-xs text-muted-foreground">{minutesLabel(row.workedMin)} em entregas</span>
+                        <span className="block text-xs text-muted-foreground">
+                          {minutesLabel(row.workedMin)} em entregas
+                        </span>
                         {row.unassignedMin > 0 ? (
                           <span className="block text-xs text-muted-foreground">
                             {minutesLabel(row.unassignedMin)} fora das entregas

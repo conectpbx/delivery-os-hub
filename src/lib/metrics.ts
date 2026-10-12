@@ -268,7 +268,14 @@ export function reportBreakdown(
 ): ReportBreakdownRow[] {
   type MutableRow = Omit<
     ReportBreakdownRow,
-    "totalCost" | "profit" | "revenuePerKm" | "profitPerHour" | "costPerKm" | "totalMin" | "journeyMin" | "unassignedMin"
+    | "totalCost"
+    | "profit"
+    | "revenuePerKm"
+    | "profitPerHour"
+    | "costPerKm"
+    | "totalMin"
+    | "journeyMin"
+    | "unassignedMin"
   >;
   const rows = new Map<string, MutableRow>();
 
@@ -324,7 +331,9 @@ export function reportBreakdown(
     const cursor = startOfDay(operationalDate(journey.started_at));
     const last = operationalDate(journey.ended_at ?? now.toISOString());
     while (cursor <= last) {
-      bucket(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`);
+      bucket(
+        `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`,
+      );
       cursor.setDate(cursor.getDate() + 1);
     }
   }

@@ -66,7 +66,10 @@ function calendarDate(value: string | Date) {
   return startOfDay(new Date(value));
 }
 
-export function buildMaintenanceAlerts(maintenances: Maintenance[], date = new Date()): SmartAlert[] {
+export function buildMaintenanceAlerts(
+  maintenances: Maintenance[],
+  date = new Date(),
+): SmartAlert[] {
   const alerts: SmartAlert[] = [];
   const referenceDate = calendarDate(date);
 
@@ -116,7 +119,12 @@ export function buildMaintenanceAlerts(maintenances: Maintenance[], date = new D
 }
 
 function normalizedServiceType(value: string) {
-  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().replace(/\s+/g, " ").toLowerCase();
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
 }
 
 /** O registro mais recente encerra o ciclo anterior do mesmo serviço. */
@@ -125,7 +133,11 @@ export function latestMaintenanceCycles(maintenances: Maintenance[]) {
   for (const maintenance of maintenances) {
     const key = normalizedServiceType(maintenance.service_type);
     const current = latest.get(key);
-    if (!current || parseDateValue(maintenance.performed_at).getTime() > parseDateValue(current.performed_at).getTime()) {
+    if (
+      !current ||
+      parseDateValue(maintenance.performed_at).getTime() >
+        parseDateValue(current.performed_at).getTime()
+    ) {
       latest.set(key, maintenance);
     }
   }
@@ -159,7 +171,11 @@ export function buildAlerts(input: {
   const elapsed = input.operationTime;
   const outsideMin = elapsed?.unassignedMin ?? sToday.idleMin;
   const deliveryMin = elapsed?.deliveryMin ?? sToday.workedMin;
-  const perHour = elapsed ? (elapsed.totalMin > 0 ? sToday.revenue / (elapsed.totalMin / 60) : 0) : sToday.perHour;
+  const perHour = elapsed
+    ? elapsed.totalMin > 0
+      ? sToday.revenue / (elapsed.totalMin / 60)
+      : 0
+    : sToday.perHour;
   const dailyGoalPlan = adaptiveDailyRevenueGoal({ deliveries, goals, profile, date: now });
   const dailyGoal = dailyGoalPlan.target;
   if (dailyGoal > 0 && dailyGoalPlan.isPlannedWorkday) {

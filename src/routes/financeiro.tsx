@@ -19,7 +19,15 @@ import {
   useRemove,
   useUpsertProfile,
 } from "@/lib/data";
-import { brl, dateLabel, dateTimeLabel, dec, localDateValue, minutesLabel, num } from "@/lib/format";
+import {
+  brl,
+  dateLabel,
+  dateTimeLabel,
+  dec,
+  localDateValue,
+  minutesLabel,
+  num,
+} from "@/lib/format";
 import {
   geolocationErrorMessage,
   getCurrentPosition,
@@ -101,7 +109,15 @@ function Financeiro() {
   const [newGpsToken, setNewGpsToken] = useState<string | null>(null);
   const period = usePeriodSelection(3);
   const [gps, setGps] = useState(false);
-  const { trip, error: tripError, start, finish, reset, pushIntegratedGps, saving } = useTripTracker();
+  const {
+    trip,
+    error: tripError,
+    start,
+    finish,
+    reset,
+    pushIntegratedGps,
+    saving,
+  } = useTripTracker();
   const journeys = useJourneys();
   const [clock, setClock] = useState<number | null>(null);
   useEffect(() => {
@@ -110,7 +126,13 @@ function Financeiro() {
     const timer = setInterval(() => setClock(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [trip.active]);
-  const journeyMinutes = trip.startedAt && clock ? Math.max(0, ((trip.endedAt ? Date.parse(trip.endedAt) : clock) - Date.parse(trip.startedAt)) / 60000) : 0;
+  const journeyMinutes =
+    trip.startedAt && clock
+      ? Math.max(
+          0,
+          ((trip.endedAt ? Date.parse(trip.endedAt) : clock) - Date.parse(trip.startedAt)) / 60000,
+        )
+      : 0;
   const gpsDevices = useGpsDevices();
   const externalGps = useGpsDeviceState(
     trip.active,
@@ -230,9 +252,22 @@ function Financeiro() {
         description="Inicie no começo do dia e finalize no fim — a quilometragem é somada automaticamente"
       >
         <dl className="mb-4 grid gap-3 sm:grid-cols-3">
-          <div><dt className="text-xs text-muted-foreground">Início</dt><dd className="text-sm font-medium">{trip.startedAt ? dateTimeLabel(trip.startedAt) : "—"}</dd></div>
-          <div><dt className="text-xs text-muted-foreground">Término</dt><dd className="text-sm font-medium">{trip.endedAt ? dateTimeLabel(trip.endedAt) : trip.active ? "Em andamento" : "—"}</dd></div>
-          <div><dt className="text-xs text-muted-foreground">Duração da jornada</dt><dd className="text-lg font-semibold tabular-nums">{minutesLabel(journeyMinutes)}</dd></div>
+          <div>
+            <dt className="text-xs text-muted-foreground">Início</dt>
+            <dd className="text-sm font-medium">
+              {trip.startedAt ? dateTimeLabel(trip.startedAt) : "—"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs text-muted-foreground">Término</dt>
+            <dd className="text-sm font-medium">
+              {trip.endedAt ? dateTimeLabel(trip.endedAt) : trip.active ? "Em andamento" : "—"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs text-muted-foreground">Duração da jornada</dt>
+            <dd className="text-lg font-semibold tabular-nums">{minutesLabel(journeyMinutes)}</dd>
+          </div>
         </dl>
         <div className="flex flex-wrap items-center gap-3">
           <div className="min-w-0">
@@ -248,7 +283,8 @@ function Financeiro() {
           <div className="ml-auto flex flex-wrap gap-2">
             {trip.active || trip.pendingSave ? (
               <Button variant="destructive" onClick={finish} disabled={saving}>
-                <Square className="mr-2 size-4" /> {saving ? "Salvando…" : trip.pendingSave ? "Salvar jornada" : "Finalizar"}
+                <Square className="mr-2 size-4" />{" "}
+                {saving ? "Salvando…" : trip.pendingSave ? "Salvar jornada" : "Finalizar"}
               </Button>
             ) : (
               <Button
@@ -298,12 +334,36 @@ function Financeiro() {
 
       <OperationTimeStats from={period.fromDate} to={period.toDate} />
       <SectionCard className="mt-4" title="Histórico de jornadas">
-        {journeys.isError ? <p className="text-sm text-destructive">Não foi possível carregar as jornadas.</p> : journeys.data?.length ? <ul className="divide-y divide-border">
-          {journeys.data.filter((j) => Date.parse(j.started_at) <= period.toDate.getTime() && Date.parse(j.ended_at ?? j.started_at) >= period.fromDate.getTime()).map((j) => <li key={j.id} className="flex flex-wrap justify-between gap-2 py-3 text-sm">
-            <div><p>Início: {dateTimeLabel(j.started_at)}</p><p className="text-xs text-muted-foreground">Término: {j.ended_at ? dateTimeLabel(j.ended_at) : "Em andamento"}</p></div>
-            <p className="font-medium tabular-nums">{minutesLabel((Date.parse(j.ended_at ?? j.started_at) - Date.parse(j.started_at)) / 60000)} · {num(j.distance_km)} km</p>
-          </li>)}
-        </ul> : <EmptyState>Nenhuma jornada finalizada.</EmptyState>}
+        {journeys.isError ? (
+          <p className="text-sm text-destructive">Não foi possível carregar as jornadas.</p>
+        ) : journeys.data?.length ? (
+          <ul className="divide-y divide-border">
+            {journeys.data
+              .filter(
+                (j) =>
+                  Date.parse(j.started_at) <= period.toDate.getTime() &&
+                  Date.parse(j.ended_at ?? j.started_at) >= period.fromDate.getTime(),
+              )
+              .map((j) => (
+                <li key={j.id} className="flex flex-wrap justify-between gap-2 py-3 text-sm">
+                  <div>
+                    <p>Início: {dateTimeLabel(j.started_at)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Término: {j.ended_at ? dateTimeLabel(j.ended_at) : "Em andamento"}
+                    </p>
+                  </div>
+                  <p className="font-medium tabular-nums">
+                    {minutesLabel(
+                      (Date.parse(j.ended_at ?? j.started_at) - Date.parse(j.started_at)) / 60000,
+                    )}{" "}
+                    · {num(j.distance_km)} km
+                  </p>
+                </li>
+              ))}
+          </ul>
+        ) : (
+          <EmptyState>Nenhuma jornada finalizada.</EmptyState>
+        )}
       </SectionCard>
 
       <SectionCard

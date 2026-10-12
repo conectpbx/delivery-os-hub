@@ -12,14 +12,26 @@ export function useOperationTime(from: Date, to: Date) {
   useEffect(() => {
     const update = () => {
       setNow(new Date());
-      if (!user) { setActive(null); return; }
+      if (!user) {
+        setActive(null);
+        return;
+      }
       try {
         const raw = JSON.parse(localStorage.getItem(`deliveryos.trip:${user.id}`) ?? "null");
-        setActive(raw?.startedAt && (raw.active || raw.pendingSave) ? {
-          id: raw.journeyId ?? "active", started_at: raw.startedAt, ended_at: raw.endedAt,
-          source: raw.source, distance_km: raw.distanceKm,
-        } : null);
-      } catch { setActive(null); }
+        setActive(
+          raw?.startedAt && (raw.active || raw.pendingSave)
+            ? {
+                id: raw.journeyId ?? "active",
+                started_at: raw.startedAt,
+                ended_at: raw.endedAt,
+                source: raw.source,
+                distance_km: raw.distanceKm,
+              }
+            : null,
+        );
+      } catch {
+        setActive(null);
+      }
     };
     update();
     const timer = setInterval(update, 15000);
@@ -35,5 +47,9 @@ export function useOperationTime(from: Date, to: Date) {
   }, [user?.id]);
   const rows = journeys.data ?? [];
   const records = active && !rows.some((j) => j.id === active.id) ? [...rows, active] : rows;
-  return { ...operationTime(deliveries.data ?? [], records, from, to, now ?? from), records, now: now ?? from };
+  return {
+    ...operationTime(deliveries.data ?? [], records, from, to, now ?? from),
+    records,
+    now: now ?? from,
+  };
 }

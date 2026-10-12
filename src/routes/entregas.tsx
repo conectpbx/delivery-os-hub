@@ -1041,11 +1041,15 @@ function Entregas() {
                           </p>
                           <p className="text-xs text-muted-foreground">
                             {dateTimeLabel(d.occurred_at)} · {paymentMethodLabel(d.payment_method)}{" "}
-                            · {num(Number(d.distance_km))} km ·{" "}
-                            {minutesLabel(deliveryMinutes(d))} em entrega ·{" "}
-                            {minutesLabel(Number(d.idle_min))} parado
+                            · {num(Number(d.distance_km))} km · {minutesLabel(deliveryMinutes(d))}{" "}
+                            em entrega · {minutesLabel(Number(d.idle_min))} parado
                           </p>
-                          {d.started_at ? <p className="mt-1 text-xs text-muted-foreground">Início: {dateTimeLabel(d.started_at)} · Término: {d.ended_at ? dateTimeLabel(d.ended_at) : "Em andamento"}</p> : null}
+                          {d.started_at ? (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Início: {dateTimeLabel(d.started_at)} · Término:{" "}
+                              {d.ended_at ? dateTimeLabel(d.ended_at) : "Em andamento"}
+                            </p>
+                          ) : null}
                         </div>
                         {nav ? (
                           <Button asChild variant="ghost" size="icon" aria-label="Navegar">
@@ -1261,7 +1265,11 @@ function Entregas() {
                                     if (totals) {
                                       routed = totals.pts as typeof allPts;
                                       extra.distance_km = totals.distanceKm;
-                                      extra.duration_min = d.started_at ? Math.round((Date.now() - Date.parse(d.started_at)) / 60000) : totals.durationMin;
+                                      extra.duration_min = d.started_at
+                                        ? Math.round(
+                                            (Date.now() - Date.parse(d.started_at)) / 60000,
+                                          )
+                                        : totals.durationMin;
                                     } else {
                                       toast.error(
                                         "Não foi possível calcular a distância desta entrega — verifique se os pontos têm endereço ou GPS preenchido e tente novamente.",
@@ -1273,7 +1281,8 @@ function Entregas() {
                                         dropoff_address: last?.address ?? "",
                                         status: "concluida",
                                         ended_at: new Date().toISOString(),
-                                        estimated_duration_min: totals?.durationMin ?? d.estimated_duration_min ?? null,
+                                        estimated_duration_min:
+                                          totals?.durationMin ?? d.estimated_duration_min ?? null,
                                         stops: routed,
                                         ...extra,
                                       },
