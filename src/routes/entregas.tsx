@@ -173,6 +173,7 @@ function Entregas() {
   } | null>("entregas.finishing", null);
   const [finishGeo, setFinishGeo] = useState<string | null>(null);
   const [histRange, setHistRange] = useState<"hoje" | "7d" | "mes" | "tudo">("hoje");
+  const [deliveryStartedAt, setDeliveryStartedAt] = usePersistentState<string | null>("entregas.started-at", null);
 
   const [form, setForm] = usePersistentState("entregas.form", {
     app_name: "",
@@ -452,15 +453,15 @@ function Entregas() {
         tip: dec(form.tip),
         payment_method: form.payment_method ?? "credito",
         distance_km: dec(form.distance_km),
-        duration_min: Math.round(dec(form.duration_min)),
+        duration_min: finalized && deliveryStartedAt ? Math.max(0, Math.round((Date.now() - Date.parse(deliveryStartedAt)) / 60000)) : Math.round(dec(form.duration_min)),
         idle_min: Math.round(dec(form.idle_min)),
         pickup_address: first?.address || null,
         dropoff_address: finalized ? last?.address || null : null,
         lat: first?.lat ?? null,
         lng: first?.lng ?? null,
         status: finalized ? "concluida" : "em_rota",
-        started_at: finalized ? null : new Date().toISOString(),
-        ended_at: null,
+        started_at: deliveryStartedAt ?? (finalized ? null : new Date().toISOString()),
+        ended_at: finalized && deliveryStartedAt ? new Date().toISOString() : null,
         estimated_duration_min: route?.durationMin ?? null,
         stops: recordedStops(
           filled.map((s) => ({
@@ -485,6 +486,7 @@ function Entregas() {
         idle_min: "",
       }));
       setStops([newStop("coleta"), newStop("entrega")]);
+      setDeliveryStartedAt(null);
       setRoute(null);
       setShowRoute(false);
     } catch {
@@ -729,13 +731,14 @@ function Entregas() {
                 onChange={(v) => set("distance_km", v)}
               />
               <Field
-                label="Duração (min)"
+                label="Duração informada/estimada (min)"
                 value={form.duration_min}
                 onChange={(v) => set("duration_min", v)}
               />
-              <p className="col-span-2 text-xs text-muted-foreground">
-                Distância e duração são preenchidas automaticamente ao capturar os pontos pelo GPS.
-              </p>
+              <div className="col-span-2 flex flex-wrap items-center gap-2">
+                <Button type="button" variant="outline" size="sm" disabled={!!deliveryStartedAt} onClick={() => setDeliveryStartedAt(new Date().toISOString())}>Iniciar entrega</Button>
+                {deliveryStartedAt ? <><span className="text-xs text-muted-foreground">Início: {dateTimeLabel(deliveryStartedAt)}</span><Button type="button" size="icon" variant="ghost" aria-label="Cancelar captura do tempo da entrega" onClick={() => setDeliveryStartedAt(null)}><X className="size-4" /></Button></> : null}
+              </div>
               <Field
                 label="Tempo parado (min)"
                 value={form.idle_min}

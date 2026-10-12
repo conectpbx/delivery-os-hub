@@ -129,13 +129,14 @@ function Relatorios() {
   const breakdown = useMemo(
     () =>
       reportBreakdown(
-        deliveriesData,
+        perDeliveries,
         perExpenses,
         perFuelings,
         perMaint,
         granularity,
         time.records,
         time.now,
+        { from: period.fromDate, to: period.toDate },
       ).filter((row) => row.from <= period.toDate && row.to >= period.fromDate),
     [
       granularity,

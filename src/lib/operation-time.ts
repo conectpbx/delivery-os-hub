@@ -51,10 +51,14 @@ export function operationTime(
   const routeIntervals: Interval[] = [];
   let legacyDeliveryMin = 0;
   let recordedIdleMin = 0;
+  let outsideLegacyMin = 0;
+  let outsideIdleMin = 0;
   for (const delivery of deliveries) {
     const occurred = Date.parse(delivery.occurred_at);
     const inPeriod = occurred >= lower && occurred <= upper;
+    const covered = journeyIntervals.some(([a, b]) => occurred >= a && occurred < b);
     if (inPeriod) recordedIdleMin += Math.max(0, Number(delivery.idle_min) || 0);
+    if (inPeriod && !covered) outsideIdleMin += Math.max(0, Number(delivery.idle_min) || 0);
     if (delivery.started_at && (delivery.ended_at || delivery.status === "em_rota")) {
       routeIntervals.push(
         clip(
@@ -62,9 +66,12 @@ export function operationTime(
           delivery.ended_at ? Date.parse(delivery.ended_at) : now.getTime(),
         ),
       );
-    } else if (inPeriod) legacyDeliveryMin += deliveryMinutes(delivery, now);
+    } else if (inPeriod) {
+      legacyDeliveryMin += deliveryMinutes(delivery, now);
+      if (!covered) outsideLegacyMin += deliveryMinutes(delivery, now);
+    }
   }
-  const deliveryMin = unionMinutes(routeIntervals) + legacyDeliveryMin;
+  const measuredDeliveryMin = unionMinutes(routeIntervals);
   const journeyMin = unionMinutes(journeyIntervals);
   const hasJourney = journeyIntervals.some(([a, b]) => b > a);
   // Outside recorded journeys, retain historical delivery/idle data without inventing a shift.
@@ -84,8 +91,9 @@ export function operationTime(
     outsideRoutes.push(...fragments);
   }
   const totalMin = hasJourney
-    ? journeyMin + unionMinutes(outsideRoutes) + legacyDeliveryMin
-    : deliveryMin + recordedIdleMin;
+    ? journeyMin + unionMinutes(outsideRoutes) + outsideLegacyMin + outsideIdleMin
+    : measuredDeliveryMin + legacyDeliveryMin + recordedIdleMin;
+  const deliveryMin = hasJourney ? Math.min(totalMin, measuredDeliveryMin + legacyDeliveryMin) : measuredDeliveryMin + legacyDeliveryMin;
   return {
     journeyMin,
     deliveryMin,
