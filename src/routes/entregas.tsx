@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
+import { OperationTimeStats } from "@/components/OperationTimeStats";
+import { deliveryMinutes } from "@/lib/operation-time";
 import { BrandSpinner } from "@/components/BrandLoader";
 
 import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
@@ -457,6 +459,9 @@ function Entregas() {
         lat: first?.lat ?? null,
         lng: first?.lng ?? null,
         status: finalized ? "concluida" : "em_rota",
+        started_at: finalized ? null : new Date().toISOString(),
+        ended_at: null,
+        estimated_duration_min: route?.durationMin ?? null,
         stops: recordedStops(
           filled.map((s) => ({
             kind: s.kind,
@@ -574,6 +579,7 @@ function Entregas() {
         <StatCard label="Tempo parado" value={minutesLabel(idle)} tone="warning" />
       </div>
 
+      <OperationTimeStats from={todayStart} to={todayEnd} />
       {deliveryIntel ? (
         <SectionCard
           title="Inteligência de entregas"
@@ -1036,9 +1042,10 @@ function Entregas() {
                           <p className="text-xs text-muted-foreground">
                             {dateTimeLabel(d.occurred_at)} · {paymentMethodLabel(d.payment_method)}{" "}
                             · {num(Number(d.distance_km))} km ·{" "}
-                            {minutesLabel(Number(d.duration_min))} rodando ·{" "}
+                            {minutesLabel(deliveryMinutes(d))} em entrega ·{" "}
                             {minutesLabel(Number(d.idle_min))} parado
                           </p>
+                          {d.started_at ? <p className="mt-1 text-xs text-muted-foreground">Início: {dateTimeLabel(d.started_at)} · Término: {d.ended_at ? dateTimeLabel(d.ended_at) : "Em andamento"}</p> : null}
                         </div>
                         {nav ? (
                           <Button asChild variant="ghost" size="icon" aria-label="Navegar">
@@ -1254,7 +1261,7 @@ function Entregas() {
                                     if (totals) {
                                       routed = totals.pts as typeof allPts;
                                       extra.distance_km = totals.distanceKm;
-                                      extra.duration_min = totals.durationMin;
+                                      extra.duration_min = d.started_at ? Math.round((Date.now() - Date.parse(d.started_at)) / 60000) : totals.durationMin;
                                     } else {
                                       toast.error(
                                         "Não foi possível calcular a distância desta entrega — verifique se os pontos têm endereço ou GPS preenchido e tente novamente.",
@@ -1265,6 +1272,8 @@ function Entregas() {
                                       values: {
                                         dropoff_address: last?.address ?? "",
                                         status: "concluida",
+                                        ended_at: new Date().toISOString(),
+                                        estimated_duration_min: totals?.durationMin ?? d.estimated_duration_min ?? null,
                                         stops: routed,
                                         ...extra,
                                       },

@@ -34,5 +34,6 @@ export function useOperationTime(from: Date, to: Date) {
     };
   }, [user?.id]);
   const rows = journeys.data ?? [];
-  return operationTime(deliveries.data ?? [], active && !rows.some((j) => j.id === active.id) ? [...rows, active] : rows, from, to, now ?? from);
+  const records = active && !rows.some((j) => j.id === active.id) ? [...rows, active] : rows;
+  return { ...operationTime(deliveries.data ?? [], records, from, to, now ?? from), records, now: now ?? from };
 }

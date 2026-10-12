@@ -100,6 +100,7 @@ function Dashboard() {
     };
   }, [now, range.days, range.monthOffset]);
   const time = useOperationTime(from, to);
+  const todayTime = useOperationTime(startOfDay(now), endOfDay(now));
 
   const periodDeliveries = useMemo(
     () => deliveriesData.filter((d) => inRange(d.occurred_at, from, to)),
@@ -211,7 +212,7 @@ function Dashboard() {
     goals: goals.data ?? [],
     profile: profile.data,
     date: now,
-    operationTime: time,
+    operationTime: todayTime,
   });
 
   return (
