@@ -1,3 +1,6 @@
+// @refresh reset
+// Remount consumers when this hook changes: an older mounted version may have
+// a different hook signature after an editor update.
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useDeliveries, useJourneys } from "./data";
