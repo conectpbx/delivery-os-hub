@@ -129,7 +129,7 @@ function Relatorios() {
   const breakdown = useMemo(
     () =>
       reportBreakdown(
-        perDeliveries,
+        deliveriesData,
         perExpenses,
         perFuelings,
         perMaint,
@@ -199,7 +199,9 @@ function Relatorios() {
         deliveryMinutes(d, time.now),
         Number(d.idle_min),
         d.dropoff_address ?? "",
-        d.started_at ? dateTimeLabel(d.started_at) : "",
+        d.started_at || d.ended_at || d.status === "em_rota"
+          ? dateTimeLabel(d.started_at ?? d.occurred_at)
+          : "",
         d.ended_at ? dateTimeLabel(d.ended_at) : "",
         d.estimated_duration_min ?? "",
       ]),
@@ -438,7 +440,10 @@ function Relatorios() {
                     <th className="pb-2 pr-4 font-medium">Período</th>
                     <th className="px-2 pb-2 text-right font-medium">Entregas</th>
                     <th className="px-2 pb-2 text-right font-medium">KM</th>
-                    <th className="px-2 pb-2 text-right font-medium">Tempo</th>
+                    <th className="px-2 pb-2 text-right font-medium">Jornada</th>
+                    <th className="px-2 pb-2 text-right font-medium">Entregas/rotas</th>
+                    <th className="px-2 pb-2 text-right font-medium">Fora das entregas</th>
+                    <th className="px-2 pb-2 text-right font-medium">Tempo total</th>
                     <th className="px-2 pb-2 text-right font-medium">Receita</th>
                     <th className="px-2 pb-2 text-right font-medium">Gastos</th>
                     <th className="px-2 pb-2 text-right font-medium">Lucro</th>
@@ -460,15 +465,16 @@ function Relatorios() {
                       <td className="px-2 py-3 text-right tabular-nums">{row.count}</td>
                       <td className="px-2 py-3 text-right tabular-nums">{num(row.distance)}</td>
                       <td className="px-2 py-3 text-right tabular-nums">
+                        {minutesLabel(row.journeyMin)}
+                      </td>
+                      <td className="px-2 py-3 text-right tabular-nums">
+                        {minutesLabel(row.workedMin)}
+                      </td>
+                      <td className="px-2 py-3 text-right tabular-nums">
+                        {minutesLabel(row.unassignedMin)}
+                      </td>
+                      <td className="px-2 py-3 text-right tabular-nums">
                         <span>{minutesLabel(row.totalMin)}</span>
-                        <span className="block text-xs text-muted-foreground">
-                          {minutesLabel(row.workedMin)} em entregas
-                        </span>
-                        {row.unassignedMin > 0 ? (
-                          <span className="block text-xs text-muted-foreground">
-                            {minutesLabel(row.unassignedMin)} fora das entregas
-                          </span>
-                        ) : null}
                       </td>
                       <td className="px-2 py-3 text-right tabular-nums">{brl(row.revenue)}</td>
                       <td className="px-2 py-3 text-right tabular-nums text-destructive">

@@ -1,3 +1,4 @@
+// @refresh reset
 import { StatCard } from "./ui-kit";
 import { minutesLabel } from "@/lib/format";
 import { useOperationTime } from "@/lib/use-operation-time";

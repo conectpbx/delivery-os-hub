@@ -21,17 +21,19 @@ function unionMinutes(intervals: Interval[]) {
 }
 
 export function deliveryMinutes(delivery: Delivery, now = new Date()) {
-  if (delivery.started_at && (delivery.ended_at || delivery.status === "em_rota")) {
-    return (
-      Math.max(
-        0,
-        ((delivery.ended_at ? Date.parse(delivery.ended_at) : now.getTime()) -
-          Date.parse(delivery.started_at)) /
-          60000,
-      ) || 0
-    );
+  const interval = deliveryInterval(delivery, now);
+  if (interval) {
+    return Math.max(0, (interval[1] - interval[0]) / 60000);
   }
   return Math.max(0, Number(delivery.duration_min) || 0);
+}
+
+/** Legacy open routes were created at pickup: use that timestamp only when an end or open status exists. */
+export function deliveryInterval(delivery: Delivery, now = new Date()): Interval | null {
+  if (!delivery.ended_at && delivery.status !== "em_rota") return null;
+  const start = Date.parse(delivery.started_at ?? delivery.occurred_at);
+  const end = delivery.ended_at ? Date.parse(delivery.ended_at) : now.getTime();
+  return Number.isFinite(start) && Number.isFinite(end) && end >= start ? [start, end] : null;
 }
 
 /** Elapsed time is independent of GPS and overlapping routes are never double-counted. */
@@ -59,13 +61,9 @@ export function operationTime(
     const covered = journeyIntervals.some(([a, b]) => occurred >= a && occurred < b);
     if (inPeriod) recordedIdleMin += Math.max(0, Number(delivery.idle_min) || 0);
     if (inPeriod && !covered) outsideIdleMin += Math.max(0, Number(delivery.idle_min) || 0);
-    if (delivery.started_at && (delivery.ended_at || delivery.status === "em_rota")) {
-      routeIntervals.push(
-        clip(
-          Date.parse(delivery.started_at),
-          delivery.ended_at ? Date.parse(delivery.ended_at) : now.getTime(),
-        ),
-      );
+    const interval = deliveryInterval(delivery, now);
+    if (interval) {
+      routeIntervals.push(clip(interval[0], interval[1]));
     } else if (inPeriod) {
       legacyDeliveryMin += deliveryMinutes(delivery, now);
       if (!covered) outsideLegacyMin += deliveryMinutes(delivery, now);
