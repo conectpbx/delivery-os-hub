@@ -126,3 +126,19 @@ test("monthly report splits the journey at São Paulo midnight and uses journey 
   const daily = reportBreakdown([delivery()], [], [], [], "day", [journey], now);
   assert.equal(daily[0]?.profitPerHour, 12.5);
 });
+test("legacy open delivery uses its creation time rather than route estimate", () => {
+  const open = delivery({ started_at: null, ended_at: null, status: "em_rota", occurred_at: "2026-10-12T13:00:00Z", duration_min: 20 });
+  const time = operationTime([open], [journey], from, to, new Date("2026-10-12T15:00:00Z"));
+  assert.equal(time.deliveryMin, 120);
+  assert.equal(time.unassignedMin, 60);
+});
+test("legacy route with recorded finish retains the elapsed interval after completion", () => {
+  assert.equal(deliveryMinutes(delivery({ started_at: null, duration_min: 53 }), now), 120);
+});
+test("open legacy route crossing midnight remains delivery time in yesterday and today's report", () => {
+  const open = delivery({ occurred_at: "2026-10-12T23:00:00-03:00", started_at: null, ended_at: null, status: "em_rota" });
+  const rows = reportBreakdown([open], [], [], [], "day", [], new Date("2026-10-13T01:00:00-03:00"));
+  assert.equal(rows.find((r) => r.key === "2026-10-12")?.workedMin, 60);
+  assert.equal(rows.find((r) => r.key === "2026-10-13")?.workedMin, 60);
+  assert.equal(rows.find((r) => r.key === "2026-10-13")?.unassignedMin, 0);
+});

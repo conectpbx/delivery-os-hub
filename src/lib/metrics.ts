@@ -1,6 +1,6 @@
 import type { Delivery, Expense, Fueling, Goal, Maintenance, Profile } from "./data";
 import { monthKey, parseDateValue } from "./format";
-import { deliveryMinutes, operationTime, type WorkJourney } from "./operation-time";
+import { deliveryInterval, deliveryMinutes, operationTime, type WorkJourney } from "./operation-time";
 
 const BUSINESS_TIME_ZONE = "America/Sao_Paulo";
 
@@ -316,6 +316,7 @@ export function reportBreakdown(
   };
 
   for (const delivery of deliveries) {
+    if (range && !filterByRange([delivery], (d) => d.occurred_at, range.from, range.to).length) continue;
     const row = bucket(delivery.occurred_at);
     row.revenue += Number(delivery.earnings) + Number(delivery.tip);
     row.distance += Number(delivery.distance_km);
@@ -335,6 +336,18 @@ export function reportBreakdown(
       bucket(
         `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`,
       );
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  }
+
+  // Routes may be open across midnight even when no journey was recorded on the next day.
+  for (const delivery of deliveries) {
+    const interval = deliveryInterval(delivery, now);
+    if (!interval || interval[1] <= interval[0]) continue;
+    const cursor = startOfDay(operationalDate(new Date(interval[0]).toISOString()));
+    const last = operationalDate(new Date(interval[1] - 1).toISOString());
+    while (cursor <= last) {
+      bucket(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`);
       cursor.setDate(cursor.getDate() + 1);
     }
   }
