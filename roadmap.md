@@ -12,3 +12,5 @@
 - [x] Unificar tempos, ganho/hora e exportações nos módulos consumidores
 - [x] Validar cálculos de jornada, intervalos simultâneos e virada do mês (39 testes aprovados)
 - [ ] Validar fluxo autenticado completo de jornada no preview (sem sessão disponível nesta rodada)
+- [ ] Corrigir tempos de entregas antigas abertas e validar registros de ontem
+- [ ] Disponibilizar tempos separados no detalhamento dos relatórios e exportações
