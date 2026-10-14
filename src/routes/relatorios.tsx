@@ -462,9 +462,15 @@ function Relatorios() {
                       </td>
                       <td className="px-2 py-3 text-right tabular-nums">{row.count}</td>
                       <td className="px-2 py-3 text-right tabular-nums">{num(row.distance)}</td>
-                      <td className="px-2 py-3 text-right tabular-nums">{minutesLabel(row.journeyMin)}</td>
-                      <td className="px-2 py-3 text-right tabular-nums">{minutesLabel(row.workedMin)}</td>
-                      <td className="px-2 py-3 text-right tabular-nums">{minutesLabel(row.unassignedMin)}</td>
+                      <td className="px-2 py-3 text-right tabular-nums">
+                        {minutesLabel(row.journeyMin)}
+                      </td>
+                      <td className="px-2 py-3 text-right tabular-nums">
+                        {minutesLabel(row.workedMin)}
+                      </td>
+                      <td className="px-2 py-3 text-right tabular-nums">
+                        {minutesLabel(row.unassignedMin)}
+                      </td>
                       <td className="px-2 py-3 text-right tabular-nums">
                         <span>{minutesLabel(row.totalMin)}</span>
                       </td>

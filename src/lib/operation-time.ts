@@ -23,9 +23,7 @@ function unionMinutes(intervals: Interval[]) {
 export function deliveryMinutes(delivery: Delivery, now = new Date()) {
   const interval = deliveryInterval(delivery, now);
   if (interval) {
-    return (
-      Math.max(0, (interval[1] - interval[0]) / 60000)
-    );
+    return Math.max(0, (interval[1] - interval[0]) / 60000);
   }
   return Math.max(0, Number(delivery.duration_min) || 0);
 }
