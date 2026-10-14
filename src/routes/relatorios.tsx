@@ -199,7 +199,7 @@ function Relatorios() {
         deliveryMinutes(d, time.now),
         Number(d.idle_min),
         d.dropoff_address ?? "",
-        d.started_at ? dateTimeLabel(d.started_at) : "",
+        d.started_at || d.ended_at || d.status === "em_rota" ? dateTimeLabel(d.started_at ?? d.occurred_at) : "",
         d.ended_at ? dateTimeLabel(d.ended_at) : "",
         d.estimated_duration_min ?? "",
       ]),

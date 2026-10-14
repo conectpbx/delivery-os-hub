@@ -1312,6 +1312,7 @@ function Entregas() {
                                       values: {
                                         dropoff_address: last?.address ?? "",
                                         status: "concluida",
+                                        started_at: d.started_at ?? d.occurred_at,
                                         ended_at: new Date().toISOString(),
                                         estimated_duration_min:
                                           totals?.durationMin ?? d.estimated_duration_min ?? null,
