@@ -161,3 +161,23 @@ test("open legacy route crossing midnight remains delivery time in yesterday and
   assert.equal(rows.find((r) => r.key === "2026-10-13")?.workedMin, 60);
   assert.equal(rows.find((r) => r.key === "2026-10-13")?.unassignedMin, 0);
 });
+test("October 13 records use the recorded finish instead of the 53-minute estimate", () => {
+  const records = [
+    delivery({ id: "1", started_at: null, ended_at: null, occurred_at: "2026-10-13T13:13:01.579666Z", duration_min: 23 }),
+    delivery({ id: "2", started_at: null, ended_at: null, occurred_at: "2026-10-13T13:28:35.794851Z", duration_min: 31 }),
+    delivery({ id: "3", started_at: null, ended_at: null, occurred_at: "2026-10-13T13:45:31.664382Z", duration_min: 31 }),
+    delivery({ id: "4", started_at: null, ended_at: null, occurred_at: "2026-10-13T15:14:15.021528Z", duration_min: 35 }),
+    delivery({ id: "5", started_at: null, ended_at: null, occurred_at: "2026-10-13T16:07:27.603567Z", duration_min: 25 }),
+    delivery({ id: "6", started_at: null, ended_at: "2026-10-13T19:45:01.443Z", occurred_at: "2026-10-13T17:40:46.092702Z", duration_min: 53 }),
+  ];
+  const shift = { ...journey, started_at: "2026-10-13T12:45:30.294Z", ended_at: "2026-10-13T20:17:35.488Z" };
+  const start = new Date("2026-10-13T00:00:00-03:00");
+  const end = new Date("2026-10-13T23:59:59.999-03:00");
+  const time = operationTime(records, [shift], start, end, new Date("2026-10-14T11:53:00Z"));
+  assert.equal(Math.round(time.journeyMin), 452);
+  assert.equal(Math.round(time.deliveryMin), 269);
+  assert.equal(Math.round(time.unassignedMin), 183);
+  const [row] = reportBreakdown(records, [], [], [], "day", [shift], new Date("2026-10-14T11:53:00Z"), { from: start, to: end });
+  assert.equal(row?.workedMin, time.deliveryMin);
+  assert.equal(row?.unassignedMin, time.unassignedMin);
+});
