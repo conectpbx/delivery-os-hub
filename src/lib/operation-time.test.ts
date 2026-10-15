@@ -56,8 +56,8 @@ test("only one pause is open and resuming preserves its reason and start", () =>
   assert.equal(closed[0]?.ended_at, "2026-10-12T14:30:00.000Z");
 });
 test("active pauses stop at journey finish and overlapping pauses never double count", () => {
-  const pauses = [{ id: "p", reason: "Manutenção", started_at: "2026-10-12T19:00:00Z", ended_at: null }];
-  const result = operationTime([], [{ ...journey, pauses: [...pauses, { ...pauses[0], id: "p2", reason: "Almoço" }] }], from, to, now);
+  const pause = { id: "p", reason: "Manutenção", started_at: "2026-10-12T19:00:00Z", ended_at: null };
+  const result = operationTime([], [{ ...journey, pauses: [pause, { ...pause, id: "p2", reason: "Almoço" }] }], from, to, now);
   assert.equal(result.pauseMin, 60);
   assert.equal(result.unassignedMin, 420);
 });

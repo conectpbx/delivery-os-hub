@@ -276,7 +276,7 @@ function Dashboard() {
         <StatCard
           label="Tempo fora das entregas"
           value={minutesLabel(time.unassignedMin)}
-          hint={`Entregas/rotas ${minutesLabel(time.deliveryMin)}`}
+          hint={`Entregas/rotas ${minutesLabel(time.deliveryMin)} · Pausas ${minutesLabel(time.pauseMin)}`}
           tone="warning"
           icon={<Timer className="size-4" />}
         />

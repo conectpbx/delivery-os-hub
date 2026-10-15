@@ -317,7 +317,7 @@ export function buildAlerts(input: {
         kind: "aviso",
         severity: "warning",
         title: "Tempo fora das entregas elevado",
-        message: `${Math.round(outsideMin)} min fora das entregas hoje, incluindo espera, pausas e deslocamentos. Avalie a região e o horário.`,
+        message: `${Math.round(outsideMin)} min fora das entregas hoje, incluindo espera e deslocamentos, sem as pausas registradas. Avalie a região e o horário.`,
       });
     }
     alerts.push({

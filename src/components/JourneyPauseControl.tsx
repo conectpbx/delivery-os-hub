@@ -10,7 +10,7 @@ import { dateTimeLabel } from "@/lib/format";
 
 export function JourneyPauseControl({ active, pauses = [], pause, resume }: {
   active: boolean;
-  pauses?: JourneyPause[];
+  pauses?: JourneyPause[] | undefined;
   pause: (reason: string) => void;
   resume: () => void;
 }) {
