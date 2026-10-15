@@ -178,6 +178,7 @@ export function useTripTracker() {
         if (now - lastSampleAt.current < GPS_SAMPLE_INTERVAL_MS) return;
         lastSampleAt.current = now;
         const cur = stateRef.current;
+        if (cur.pauses?.some((pause) => !pause.ended_at)) return;
         const point = {
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
