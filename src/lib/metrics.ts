@@ -254,6 +254,7 @@ export type ReportBreakdownRow = {
   totalMin: number;
   journeyMin: number;
   unassignedMin: number;
+  pauseMin: number;
   profitPerHour: number;
   costPerKm: number;
 };
@@ -282,6 +283,7 @@ export function reportBreakdown(
     | "totalMin"
     | "journeyMin"
     | "unassignedMin"
+    | "pauseMin"
   >;
   const rows = new Map<string, MutableRow>();
 
@@ -382,6 +384,7 @@ export function reportBreakdown(
         totalMin: time.totalMin,
         journeyMin: time.journeyMin,
         unassignedMin: time.unassignedMin,
+        pauseMin: time.pauseMin,
         totalCost,
         profit,
         revenuePerKm: row.distance > 0 ? row.revenue / row.distance : 0,

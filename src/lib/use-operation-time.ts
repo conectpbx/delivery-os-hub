@@ -29,6 +29,7 @@ export function useOperationTime(from: Date, to: Date) {
                 ended_at: raw.endedAt,
                 source: raw.source,
                 distance_km: raw.distanceKm,
+                 pauses: raw.pauses ?? [],
               }
             : null,
         );

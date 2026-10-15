@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useInsert } from "./data";
+import { beginPause, endPause, type JourneyPause } from "./operation-time";
 import { sendNativeTripCommand, subscribeNativeGps } from "@/lib/native-gps-bridge";
 import type { GpsDeviceState } from "./gps-integration";
 import {
@@ -36,6 +37,7 @@ export type TripState = {
   integratedBaseline?: IntegratedBaseline;
   journeyId?: string;
   pendingSave?: boolean;
+  pauses?: JourneyPause[];
 };
 
 const EMPTY: TripState = {
@@ -263,12 +265,14 @@ export function useTripTracker() {
     const current = stateRef.current;
     if (!current.startedAt || (!current.active && !current.pendingSave)) return;
     stopWatch();
+    const endedAt = current.endedAt ?? new Date().toISOString();
     const next = {
       ...current,
       journeyId: current.journeyId ?? crypto.randomUUID(),
       active: false,
       pendingSave: true,
-      endedAt: current.endedAt ?? new Date().toISOString(),
+      endedAt,
+      pauses: endPause(current.pauses ?? [], endedAt),
       last: null,
     };
     apply(next);
@@ -281,6 +285,7 @@ export function useTripTracker() {
         ended_at: next.endedAt,
         distance_km: next.distanceKm,
         source: next.source,
+        pauses: next.pauses,
       });
       const saved = { ...stateRef.current, pendingSave: false };
       apply(saved);
@@ -297,6 +302,21 @@ export function useTripTracker() {
     sendNativeTripCommand("reset");
   }, [apply, stopWatch]);
 
+  const pause = (reason: string) => {
+    const current = stateRef.current;
+    if (!current.active) return;
+    const next = { ...current, pauses: beginPause(current.pauses ?? [], reason, new Date().toISOString()) };
+    apply(next);
+    save(storageKey, next);
+  };
+  const resume = () => {
+    const current = stateRef.current;
+    if (!current.active) return;
+    const next = { ...current, pauses: endPause(current.pauses ?? [], new Date().toISOString()) };
+    apply(next);
+    save(storageKey, next);
+  };
+
   return {
     trip: state,
     error,
@@ -306,5 +326,7 @@ export function useTripTracker() {
     pushGps,
     pushIntegratedGps,
     saving: addJourney.isPending,
+    pause,
+    resume,
   };
 }
