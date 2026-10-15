@@ -214,6 +214,7 @@ export function useTripTracker() {
   const pushGps = useCallback(
     (point: GpsPoint) => {
       const cur = stateRef.current;
+      if (cur.pauses?.some((pause) => !pause.ended_at)) return;
       if (cur.integratedBaseline) return;
       const result = ingest(cur, point, 60);
       if (result.next) {
@@ -230,6 +231,11 @@ export function useTripTracker() {
 
   const pushIntegratedGps = useCallback(
     (reading: GpsDeviceState) => {
+      if (stateRef.current.pauses?.some((pause) => !pause.ended_at)) {
+        const baseline = gpsCounterBaseline(reading);
+        if (baseline) apply({ ...stateRef.current, integratedBaseline: baseline, last: null });
+        return;
+      }
       const next = accumulateIntegratedTrip(stateRef.current, reading);
       if (next) {
         setError(null);
@@ -305,14 +311,14 @@ export function useTripTracker() {
   const pause = (reason: string) => {
     const current = stateRef.current;
     if (!current.active) return;
-    const next = { ...current, pauses: beginPause(current.pauses ?? [], reason, new Date().toISOString()) };
+    const next = { ...current, last: null, pauses: beginPause(current.pauses ?? [], reason, new Date().toISOString()) };
     apply(next);
     save(storageKey, next);
   };
   const resume = () => {
     const current = stateRef.current;
     if (!current.active) return;
-    const next = { ...current, pauses: endPause(current.pauses ?? [], new Date().toISOString()) };
+    const next = { ...current, last: null, pauses: endPause(current.pauses ?? [], new Date().toISOString()) };
     apply(next);
     save(storageKey, next);
   };
