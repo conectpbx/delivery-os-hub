@@ -523,6 +523,7 @@ export type Database = {
           distance_km: number
           ended_at: string
           id: string
+          pauses: Json
           source: string
           started_at: string
           user_id: string
@@ -532,6 +533,7 @@ export type Database = {
           distance_km?: number
           ended_at: string
           id?: string
+          pauses?: Json
           source?: string
           started_at: string
           user_id: string
@@ -541,6 +543,7 @@ export type Database = {
           distance_km?: number
           ended_at?: string
           id?: string
+          pauses?: Json
           source?: string
           started_at?: string
           user_id?: string
