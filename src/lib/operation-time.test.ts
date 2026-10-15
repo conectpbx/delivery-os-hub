@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Delivery } from "./data";
-import { deliveryMinutes, operationTime, type WorkJourney } from "./operation-time";
+import { beginPause, endPause, deliveryMinutes, operationTime, type WorkJourney } from "./operation-time";
 import { reportBreakdown } from "./metrics";
 
 const journey: WorkJourney = {
@@ -33,6 +33,40 @@ const delivery = (values: Partial<Delivery> = {}): Delivery => ({
 const from = new Date("2026-10-12T00:00:00Z");
 const to = new Date("2026-10-12T23:59:59.999Z");
 const now = new Date("2026-10-13T00:00:00Z");
+
+test("lunch and maintenance pauses are separated from unassigned and delivery time", () => {
+  const pauses = [
+    { id: "lunch", reason: "Almoço", started_at: "2026-10-12T14:00:00Z", ended_at: "2026-10-12T15:00:00Z" },
+    { id: "maintenance", reason: "Manutenção", started_at: "2026-10-12T17:00:00Z", ended_at: "2026-10-12T17:30:00Z" },
+  ];
+  const time = operationTime([delivery()], [{ ...journey, pauses }], from, to, now);
+  assert.equal(time.pauseMin, 90);
+  assert.equal(time.deliveryMin, 60);
+  assert.equal(time.unassignedMin, 330);
+  assert.equal(time.totalMin, 480);
+  const [row] = reportBreakdown([delivery()], [], [], [], "day", [{ ...journey, pauses }], now);
+  assert.equal(row?.pauseMin, 90);
+});
+test("only one pause is open and resuming preserves its reason and start", () => {
+  const pauses = beginPause([], "Almoço", "2026-10-12T14:00:00Z");
+  assert.equal(beginPause(pauses, "Manutenção", "2026-10-12T14:10:00Z").length, 1);
+  const closed = endPause(pauses, "2026-10-12T14:30:00Z");
+  assert.equal(closed[0]?.reason, "Almoço");
+  assert.equal(closed[0]?.started_at, "2026-10-12T14:00:00Z");
+  assert.equal(closed[0]?.ended_at, "2026-10-12T14:30:00.000Z");
+});
+test("active pauses stop at journey finish and overlapping pauses never double count", () => {
+  const pauses = [{ id: "p", reason: "Manutenção", started_at: "2026-10-12T19:00:00Z", ended_at: null }];
+  const result = operationTime([], [{ ...journey, pauses: [...pauses, { ...pauses[0], id: "p2", reason: "Almoço" }] }], from, to, now);
+  assert.equal(result.pauseMin, 60);
+  assert.equal(result.unassignedMin, 420);
+});
+test("pauses crossing a civil month boundary are clipped separately", () => {
+  const cross = { ...journey, started_at: "2026-10-01T02:00:00Z", ended_at: "2026-10-01T04:00:00Z", pauses: [{ id: "p", reason: "Almoço", started_at: "2026-10-01T02:30:00Z", ended_at: "2026-10-01T03:30:00Z" }] };
+  const rows = reportBreakdown([], [], [], [], "month", [cross], now);
+  assert.equal(rows.find((r) => r.key === "2026-09-01")?.pauseMin, 30);
+  assert.equal(rows.find((r) => r.key === "2026-10-01")?.pauseMin, 30);
+});
 
 test("separates start-to-finish journey duration from delivery time, independently of GPS", () => {
   const time = operationTime([delivery()], [journey], from, to, now);

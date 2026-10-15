@@ -4,6 +4,7 @@ import { Copy, Link2, LocateFixed, Play, Smartphone, Square, Trash2, Unplug } fr
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { OperationTimeStats } from "@/components/OperationTimeStats";
+import { JourneyPauseControl } from "@/components/JourneyPauseControl";
 import { useJourneys } from "@/lib/data";
 import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
 import { Button } from "@/components/ui/button";
@@ -117,6 +118,8 @@ function Financeiro() {
     reset,
     pushIntegratedGps,
     saving,
+    pause,
+    resume,
   } = useTripTracker();
   const journeys = useJourneys();
   const [clock, setClock] = useState<number | null>(null);
@@ -281,6 +284,7 @@ function Financeiro() {
             </p>
           </div>
           <div className="ml-auto flex flex-wrap gap-2">
+            <JourneyPauseControl active={trip.active} pauses={trip.pauses} pause={pause} resume={resume} />
             {trip.active || trip.pendingSave ? (
               <Button variant="destructive" onClick={finish} disabled={saving}>
                 <Square className="mr-2 size-4" />{" "}
