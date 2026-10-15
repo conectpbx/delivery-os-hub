@@ -6,7 +6,7 @@ import { useOperationTime } from "@/lib/use-operation-time";
 export function OperationTimeStats({ from, to }: { from: Date; to: Date }) {
   const time = useOperationTime(from, to);
   return (
-    <div className="mt-3 grid gap-3 sm:grid-cols-3">
+    <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
       <StatCard
         label="Jornada registrada"
         value={time.hasJourney ? minutesLabel(time.journeyMin) : "—"}
@@ -17,10 +17,11 @@ export function OperationTimeStats({ from, to }: { from: Date; to: Date }) {
         value={minutesLabel(time.unassignedMin)}
         hint={
           time.hasJourney
-            ? "Espera, pausas e deslocamentos sem entrega"
+            ? "Espera e deslocamentos, sem as pausas registradas"
             : "Espera informada nos registros"
         }
       />
+      <StatCard label="Pausas registradas" value={minutesLabel(time.pauseMin)} tone="warning" />
     </div>
   );
 }

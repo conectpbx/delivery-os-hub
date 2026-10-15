@@ -14,3 +14,5 @@
 - [ ] Validar fluxo autenticado completo de jornada no preview (sem sessão disponível nesta rodada)
 - [x] Corrigir tempos de entregas antigas abertas e validar registros de 13/10
 - [x] Disponibilizar tempos separados no detalhamento dos relatórios e exportações
+- [x] Adicionar pausas por motivo em Entregas e detalhar nos relatórios, com uso offline e telas adaptáveis
+- [ ] Conferir pausa, retomada e relatório na conta do usuário (aguarda login na prévia)
