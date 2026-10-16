@@ -182,12 +182,21 @@ export function buildAlerts(input: {
     const pct = (sToday.revenue / dailyGoal) * 100;
     const hour = now.getHours();
     if (pct >= 100) {
+      const extra = sToday.revenue - dailyGoal;
+      const details = [
+        `${brl(sToday.revenue)} hoje (${num(pct, 0)}% da meta de ${brl(dailyGoal)})`,
+        extra > 0 ? `+${brl(extra)} acima do alvo` : null,
+        `lucro real ${brl(sToday.profit)}`,
+        `${sToday.count} entrega(s), ticket médio ${brl(sToday.count ? sToday.revenue / sToday.count : 0)}`,
+        perHour > 0 ? `${brl(perHour)}/hora` : null,
+        sToday.km > 0 ? `${num(sToday.km, 1)} km rodados (${brl(sToday.perKm)}/km)` : null,
+      ].filter(Boolean);
       alerts.push({
         id: "meta-diaria-ok",
         kind: "motivacional",
         severity: "success",
         title: "Meta diária batida! 🏆",
-        message: `Você já fez ${brl(sToday.revenue)} hoje. Tudo daqui pra frente é lucro extra.`,
+        message: `${details.join(" · ")}. O excedente ajuda a reduzir a meta dos próximos dias.`,
         toast: true,
       });
     } else if (pct >= 70) {
