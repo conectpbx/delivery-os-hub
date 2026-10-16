@@ -108,7 +108,7 @@ function Financeiro() {
   const [eff, setEff] = useState("");
   const [deviceName, setDeviceName] = useState("PainelOverlay");
   const [newGpsToken, setNewGpsToken] = useState<string | null>(null);
-  const period = usePeriodSelection(3);
+  const period = usePeriodSelection(0);
   const [gps, setGps] = useState(false);
   const {
     trip,

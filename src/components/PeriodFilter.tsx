@@ -46,8 +46,8 @@ export type PeriodSelection = {
   setTo: (v: string) => void;
 };
 
-export function usePeriodSelection(defaultIndex = 3): PeriodSelection {
-  const initial = PERIODS[defaultIndex] ?? PERIODS[3]!;
+export function usePeriodSelection(defaultIndex = 0): PeriodSelection {
+  const initial = PERIODS[defaultIndex] ?? PERIODS[0]!;
   const now = useCalendarNow();
   const [state, setState] = useState(() => ({
     key: initial.key as string,
