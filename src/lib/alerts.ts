@@ -189,7 +189,7 @@ export function buildAlerts(input: {
         `lucro real ${brl(sToday.profit)}`,
         `${sToday.count} entrega(s), ticket médio ${brl(sToday.count ? sToday.revenue / sToday.count : 0)}`,
         perHour > 0 ? `${brl(perHour)}/hora` : null,
-        sToday.km > 0 ? `${num(sToday.km, 1)} km rodados (${brl(sToday.perKm)}/km)` : null,
+        sToday.distance > 0 ? `${num(sToday.distance, 1)} km rodados (${brl(sToday.perKm)}/km)` : null,
       ].filter(Boolean);
       alerts.push({
         id: "meta-diaria-ok",
