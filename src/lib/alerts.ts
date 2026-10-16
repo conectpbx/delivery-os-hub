@@ -239,7 +239,11 @@ export function buildAlerts(input: {
         kind: "motivacional",
         severity: "success",
         title: "Meta do mês conquistada! 🚀",
-        message: `${brl(monthRevenue)} acumulados. Excelente trabalho.`,
+        message: `${brl(monthRevenue)} acumulados (${num((monthRevenue / monthTarget) * 100, 0)}% da meta de ${brl(
+          monthTarget,
+        )}), +${brl(monthRevenue - monthTarget)} de excedente · ${monthDeliveries.length} entregas · média ${brl(
+          monthRevenue / Math.max(1, new Set(monthDeliveries.map((d) => d.occurred_at.slice(0, 10))).size),
+        )} por dia trabalhado · faltam ${daysInMonth - now.getDate()} dia(s) no mês para ampliar o resultado.`,
         toast: true,
       });
     } else if (monthRevenue < expected * 0.8) {
