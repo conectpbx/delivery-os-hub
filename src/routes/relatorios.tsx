@@ -62,7 +62,7 @@ function Relatorios() {
   const fuelings = useFuelings();
   const maintenances = useMaintenances();
   const profile = useProfile();
-  const period = usePeriodSelection(3);
+  const period = usePeriodSelection(0);
   const time = useOperationTime(period.fromDate, period.toDate);
   const [granularity, setGranularity] = useState<ReportGranularity>("day");
 
