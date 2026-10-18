@@ -49,7 +49,7 @@ SET search_path = public, pg_temp
 AS $$
 DECLARE
   _device public.gps_device_tokens;
-  _inserted BOOLEAN := false;
+  _rows INTEGER := 0;
 BEGIN
   SELECT * INTO _device
   FROM public.gps_device_tokens
@@ -71,7 +71,7 @@ BEGIN
   )
   ON CONFLICT (point_id) DO NOTHING;
 
-  GET DIAGNOSTICS _inserted = ROW_COUNT;
+  GET DIAGNOSTICS _rows = ROW_COUNT;
 
   INSERT INTO public.gps_device_state(
     token_id, user_id, source, latitude, longitude, accuracy_m,
@@ -101,7 +101,7 @@ BEGIN
 
   RETURN jsonb_build_object(
     'accepted', true,
-    'reason', CASE WHEN _inserted THEN 'accepted' ELSE 'duplicate' END
+    'reason', CASE WHEN _rows > 0 THEN 'accepted' ELSE 'duplicate' END
   );
 END;
 $$;
