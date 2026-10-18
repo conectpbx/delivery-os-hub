@@ -1,5 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+const db = supabase as unknown as SupabaseClient;
 
 export type GpsDevice = {
   id: string;
@@ -93,5 +96,69 @@ export function useRevokeGpsDevice() {
       await queryClient.invalidateQueries({ queryKey: ["gps-devices"] });
       await queryClient.invalidateQueries({ queryKey: ["gps-device-state"] });
     },
+  });
+}
+
+
+export type GpsRouteSession = {
+  id: string;
+  token_id: string;
+  user_id: string;
+  started_at: string;
+  ended_at: string | null;
+  start_total_km: number | null;
+  end_total_km: number | null;
+  distance_km: number;
+  point_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type GpsRoutePoint = {
+  point_id: string;
+  route_id: string | null;
+  latitude: number;
+  longitude: number;
+  accuracy_m: number;
+  speed_kmh: number | null;
+  trip_km: number;
+  total_km: number;
+  captured_at: string;
+};
+
+export function useGpsRouteSessions() {
+  return useQuery({
+    queryKey: ["gps-route-sessions"],
+    queryFn: async () => {
+      const { data, error } = await db
+        .from("gps_route_sessions")
+        .select("*")
+        .order("started_at", { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      return (data ?? []) as GpsRouteSession[];
+    },
+    staleTime: 10_000,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: "always",
+  });
+}
+
+export function useGpsRoutePoints(routeId?: string | null) {
+  return useQuery({
+    queryKey: ["gps-route-points", routeId ?? null],
+    enabled: Boolean(routeId),
+    queryFn: async () => {
+      const { data, error } = await db
+        .from("gps_route_points")
+        .select("point_id,route_id,latitude,longitude,accuracy_m,speed_kmh,trip_km,total_km,captured_at")
+        .eq("route_id", routeId as string)
+        .order("captured_at", { ascending: true })
+        .limit(10_000);
+      if (error) throw error;
+      return (data ?? []) as GpsRoutePoint[];
+    },
+    staleTime: 5_000,
+    refetchInterval: 10_000,
   });
 }
