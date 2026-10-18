@@ -22,6 +22,13 @@
       "when": 1792333530283,
       "tag": "0002_gps_route_points",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792336071668,
+      "tag": "0003_gps_route_sessions",
+      "breakpoints": true
     }
   ]
 }
