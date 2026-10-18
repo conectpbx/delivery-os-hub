@@ -15,6 +15,13 @@
       "when": 1792066765832,
       "tag": "0001_add_journey_pauses",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792333530283,
+      "tag": "0002_gps_route_points",
+      "breakpoints": true
     }
   ]
 }
