@@ -66,6 +66,7 @@ export const Route = createFileRoute("/api/public/gps")({
           });
           const rpcResult = await client.rpc("ingest_gps_device_point", {
             _point_id: parsed.data.point_id ?? crypto.randomUUID(),
+            _route_id: parsed.data.route_id ?? null,
             _token_hash: await sha256(match[1]),
             _source: parsed.data.source,
             _latitude: parsed.data.latitude,
