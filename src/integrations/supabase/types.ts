@@ -363,6 +363,7 @@ export type Database = {
           longitude: number
           point_id: string
           received_at: string
+          route_id: string | null
           sent_at: string
           source: string
           speed_kmh: number | null
@@ -378,6 +379,7 @@ export type Database = {
           longitude: number
           point_id: string
           received_at?: string
+          route_id?: string | null
           sent_at: string
           source: string
           speed_kmh?: number | null
@@ -393,6 +395,7 @@ export type Database = {
           longitude?: number
           point_id?: string
           received_at?: string
+          route_id?: string | null
           sent_at?: string
           source?: string
           speed_kmh?: number | null
@@ -403,7 +406,64 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "gps_route_points_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "gps_route_sessions"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "gps_route_points_token_id_fkey"
+            columns: ["token_id"]
+            isOneToOne: false
+            referencedRelation: "gps_device_tokens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gps_route_sessions: {
+        Row: {
+          created_at: string
+          distance_km: number
+          end_total_km: number | null
+          ended_at: string | null
+          id: string
+          point_count: number
+          start_total_km: number | null
+          started_at: string
+          token_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          distance_km?: number
+          end_total_km?: number | null
+          ended_at?: string | null
+          id: string
+          point_count?: number
+          start_total_km?: number | null
+          started_at: string
+          token_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          distance_km?: number
+          end_total_km?: number | null
+          ended_at?: string | null
+          id?: string
+          point_count?: number
+          start_total_km?: number | null
+          started_at?: string
+          token_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gps_route_sessions_token_id_fkey"
             columns: ["token_id"]
             isOneToOne: false
             referencedRelation: "gps_device_tokens"
@@ -668,23 +728,51 @@ export type Database = {
           token: string
         }[]
       }
-      get_my_system_access: { Args: never; Returns: Json }
-      ingest_gps_device_point: {
+      finish_gps_route_session: {
         Args: {
-          _accuracy_m: number
-          _captured_at: string
-          _latitude: number
-          _longitude: number
-          _point_id: string
-          _sent_at: string
-          _source: string
-          _speed_kmh: number
+          _distance_km: number
+          _end_total_km: number
+          _ended_at: string
+          _route_id: string
           _token_hash: string
-          _total_km: number
-          _trip_km: number
         }
         Returns: Json
       }
+      get_my_system_access: { Args: never; Returns: Json }
+      ingest_gps_device_point:
+        | {
+            Args: {
+              _accuracy_m: number
+              _captured_at: string
+              _latitude: number
+              _longitude: number
+              _point_id: string
+              _route_id: string
+              _sent_at: string
+              _source: string
+              _speed_kmh: number
+              _token_hash: string
+              _total_km: number
+              _trip_km: number
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              _accuracy_m: number
+              _captured_at: string
+              _latitude: number
+              _longitude: number
+              _point_id: string
+              _sent_at: string
+              _source: string
+              _speed_kmh: number
+              _token_hash: string
+              _total_km: number
+              _trip_km: number
+            }
+            Returns: Json
+          }
       ingest_gps_device_state: {
         Args: {
           _accuracy_m: number
