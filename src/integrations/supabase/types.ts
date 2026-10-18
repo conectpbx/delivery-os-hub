@@ -355,6 +355,62 @@ export type Database = {
         }
         Relationships: []
       }
+      gps_route_points: {
+        Row: {
+          accuracy_m: number
+          captured_at: string
+          latitude: number
+          longitude: number
+          point_id: string
+          received_at: string
+          sent_at: string
+          source: string
+          speed_kmh: number | null
+          token_id: string
+          total_km: number
+          trip_km: number
+          user_id: string
+        }
+        Insert: {
+          accuracy_m: number
+          captured_at: string
+          latitude: number
+          longitude: number
+          point_id: string
+          received_at?: string
+          sent_at: string
+          source: string
+          speed_kmh?: number | null
+          token_id: string
+          total_km: number
+          trip_km: number
+          user_id: string
+        }
+        Update: {
+          accuracy_m?: number
+          captured_at?: string
+          latitude?: number
+          longitude?: number
+          point_id?: string
+          received_at?: string
+          sent_at?: string
+          source?: string
+          speed_kmh?: number | null
+          token_id?: string
+          total_km?: number
+          trip_km?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gps_route_points_token_id_fkey"
+            columns: ["token_id"]
+            isOneToOne: false
+            referencedRelation: "gps_device_tokens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       maintenances: {
         Row: {
           cost: number
@@ -613,6 +669,22 @@ export type Database = {
         }[]
       }
       get_my_system_access: { Args: never; Returns: Json }
+      ingest_gps_device_point: {
+        Args: {
+          _accuracy_m: number
+          _captured_at: string
+          _latitude: number
+          _longitude: number
+          _point_id: string
+          _sent_at: string
+          _source: string
+          _speed_kmh: number
+          _token_hash: string
+          _total_km: number
+          _trip_km: number
+        }
+        Returns: Json
+      }
       ingest_gps_device_state: {
         Args: {
           _accuracy_m: number
