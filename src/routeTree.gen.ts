@@ -20,6 +20,7 @@ import { Route as MetasRouteImport } from './routes/metas'
 import { Route as RelatoriosRouteImport } from './routes/relatorios'
 import { Route as ScannerRouteImport } from './routes/scanner'
 import { Route as ApiPublicGpsRouteImport } from './routes/api/public/gps'
+import { Route as ApiPublicGpsFinishRouteImport } from './routes/api/public/gps/finish'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -76,6 +77,11 @@ const ApiPublicGpsRoute = ApiPublicGpsRouteImport.update({
   path: '/api/public/gps',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicGpsFinishRoute = ApiPublicGpsFinishRouteImport.update({
+  id: '/finish',
+  path: '/finish',
+  getParentRoute: () => ApiPublicGpsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -88,7 +94,8 @@ export interface FileRoutesByFullPath {
   '/metas': typeof MetasRoute
   '/relatorios': typeof RelatoriosRoute
   '/scanner': typeof ScannerRoute
-  '/api/public/gps': typeof ApiPublicGpsRoute
+  '/api/public/gps': typeof ApiPublicGpsRouteWithChildren
+  '/api/public/gps/finish': typeof ApiPublicGpsFinishRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -101,7 +108,8 @@ export interface FileRoutesByTo {
   '/metas': typeof MetasRoute
   '/relatorios': typeof RelatoriosRoute
   '/scanner': typeof ScannerRoute
-  '/api/public/gps': typeof ApiPublicGpsRoute
+  '/api/public/gps': typeof ApiPublicGpsRouteWithChildren
+  '/api/public/gps/finish': typeof ApiPublicGpsFinishRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -115,7 +123,8 @@ export interface FileRoutesById {
   '/metas': typeof MetasRoute
   '/relatorios': typeof RelatoriosRoute
   '/scanner': typeof ScannerRoute
-  '/api/public/gps': typeof ApiPublicGpsRoute
+  '/api/public/gps': typeof ApiPublicGpsRouteWithChildren
+  '/api/public/gps/finish': typeof ApiPublicGpsFinishRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -131,6 +140,7 @@ export interface FileRouteTypes {
     | '/relatorios'
     | '/scanner'
     | '/api/public/gps'
+    | '/api/public/gps/finish'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -144,6 +154,7 @@ export interface FileRouteTypes {
     | '/relatorios'
     | '/scanner'
     | '/api/public/gps'
+    | '/api/public/gps/finish'
   id:
     | '__root__'
     | '/'
@@ -157,6 +168,7 @@ export interface FileRouteTypes {
     | '/relatorios'
     | '/scanner'
     | '/api/public/gps'
+    | '/api/public/gps/finish'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -170,7 +182,7 @@ export interface RootRouteChildren {
   MetasRoute: typeof MetasRoute
   RelatoriosRoute: typeof RelatoriosRoute
   ScannerRoute: typeof ScannerRoute
-  ApiPublicGpsRoute: typeof ApiPublicGpsRoute
+  ApiPublicGpsRoute: typeof ApiPublicGpsRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -252,8 +264,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicGpsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/gps/finish': {
+      id: '/api/public/gps/finish'
+      path: '/finish'
+      fullPath: '/api/public/gps/finish'
+      preLoaderRoute: typeof ApiPublicGpsFinishRouteImport
+      parentRoute: typeof ApiPublicGpsRoute
+    }
   }
 }
+
+interface ApiPublicGpsRouteChildren {
+  ApiPublicGpsFinishRoute: typeof ApiPublicGpsFinishRoute
+}
+
+const ApiPublicGpsRouteChildren: ApiPublicGpsRouteChildren = {
+  ApiPublicGpsFinishRoute: ApiPublicGpsFinishRoute,
+}
+
+const ApiPublicGpsRouteWithChildren = ApiPublicGpsRoute._addFileChildren(
+  ApiPublicGpsRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -266,18 +297,8 @@ const rootRouteChildren: RootRouteChildren = {
   MetasRoute: MetasRoute,
   RelatoriosRoute: RelatoriosRoute,
   ScannerRoute: ScannerRoute,
-  ApiPublicGpsRoute: ApiPublicGpsRoute,
+  ApiPublicGpsRoute: ApiPublicGpsRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
