@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { mergeRemoteTrip, type TripState } from "./trip-tracker";
 const base: TripState = { active: false, source: "browser", startedAt: null, endedAt: null, distanceKm: 0, points: 0, last: null };
 const active: TripState = { ...base, active: true, startedAt: "2026-10-18T10:00:00Z", journeyId: "a", updatedAt: "2026-10-18T10:00:00Z" };
