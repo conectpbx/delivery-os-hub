@@ -9,11 +9,10 @@ import {
   type IntegratedBaseline,
 } from "./integrated-trip";
 
-import { haversineKm } from "./gps-distance";
+import { ingestGpsPoint } from "./gps-filter";
 export { haversineKm } from "./gps-distance";
 
 const PREFIX = "deliveryos.trip:";
-const GPS_SAMPLE_INTERVAL_MS = 2_000;
 const STORAGE_WRITE_DELAY_MS = 3_000;
 
 export type GpsPoint = {
@@ -70,49 +69,9 @@ function save(key: string | null, state: TripState) {
   }
 }
 
-function ingest(
-  cur: TripState,
-  point: GpsPoint,
-  maxAccuracy = 50,
-): { next: TripState | null; reason?: "not-active" | "inaccurate" | "noise" | "jump" } {
-  if (!cur.active) return { next: null, reason: "not-active" };
-  const acc = point.accuracy ?? 999;
-  if (acc > maxAccuracy) return { next: null, reason: "inaccurate" };
-
-  const prev = cur.last;
-  let add = 0;
-  if (prev) {
-    if (prev.at && point.at && new Date(point.at).getTime() <= new Date(prev.at).getTime()) {
-      return { next: null, reason: "noise" };
-    }
-    const d = haversineKm(prev, point);
-    const elapsedHours =
-      prev.at && point.at
-        ? (new Date(point.at).getTime() - new Date(prev.at).getTime()) / 3_600_000
-        : 0;
-    // O limite cresce em capturas nativas espaçadas (por exemplo, após execução em segundo
-    // plano), mas nunca permite uma velocidade média acima de 180 km/h.
-    const maxDistanceKm = Math.max(2, elapsedHours * 180);
-    if (elapsedHours < 0) return { next: null, reason: "noise" };
-    if (d >= 0.015 && d <= maxDistanceKm) add = d;
-    else if (d < 0.015) return { next: null, reason: "noise" };
-    else return { next: null, reason: "jump" };
-  }
-
-  return {
-    next: {
-      ...cur,
-      source: "external",
-      distanceKm: Math.round((cur.distanceKm + add) * 1000) / 1000,
-      points: cur.points + 1,
-      last: point,
-    },
-  };
-}
-
 /**
  * Captura contínua de quilometragem via GPS.
- * Filtra pontos imprecisos (>50m de erro) e saltos irreais para evitar inflar a distância.
+ * Filtra pontos antigos, ruído proporcional à precisão e velocidades irreais.
  * Também aceita pontos vindos de um app nativo pela rede Wi-Fi (pushGps).
  */
 export function useTripTracker() {
@@ -123,7 +82,6 @@ export function useTripTracker() {
   const [error, setError] = useState<string | null>(null);
   const watchId = useRef<number | null>(null);
   const stateRef = useRef<TripState>(EMPTY);
-  const lastSampleAt = useRef(0);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const persistSoon = useCallback(() => {
@@ -172,18 +130,17 @@ export function useTripTracker() {
     if (watchId.current != null) return;
     watchId.current = navigator.geolocation.watchPosition(
       (pos) => {
-        const now = Date.now();
-        if (now - lastSampleAt.current < GPS_SAMPLE_INTERVAL_MS) return;
-        lastSampleAt.current = now;
         const cur = stateRef.current;
+        if (cur.source !== "browser") return;
         const point = {
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
           accuracy: pos.coords.accuracy ?? 999,
           at: new Date(pos.timestamp || Date.now()).toISOString(),
         };
-        const result = ingest(cur, point, 50);
+        const result = ingestGpsPoint(cur, point, 50);
         if (!result.next) return;
+        setError(null);
         apply({ ...result.next, source: "browser" });
       },
       (err) => {
@@ -191,7 +148,7 @@ export function useTripTracker() {
         else if (err.code === err.TIMEOUT) setError("O GPS demorou demais para responder");
         else setError("Não foi possível obter a localização");
       },
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 },
     );
   }, [apply]);
 
@@ -200,7 +157,6 @@ export function useTripTracker() {
       navigator.geolocation.clearWatch(watchId.current);
     }
     watchId.current = null;
-    lastSampleAt.current = 0;
   }, []);
 
   // Retoma a captura ao recarregar a página com jornada ativa (somente no browser).
@@ -213,7 +169,9 @@ export function useTripTracker() {
     (point: GpsPoint) => {
       const cur = stateRef.current;
       if (cur.integratedBaseline) return;
-      const result = ingest(cur, point, 60);
+      // A troca de sensores não deve somar o deslocamento entre suas estimativas.
+      const nativeState = cur.source === "browser" ? { ...cur, last: null } : cur;
+      const result = ingestGpsPoint(nativeState, point, 60);
       if (result.next) {
         setError(null);
         apply(result.next);
