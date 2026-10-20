@@ -121,12 +121,12 @@ A precisão real depende do aparelho, das permissões e da recepção do sinal. 
 
 ### Validação das melhorias
 
-Foram aprovados 57 testes, o build de produção, a checagem TypeScript e o ESLint dos arquivos alterados. Os testes novos cobrem saltos, pontos inválidos ou antigos, oscilações parado, curvas curtas, distâncias fracionárias e recuperação após perda de sinal. O lint global tem pendências preexistentes, descritas separadamente do lint dos arquivos alterados.
+Após integrar as alterações mais recentes da `main`, foram aprovados 65 testes, o build de produção e a checagem TypeScript. O ESLint dos novos arquivos de filtro e testes também passou; o rastreador contém 9 erros de formatação provenientes das alterações incorporadas da `main`. Os testes novos cobrem saltos, pontos inválidos ou antigos, oscilações parado, curvas curtas, distâncias fracionárias e recuperação após perda de sinal. O lint global tem pendências preexistentes, descritas separadamente do lint dos arquivos alterados.
 
 Para executar as suítes existentes com o carregador TypeScript disponível nas dependências instaladas:
 
 ```bash
-node --import tsx --input-type=module -e 'for (const file of ["gps-filter", "gps-ingestion", "integrated-gps-point", "integrated-trip", "metrics", "operation-time"]) await import(`./src/lib/${file}.test.ts`)'
+node --import tsx --input-type=module -e 'for (const file of ["gps-filter", "gps-ingestion", "integrated-gps-point", "integrated-trip", "metrics", "operation-time", "trip-sync"]) await import(`./src/lib/${file}.test.ts`)'
 ```
 
 ## Como funcionam as atualizações
