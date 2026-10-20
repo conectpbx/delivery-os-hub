@@ -104,6 +104,31 @@ Ao iniciar, finalizar ou zerar uma jornada, a aplicação envia ao host React Na
 com o tipo `deliveryos:trip-command` e os comandos `start`, `finish` ou `reset`. Os mesmos dados
 são publicados como `CustomEvent` para outros tipos de WebView.
 
+## Precisão e estabilidade do GPS
+
+A captura no navegador solicita alta precisão e posições novas, sem reutilizar o cache. O rastreador processa cada leitura recebida, sem descartar amostras por um intervalo fixo; a frequência efetiva depende do dispositivo e do sistema operacional.
+
+- Valida coordenadas, precisão e horário; descarta leituras anteriores à jornada, com mais de 60 segundos ou mais de 5 segundos no futuro.
+- Rejeita deslocamentos que implicariam velocidade média acima de 180 km/h.
+- Filtra oscilações usando a precisão informada pelo sensor, com um mínimo de 3 metros. Mantém a última posição aceita como referência para acumular deslocamentos lentos e preservar curvas curtas quando o sinal é preciso.
+- Soma distâncias sem arredondar cada amostra, evitando erro acumulado.
+- Após um intervalo superior a 60 segundos entre posições aceitas, estabelece uma nova referência sem somar um trajeto desconhecido. A quilometragem desse intervalo pode ficar subestimada.
+- Prioriza a captura nativa após uma leitura válida, interrompendo a captura do navegador. A troca de sensores não soma a diferença entre suas estimativas de posição.
+
+Esses filtros se aplicam às coordenadas capturadas pelo navegador e pela ponte nativa. A integração externa que fornece contadores de quilometragem mantém seu cálculo próprio.
+
+A precisão real depende do aparelho, das permissões e da recepção do sinal. Alta precisão pode aumentar o consumo de bateria; captura em segundo plano depende do suporte do aplicativo nativo e do sistema operacional. Ainda é necessário avaliar o resultado em percursos reais, incluindo curvas, paradas e períodos sem sinal.
+
+### Validação das melhorias
+
+Foram aprovados 57 testes, o build de produção, a checagem TypeScript e o ESLint dos arquivos alterados. Os testes novos cobrem saltos, pontos inválidos ou antigos, oscilações parado, curvas curtas, distâncias fracionárias e recuperação após perda de sinal. O lint global tem pendências preexistentes, descritas separadamente do lint dos arquivos alterados.
+
+Para executar as suítes existentes com o carregador TypeScript disponível nas dependências instaladas:
+
+```bash
+node --import tsx --input-type=module -e 'for (const file of ["gps-filter", "gps-ingestion", "integrated-gps-point", "integrated-trip", "metrics", "operation-time"]) await import(`./src/lib/${file}.test.ts`)'
+```
+
 ## Como funcionam as atualizações
 
 ### Deploy do servidor (automático)
