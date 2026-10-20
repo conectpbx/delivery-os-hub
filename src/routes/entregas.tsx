@@ -7,6 +7,8 @@ import {
   MapPin,
   Navigation,
   Plus,
+  Play,
+  Square,
   Route as RouteIcon,
   Trash2,
   X,
@@ -14,6 +16,9 @@ import {
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { OperationTimeStats } from "@/components/OperationTimeStats";
+import { JourneyPauseControl } from "@/components/JourneyPauseControl";
+import { useTripTracker } from "@/lib/trip-tracker";
+import { useGpsDevices, useGpsDeviceState } from "@/lib/gps-integration";
 import { deliveryMinutes } from "@/lib/operation-time";
 import { BrandSpinner } from "@/components/BrandLoader";
 
@@ -145,6 +150,12 @@ function dec(v: string | number | null | undefined): number {
 
 function Entregas() {
   const now = useCalendarNow();
+  const tracker = useTripTracker();
+  const gpsDevices = useGpsDevices();
+  const externalGps = useGpsDeviceState(tracker.trip.active, tracker.trip.integratedBaseline?.tokenId, gpsDevices.data?.filter((device) => device.is_active).map((device) => device.id));
+  useEffect(() => {
+    if (tracker.trip.active && externalGps.data) tracker.pushIntegratedGps(externalGps.data);
+  }, [externalGps.data, tracker.trip.active, tracker.pushIntegratedGps]);
   const list = useDeliveries();
   const apps = useApps();
   const goals = useGoals();
@@ -569,6 +580,17 @@ function Entregas() {
 
   return (
     <AppShell title="Entregas" subtitle="Registro de corridas, rota no mapa e navegação">
+      <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold">Jornada de trabalho</h2>
+          <p className="text-xs text-muted-foreground">{tracker.trip.active ? "Em andamento" : tracker.trip.pendingSave ? "Salvamento pendente" : "Sem jornada ativa"}{tracker.trip.startedAt ? ` · Início ${dateTimeLabel(tracker.trip.startedAt)}` : ""}</p>
+        </div>
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          {tracker.trip.active || tracker.trip.pendingSave ? <Button variant="outline" className="min-h-11 gap-2" disabled={tracker.saving} onClick={() => void tracker.finish()}><Square className="size-4" />{tracker.saving ? "Salvando…" : tracker.trip.pendingSave ? "Salvar jornada" : "Finalizar jornada"}</Button> : <Button className="min-h-11 gap-2" onClick={() => { tracker.start(gpsDevices.data?.some((d) => d.is_active) ? "external" : "browser", externalGps.data); void externalGps.refetch(); }}><Play className="size-4" />Iniciar jornada</Button>}
+          <JourneyPauseControl active={tracker.trip.active} pauses={tracker.trip.pauses} pause={tracker.pause} resume={tracker.resume} />
+        </div>
+        {tracker.error ? <p role="status" className="w-full text-xs text-warning">{tracker.error}</p> : null}
+      </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatCard label="Total recebido" value={brl(total)} tone="primary" />
         <StatCard

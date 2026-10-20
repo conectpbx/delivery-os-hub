@@ -3,6 +3,8 @@ import { z } from "zod";
 const gpsTimestamp = z.union([z.number().int().positive(), z.string().datetime({ offset: true })]);
 
 export const gpsPayloadSchema = z.object({
+  point_id: z.string().uuid().optional(),
+  route_id: z.string().uuid().nullable().optional(),
   source: z.string().trim().min(1).max(80),
   latitude: z.number().finite().min(-90).max(90),
   longitude: z.number().finite().min(-180).max(180),

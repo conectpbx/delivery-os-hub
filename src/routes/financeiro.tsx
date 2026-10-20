@@ -4,6 +4,8 @@ import { Copy, Link2, LocateFixed, Play, Smartphone, Square, Trash2, Unplug } fr
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { OperationTimeStats } from "@/components/OperationTimeStats";
+import { JourneyPauseControl } from "@/components/JourneyPauseControl";
+import { GpsRouteMap } from "@/components/GpsRouteMap";
 import { useJourneys } from "@/lib/data";
 import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
 import { Button } from "@/components/ui/button";
@@ -50,6 +52,8 @@ import {
   useCreateGpsDevice,
   useGpsDevices,
   useGpsDeviceState,
+  useGpsRoutePoints,
+  useGpsRouteSessions,
   useRevokeGpsDevice,
 } from "@/lib/gps-integration";
 
@@ -107,7 +111,7 @@ function Financeiro() {
   const [eff, setEff] = useState("");
   const [deviceName, setDeviceName] = useState("PainelOverlay");
   const [newGpsToken, setNewGpsToken] = useState<string | null>(null);
-  const period = usePeriodSelection(3);
+  const period = usePeriodSelection(0);
   const [gps, setGps] = useState(false);
   const {
     trip,
@@ -117,6 +121,8 @@ function Financeiro() {
     reset,
     pushIntegratedGps,
     saving,
+    pause,
+    resume,
   } = useTripTracker();
   const journeys = useJourneys();
   const [clock, setClock] = useState<number | null>(null);
@@ -134,6 +140,13 @@ function Financeiro() {
         )
       : 0;
   const gpsDevices = useGpsDevices();
+  const gpsRouteSessions = useGpsRouteSessions();
+  const [selectedGpsRouteId, setSelectedGpsRouteId] = useState<string | null>(null);
+  const selectedGpsRoute =
+    gpsRouteSessions.data?.find((route) => route.id === selectedGpsRouteId) ??
+    gpsRouteSessions.data?.[0] ??
+    null;
+  const gpsRoutePoints = useGpsRoutePoints(selectedGpsRoute?.id);
   const externalGps = useGpsDeviceState(
     trip.active,
     trip.integratedBaseline?.tokenId,
@@ -281,6 +294,7 @@ function Financeiro() {
             </p>
           </div>
           <div className="ml-auto flex flex-wrap gap-2">
+            <JourneyPauseControl active={trip.active} pauses={trip.pauses} pause={pause} resume={resume} />
             {trip.active || trip.pendingSave ? (
               <Button variant="destructive" onClick={finish} disabled={saving}>
                 <Square className="mr-2 size-4" />{" "}
@@ -363,6 +377,85 @@ function Financeiro() {
           </ul>
         ) : (
           <EmptyState>Nenhuma jornada finalizada.</EmptyState>
+        )}
+      </SectionCard>
+
+      <SectionCard
+        className="mt-4"
+        title="Rotas registradas pelo aplicativo"
+        description="Histórico completo dos pontos GPS enviados pelo serviço Android"
+      >
+        {gpsRouteSessions.isError ? (
+          <p className="text-sm text-destructive">Não foi possível carregar as rotas GPS.</p>
+        ) : gpsRouteSessions.data?.length ? (
+          <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
+            <div className="space-y-2">
+              {gpsRouteSessions.data.slice(0, 20).map((route) => (
+                <button
+                  key={route.id}
+                  type="button"
+                  onClick={() => setSelectedGpsRouteId(route.id)}
+                  className={
+                    "w-full rounded-lg border p-3 text-left transition " +
+                    (selectedGpsRoute?.id === route.id
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:bg-muted/40")
+                  }
+                >
+                  <p className="text-sm font-medium">{dateTimeLabel(route.started_at)}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {route.ended_at ? dateTimeLabel(route.ended_at) : "Em andamento"}
+                  </p>
+                  <p className="mt-2 text-sm tabular-nums">
+                    {num(Number(route.distance_km), 2)} km · {route.point_count} pontos
+                  </p>
+                </button>
+              ))}
+            </div>
+
+            <div className="min-w-0">
+              {selectedGpsRoute ? (
+                <>
+                  <div className="mb-3 grid gap-3 sm:grid-cols-3">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Distância</p>
+                      <p className="font-semibold tabular-nums">
+                        {num(Number(selectedGpsRoute.distance_km), 2)} km
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Pontos</p>
+                      <p className="font-semibold tabular-nums">{selectedGpsRoute.point_count}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Status</p>
+                      <p className="font-semibold">
+                        {selectedGpsRoute.ended_at ? "Finalizada" : "Em andamento"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {gpsRoutePoints.isError ? (
+                    <p className="text-sm text-destructive">
+                      Não foi possível carregar os pontos desta rota.
+                    </p>
+                  ) : gpsRoutePoints.isLoading ? (
+                    <div className="flex h-80 items-center justify-center rounded-lg border border-border text-sm text-muted-foreground">
+                      Carregando trajeto…
+                    </div>
+                  ) : (
+                    <GpsRouteMap points={gpsRoutePoints.data ?? []} />
+                  )}
+                </>
+              ) : (
+                <EmptyState>Selecione uma rota para visualizar o trajeto.</EmptyState>
+              )}
+            </div>
+          </div>
+        ) : (
+          <EmptyState>
+            Nenhuma rota GPS registrada. Inicie uma jornada no aplicativo Android para começar.
+          </EmptyState>
         )}
       </SectionCard>
 

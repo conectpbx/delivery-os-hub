@@ -5,6 +5,7 @@ const MonthsBarChart = lazy(() => import("@/components/charts/MonthsBarChart"));
 import { Clock3, FileDown, Gauge, PackageCheck, Printer, Route as RouteIcon } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { OperationTimeStats } from "@/components/OperationTimeStats";
+import { JourneyPauseReport } from "@/components/JourneyPauseReport";
 import { useOperationTime } from "@/lib/use-operation-time";
 import { deliveryMinutes } from "@/lib/operation-time";
 import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
@@ -61,7 +62,7 @@ function Relatorios() {
   const fuelings = useFuelings();
   const maintenances = useMaintenances();
   const profile = useProfile();
-  const period = usePeriodSelection(3);
+  const period = usePeriodSelection(0);
   const time = useOperationTime(period.fromDate, period.toDate);
   const [granularity, setGranularity] = useState<ReportGranularity>("day");
 
@@ -234,6 +235,7 @@ function Relatorios() {
         "Horas de jornada registrada",
         "Horas totais consideradas",
         "Horas fora das entregas",
+        "Horas em pausas",
         "Receita",
         "Combustível",
         "Outros gastos",
@@ -253,6 +255,7 @@ function Relatorios() {
         row.journeyMin / 60,
         row.totalMin / 60,
         row.unassignedMin / 60,
+        row.pauseMin / 60,
         row.revenue,
         row.fuelCost,
         row.otherCost,
@@ -368,6 +371,7 @@ function Relatorios() {
       </div>
 
       <OperationTimeStats from={period.fromDate} to={period.toDate} />
+      <JourneyPauseReport journeys={time.records} from={period.fromDate} to={period.toDate} now={time.now} />
       <SectionCard
         className="mt-4"
         title="Detalhamento da operação"
@@ -415,6 +419,7 @@ function Relatorios() {
                       ["Tempo total", minutesLabel(row.totalMin)],
                       ["Entregas/rotas", minutesLabel(row.workedMin)],
                       ["Fora das entregas", minutesLabel(row.unassignedMin)],
+                      ["Pausas", minutesLabel(row.pauseMin)],
                       ["Receita", brl(row.revenue)],
                       ["Gastos", brl(row.totalCost)],
                       ["Combustível", brl(row.fuelCost)],
@@ -443,6 +448,7 @@ function Relatorios() {
                     <th className="px-2 pb-2 text-right font-medium">Jornada</th>
                     <th className="px-2 pb-2 text-right font-medium">Entregas/rotas</th>
                     <th className="px-2 pb-2 text-right font-medium">Fora das entregas</th>
+                    <th className="px-2 pb-2 text-right font-medium">Pausas</th>
                     <th className="px-2 pb-2 text-right font-medium">Tempo total</th>
                     <th className="px-2 pb-2 text-right font-medium">Receita</th>
                     <th className="px-2 pb-2 text-right font-medium">Gastos</th>
@@ -473,6 +479,7 @@ function Relatorios() {
                       <td className="px-2 py-3 text-right tabular-nums">
                         {minutesLabel(row.unassignedMin)}
                       </td>
+                      <td className="px-2 py-3 text-right tabular-nums">{minutesLabel(row.pauseMin)}</td>
                       <td className="px-2 py-3 text-right tabular-nums">
                         <span>{minutesLabel(row.totalMin)}</span>
                       </td>

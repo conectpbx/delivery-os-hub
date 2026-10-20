@@ -182,12 +182,21 @@ export function buildAlerts(input: {
     const pct = (sToday.revenue / dailyGoal) * 100;
     const hour = now.getHours();
     if (pct >= 100) {
+      const extra = sToday.revenue - dailyGoal;
+      const details = [
+        `${brl(sToday.revenue)} hoje (${num(pct, 0)}% da meta de ${brl(dailyGoal)})`,
+        extra > 0 ? `+${brl(extra)} acima do alvo` : null,
+        `lucro real ${brl(sToday.profit)}`,
+        `${sToday.count} entrega(s), ticket médio ${brl(sToday.count ? sToday.revenue / sToday.count : 0)}`,
+        perHour > 0 ? `${brl(perHour)}/hora` : null,
+        sToday.distance > 0 ? `${num(sToday.distance, 1)} km rodados (${brl(sToday.perKm)}/km)` : null,
+      ].filter(Boolean);
       alerts.push({
         id: "meta-diaria-ok",
         kind: "motivacional",
         severity: "success",
         title: "Meta diária batida! 🏆",
-        message: `Você já fez ${brl(sToday.revenue)} hoje. Tudo daqui pra frente é lucro extra.`,
+        message: `${details.join(" · ")}. O excedente ajuda a reduzir a meta dos próximos dias.`,
         toast: true,
       });
     } else if (pct >= 70) {
@@ -230,7 +239,11 @@ export function buildAlerts(input: {
         kind: "motivacional",
         severity: "success",
         title: "Meta do mês conquistada! 🚀",
-        message: `${brl(monthRevenue)} acumulados. Excelente trabalho.`,
+        message: `${brl(monthRevenue)} acumulados (${num((monthRevenue / monthTarget) * 100, 0)}% da meta de ${brl(
+          monthTarget,
+        )}), +${brl(monthRevenue - monthTarget)} de excedente · ${monthDeliveries.length} entregas · média ${brl(
+          monthRevenue / Math.max(1, new Set(monthDeliveries.map((d) => d.occurred_at.slice(0, 10))).size),
+        )} por dia trabalhado · faltam ${daysInMonth - now.getDate()} dia(s) no mês para ampliar o resultado.`,
         toast: true,
       });
     } else if (monthRevenue < expected * 0.8) {
@@ -317,7 +330,7 @@ export function buildAlerts(input: {
         kind: "aviso",
         severity: "warning",
         title: "Tempo fora das entregas elevado",
-        message: `${Math.round(outsideMin)} min fora das entregas hoje, incluindo espera, pausas e deslocamentos. Avalie a região e o horário.`,
+        message: `${Math.round(outsideMin)} min fora das entregas hoje, incluindo espera e deslocamentos, sem as pausas registradas. Avalie a região e o horário.`,
       });
     }
     alerts.push({
