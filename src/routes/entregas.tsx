@@ -18,6 +18,7 @@ import { AppShell } from "@/components/AppShell";
 import { OperationTimeStats } from "@/components/OperationTimeStats";
 import { JourneyPauseControl } from "@/components/JourneyPauseControl";
 import { useTripTracker } from "@/lib/trip-tracker";
+import { GpsTrackingStatus } from "@/components/GpsTrackingStatus";
 import { useGpsDevices, useGpsDeviceState } from "@/lib/gps-integration";
 import { deliveryMinutes } from "@/lib/operation-time";
 import { BrandSpinner } from "@/components/BrandLoader";
@@ -589,7 +590,7 @@ function Entregas() {
           {tracker.trip.active || tracker.trip.pendingSave ? <Button variant="outline" className="min-h-11 gap-2" disabled={tracker.saving} onClick={() => void tracker.finish()}><Square className="size-4" />{tracker.saving ? "Salvando…" : tracker.trip.pendingSave ? "Salvar jornada" : "Finalizar jornada"}</Button> : <Button className="min-h-11 gap-2" onClick={() => { tracker.start(gpsDevices.data?.some((d) => d.is_active) ? "external" : "browser", externalGps.data); void externalGps.refetch(); }}><Play className="size-4" />Iniciar jornada</Button>}
           <JourneyPauseControl active={tracker.trip.active} pauses={tracker.trip.pauses} pause={tracker.pause} resume={tracker.resume} />
         </div>
-        {tracker.error ? <p role="status" className="w-full text-xs text-warning">{tracker.error}</p> : null}
+        <GpsTrackingStatus trip={tracker.trip} error={tracker.error} onRetry={tracker.retryBrowserGps} />
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatCard label="Total recebido" value={brl(total)} tone="primary" />

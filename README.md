@@ -119,14 +119,26 @@ Esses filtros se aplicam às coordenadas capturadas pelo navegador e pela ponte 
 
 A precisão real depende do aparelho, das permissões e da recepção do sinal. Alta precisão pode aumentar o consumo de bateria; captura em segundo plano depende do suporte do aplicativo nativo e do sistema operacional. Ainda é necessário avaliar o resultado em percursos reais, incluindo curvas, paradas e períodos sem sinal.
 
+### Troca automática entre integração e navegador
+
+Se uma jornada for iniciada com integração cadastrada, mas sem leitura válida nos últimos 30 segundos, o PWA seleciona imediatamente o GPS do navegador. Durante a jornada, verifica a integração a cada 5 segundos e troca para o navegador quando a última leitura ultrapassa 30 segundos. Isso também vale para a ponte GPS nativa; leituras válidas de um aparelho parado mantêm a conexão ativa, mesmo sem deslocamento.
+
+Quando chegam leituras externas recentes, o sistema retorna à integração e interrompe a captura do navegador. A reconexão estabelece uma nova base do contador, sem importar a quilometragem acumulada durante o fallback. Leituras com atraso de rede aguardam uma base posterior ao último ponto do navegador antes de voltar a somar distância. O dispositivo integrado permanece identificado durante a troca, evitando misturar contadores de aparelhos diferentes. Pode haver subcontagem nos intervalos sem sinal e na transição entre fontes.
+
+As pausas suspendem a captura do navegador e a soma de distância; finalizar a jornada interrompe a captura. O resumo da jornada preserva a fonte e as referências de tempo necessárias para uma reconexão após recarregar a página, sem persistir coordenadas exatas.
+
+A tela informa qual fonte está selecionada. Se a localização estiver bloqueada ou falhar, apresenta a orientação e o botão **Tentar ativar GPS deste dispositivo**. A troca automática não concede permissões: o usuário precisa autorizar a localização em um contexto seguro (HTTPS). A negativa de permissão não gera novas solicitações periódicas; uma nova tentativa depende da ação do usuário.
+
+**iPhone:** mantenha o PWA aberto. O iOS pode suspender a localização, os temporizadores e as consultas em segundo plano ou com a tela bloqueada. Ao voltar ao aplicativo, o PWA reavalia a integração e reinicia a captura do navegador quando necessário. A implementação não garante rastreamento contínuo em segundo plano e ainda precisa de validação em um iPhone real.
+
 ### Validação das melhorias
 
-Após integrar as alterações mais recentes da `main`, foram aprovados 65 testes, o build de produção e a checagem TypeScript. O ESLint dos novos arquivos de filtro e testes também passou; o rastreador contém 9 erros de formatação provenientes das alterações incorporadas da `main`. Os testes novos cobrem saltos, pontos inválidos ou antigos, oscilações parado, curvas curtas, distâncias fracionárias e recuperação após perda de sinal. O lint global tem pendências preexistentes, descritas separadamente do lint dos arquivos alterados.
+A validação da troca automática inclui 81 testes, cobrindo indisponibilidade inicial, expiração de leituras, reconexões com atraso, prevenção de dupla contagem, recarga da página, pausas, GPS parado e mensagens da interface. O build de produção, a checagem TypeScript e o ESLint dos módulos de GPS alterados também são verificados. O lint global tem pendências preexistentes. Os testes automatizados não substituem a avaliação de precisão e permissões em dispositivos reais.
 
 Para executar as suítes existentes com o carregador TypeScript disponível nas dependências instaladas:
 
 ```bash
-node --import tsx --input-type=module -e 'for (const file of ["gps-filter", "gps-ingestion", "integrated-gps-point", "integrated-trip", "metrics", "operation-time", "trip-sync"]) await import(`./src/lib/${file}.test.ts`)'
+node --import tsx --input-type=module -e 'for (const file of ["gps-failover", "gps-filter", "gps-ingestion", "integrated-gps-point", "integrated-trip", "metrics", "operation-time", "trip-sync"]) await import(`./src/lib/${file}.test.ts`); await import("./src/components/GpsTrackingStatus.test.tsx")'
 ```
 
 ## Como funcionam as atualizações

@@ -32,7 +32,10 @@ async function pullRemote(userId: string): Promise<TripState | null | undefined>
 }
 
 /** Decide qual estado prevalece entre este dispositivo e o servidor. */
-export function mergeRemoteTrip(local: TripState, remote: TripState | null): TripState | "push" | null {
+export function mergeRemoteTrip(
+  local: TripState,
+  remote: TripState | null,
+): TripState | "push" | null {
   if (!remote) {
     // Outro dispositivo finalizou (registro removido) depois que este já havia sincronizado.
     if ((local.active || local.pendingSave) && local.synced) return { ...EMPTY };
@@ -41,23 +44,33 @@ export function mergeRemoteTrip(local: TripState, remote: TripState | null): Tri
   }
   if (!local.active && !local.pendingSave) return remote;
   if (remote.journeyId !== local.journeyId) {
-    return (remote.updatedAt ?? remote.startedAt ?? "") >= (local.updatedAt ?? local.startedAt ?? "") ? remote : "push";
+    return (remote.updatedAt ?? remote.startedAt ?? "") >=
+      (local.updatedAt ?? local.startedAt ?? "")
+      ? remote
+      : "push";
   }
   const remoteNewer = (remote.updatedAt ?? "") > (local.updatedAt ?? "");
-  if (remoteNewer) return { ...remote, distanceKm: Math.max(remote.distanceKm, local.distanceKm), points: Math.max(remote.points, local.points) };
-  if ((local.updatedAt ?? "") > (remote.updatedAt ?? "") || local.distanceKm > remote.distanceKm) return "push";
+  if (remoteNewer)
+    return {
+      ...remote,
+      distanceKm: Math.max(remote.distanceKm, local.distanceKm),
+      points: Math.max(remote.points, local.points),
+    };
+  if ((local.updatedAt ?? "") > (remote.updatedAt ?? "") || local.distanceKm > remote.distanceKm)
+    return "push";
   return null;
 }
 import { beginPause, endPause, type JourneyPause } from "./operation-time";
 import { sendNativeTripCommand, subscribeNativeGps } from "@/lib/native-gps-bridge";
 import type { GpsDeviceState } from "./gps-integration";
+import type { IntegratedBaseline } from "./integrated-trip";
 import {
-  accumulateIntegratedTrip,
-  gpsCounterBaseline,
-  type IntegratedBaseline,
-} from "./integrated-trip";
-
-import { ingestGpsPoint } from "./gps-filter";
+  fallbackToBrowser,
+  initialGpsSource,
+  ingestBrowserGps,
+  ingestIntegratedGps,
+  ingestNativeGps,
+} from "./gps-failover";
 export { haversineKm } from "./gps-distance";
 
 const PREFIX = "deliveryos.trip:";
@@ -75,6 +88,11 @@ export type TripSource = "browser" | "external";
 export type TripState = {
   active: boolean;
   source: TripSource;
+  preferredGps?: TripSource;
+  externalGpsAt?: string;
+  externalRebaseAfter?: string | null;
+  browserFallbackSince?: string | null;
+  browserGpsAt?: string | null;
   startedAt: string | null;
   endedAt: string | null;
   distanceKm: number;
@@ -134,6 +152,7 @@ export function useTripTracker() {
   const [state, setState] = useState<TripState>(EMPTY);
   const [error, setError] = useState<string | null>(null);
   const watchId = useRef<number | null>(null);
+  const locationDenied = useRef(false);
   const stateRef = useRef<TripState>(EMPTY);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -182,7 +201,12 @@ export function useTripTracker() {
       if (!userId) return;
       lastPush.current = Date.now();
       void pushRemote(userId, next).then((ok) => {
-        if (ok && (next.active || next.pendingSave) && !stateRef.current.synced && stateRef.current.journeyId === next.journeyId) {
+        if (
+          ok &&
+          (next.active || next.pendingSave) &&
+          !stateRef.current.synced &&
+          stateRef.current.journeyId === next.journeyId
+        ) {
           stateRef.current = { ...stateRef.current, synced: true };
           setState(stateRef.current);
           save(storageKey, stateRef.current);
@@ -206,13 +230,20 @@ export function useTripTracker() {
         stateRef.current = merged;
         setState(merged);
         save(storageKey, merged);
-      } else if ((stateRef.current.active) && Date.now() - lastPush.current > REMOTE_PUSH_MIN_MS && remote && stateRef.current.distanceKm > remote.distanceKm) {
+      } else if (
+        stateRef.current.active &&
+        Date.now() - lastPush.current > REMOTE_PUSH_MIN_MS &&
+        remote &&
+        stateRef.current.distanceKm > remote.distanceKm
+      ) {
         syncNow(stateRef.current);
       }
     };
     void pull();
     const id = setInterval(pull, REMOTE_PULL_MS);
-    const onVisible = () => { if (document.visibilityState === "visible") void pull(); };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void pull();
+    };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("online", pull);
     return () => {
@@ -224,11 +255,23 @@ export function useTripTracker() {
   }, [loading, userId, storageKey, syncNow]);
 
   const startWatch = useCallback(() => {
+    if (
+      !stateRef.current.active ||
+      stateRef.current.source !== "browser" ||
+      stateRef.current.pauses?.some((pause) => !pause.ended_at)
+    )
+      return;
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       setError("GPS indisponível neste dispositivo");
       return;
     }
     if (watchId.current != null) return;
+    if (locationDenied.current) {
+      setError(
+        "Permita a localização nas configurações do navegador para usar o GPS deste dispositivo.",
+      );
+      return;
+    }
     watchId.current = navigator.geolocation.watchPosition(
       (pos) => {
         const cur = stateRef.current;
@@ -240,14 +283,21 @@ export function useTripTracker() {
           accuracy: pos.coords.accuracy ?? 999,
           at: new Date(pos.timestamp || Date.now()).toISOString(),
         };
-        const result = ingestGpsPoint(cur, point, 50);
-        if (!result.next) return;
+        const next = ingestBrowserGps(cur, point);
+        if (!next) return;
         setError(null);
-        apply({ ...result.next, source: "browser" });
+        apply(next);
       },
       (err) => {
-        if (err.code === err.PERMISSION_DENIED) setError("Permissão de localização negada");
-        else if (err.code === err.TIMEOUT) setError("O GPS demorou demais para responder");
+        if (!stateRef.current.active || stateRef.current.source !== "browser") return;
+        if (err.code === err.PERMISSION_DENIED) {
+          locationDenied.current = true;
+          setError(
+            "Permita a localização nas configurações do navegador para usar o GPS deste dispositivo.",
+          );
+          if (watchId.current != null) navigator.geolocation.clearWatch(watchId.current);
+          watchId.current = null;
+        } else if (err.code === err.TIMEOUT) setError("O GPS demorou demais para responder");
         else setError("Não foi possível obter a localização");
       },
       { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 },
@@ -261,40 +311,76 @@ export function useTripTracker() {
     watchId.current = null;
   }, []);
 
-  // Retoma a captura ao recarregar a página com jornada ativa (somente no browser).
+  const paused = state.pauses?.some((pause) => !pause.ended_at) ?? false;
+  // Suspende durante pausas e reinicia ao voltar para o primeiro plano no iOS.
   useEffect(() => {
-    if (state.active && state.source === "browser") startWatch();
+    if (state.active && state.source === "browser" && !paused) startWatch();
     return stopWatch;
-  }, [state.active, state.source, startWatch, stopWatch]);
+  }, [state.active, state.source, paused, startWatch, stopWatch]);
+
+  useEffect(() => {
+    if (!state.active) return;
+    const check = () => {
+      const next = fallbackToBrowser(stateRef.current);
+      if (next) {
+        setError(null);
+        apply(next);
+      }
+      const current = stateRef.current;
+      if (
+        document.visibilityState === "visible" &&
+        current.active &&
+        current.source === "browser" &&
+        !current.pauses?.some((pause) => !pause.ended_at)
+      ) {
+        startWatch();
+      }
+    };
+    check();
+    const timer = setInterval(check, 5_000);
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      stopWatch();
+      check();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", check);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", check);
+    };
+  }, [state.active, apply, startWatch, stopWatch]);
+
+  const retryBrowserGps = useCallback(() => {
+    if (
+      !stateRef.current.active ||
+      stateRef.current.source !== "browser" ||
+      stateRef.current.pauses?.some((pause) => !pause.ended_at)
+    )
+      return;
+    setError(null);
+    locationDenied.current = false;
+    stopWatch();
+    startWatch();
+  }, [startWatch, stopWatch]);
 
   const pushGps = useCallback(
     (point: GpsPoint) => {
-      const cur = stateRef.current;
-      if (cur.pauses?.some((pause) => !pause.ended_at)) return;
-      if (cur.integratedBaseline) return;
-      // A troca de sensores não deve somar o deslocamento entre suas estimativas.
-      const nativeState = cur.source === "browser" ? { ...cur, last: null } : cur;
-      const result = ingestGpsPoint(nativeState, point, 60);
-      if (result.next) {
+      const next = ingestNativeGps(stateRef.current, point);
+      if (next) {
         setError(null);
-        apply(result.next);
+        apply(next);
       }
     },
     [apply],
   );
 
-  // O primeiro ponto nativo muda a fonte para "external" e desliga automaticamente
-  // o watchPosition do navegador, impedindo duas capturas simultâneas.
   useEffect(() => subscribeNativeGps(pushGps), [pushGps]);
 
   const pushIntegratedGps = useCallback(
     (reading: GpsDeviceState) => {
-      if (stateRef.current.pauses?.some((pause) => !pause.ended_at)) {
-        const baseline = gpsCounterBaseline(reading);
-        if (baseline) apply({ ...stateRef.current, integratedBaseline: baseline, last: null });
-        return;
-      }
-      const next = accumulateIntegratedTrip(stateRef.current, reading);
+      const next = ingestIntegratedGps(stateRef.current, reading);
       if (next) {
         setError(null);
         apply(next);
@@ -307,20 +393,20 @@ export function useTripTracker() {
     (source: TripSource = "browser", reading?: GpsDeviceState | null) => {
       if (stateRef.current.active || stateRef.current.pendingSave) return;
       setError(null);
-      const baseline = source === "external" && reading ? gpsCounterBaseline(reading) : null;
+      locationDenied.current = false;
+      const gpsSource = initialGpsSource(source, reading);
       const next = {
         ...EMPTY,
-        source,
+        ...gpsSource,
         active: true,
         startedAt: new Date().toISOString(),
         journeyId: crypto.randomUUID(),
         updatedAt: new Date().toISOString(),
-        ...(baseline ? { integratedBaseline: baseline } : {}),
       };
       apply(next);
       save(storageKey, next);
       syncNow(next);
-      if (source === "browser") startWatch();
+      if (next.source === "browser") startWatch();
       else stopWatch();
       sendNativeTripCommand("start");
     },
@@ -374,7 +460,12 @@ export function useTripTracker() {
   const pause = (reason: string) => {
     const current = stateRef.current;
     if (!current.active) return;
-    const next = { ...current, last: null, updatedAt: new Date().toISOString(), pauses: beginPause(current.pauses ?? [], reason, new Date().toISOString()) };
+    const next = {
+      ...current,
+      last: null,
+      updatedAt: new Date().toISOString(),
+      pauses: beginPause(current.pauses ?? [], reason, new Date().toISOString()),
+    };
     apply(next);
     save(storageKey, next);
     syncNow(next);
@@ -382,7 +473,12 @@ export function useTripTracker() {
   const resume = () => {
     const current = stateRef.current;
     if (!current.active) return;
-    const next = { ...current, last: null, updatedAt: new Date().toISOString(), pauses: endPause(current.pauses ?? [], new Date().toISOString()) };
+    const next = {
+      ...current,
+      last: null,
+      updatedAt: new Date().toISOString(),
+      pauses: endPause(current.pauses ?? [], new Date().toISOString()),
+    };
     apply(next);
     save(storageKey, next);
     syncNow(next);
@@ -397,6 +493,7 @@ export function useTripTracker() {
     pushGps,
     pushIntegratedGps,
     saving: addJourney.isPending,
+    retryBrowserGps,
     pause,
     resume,
   };
