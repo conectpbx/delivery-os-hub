@@ -141,6 +141,20 @@ Para executar as suítes existentes com o carregador TypeScript disponível nas 
 node --import tsx --input-type=module -e 'for (const file of ["gps-failover", "gps-filter", "gps-ingestion", "integrated-gps-point", "integrated-trip", "metrics", "operation-time", "trip-sync"]) await import(`./src/lib/${file}.test.ts`); await import("./src/components/GpsTrackingStatus.test.tsx")'
 ```
 
+## Controle de módulos da Administração
+
+Ao ativar ou desativar um módulo, o menu e a tela correspondente são atualizados na sessão que salvou a configuração, sem recarregar o PWA. A disponibilidade global vale para usuários, administradores e superadministradores. A Administração continua acessível ao superadministrador para reativar módulos, inclusive quando todos os demais estiverem desabilitados.
+
+Outros dispositivos consultam a configuração a cada 15 segundos enquanto o aplicativo está aberto e conectado. O PWA também consulta ao abrir uma tela, voltar ao primeiro plano e recuperar a conexão, mesmo que exista um cache recente. Dispositivos offline mantêm a última configuração conhecida até poderem consultar o servidor; o sistema operacional pode suspender consultas em segundo plano.
+
+O bloqueio remove o módulo dos menus de desktop e celular e substitui seu conteúdo por um aviso ao acessar a URL diretamente. Os botões de ação da tela também ficam ocultos. A navegação de retorno usa um módulo disponível, em vez de enviar sempre para um Dashboard que pode estar desativado. As regras de autenticação e de acesso a dados do backend continuam independentes da disponibilidade visual dos módulos.
+
+A correção inclui testes de desativação e reativação, todos os papéis, URLs diretas, resposta antiga em andamento, falha ao salvar, cache restaurado, retorno ao primeiro plano e reconexão. Para executar esses testes:
+
+```bash
+node --import tsx src/lib/system-access.test.ts
+```
+
 ## Como funcionam as atualizações
 
 ### Deploy do servidor (automático)

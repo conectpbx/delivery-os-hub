@@ -19,16 +19,17 @@ import { cn } from "@/lib/utils";
 import { BrandLoading } from "@/components/BrandLoader";
 import { useSystemAccess } from "@/lib/admin";
 import { useProfile } from "@/lib/data";
+import { moduleIsDisabled, visibleModules } from "@/lib/system-access";
 
-const nav = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, module: "dashboard" },
-  { to: "/entregas", label: "Entregas", icon: RouteIcon, module: "deliveries" },
-  { to: "/financeiro", label: "Financeiro", icon: Wallet, module: "finance" },
-  { to: "/manutencao", label: "Manutenção", icon: Wrench, module: "maintenance" },
-  { to: "/metas", label: "Metas", icon: Target, module: "goals" },
-  { to: "/scanner", label: "Scanner IA", icon: ScanLine, module: "scanner" },
-  { to: "/relatorios", label: "Relatórios", icon: FileBarChart, module: "reports" },
-] as const;
+const moduleIcons = {
+  dashboard: LayoutDashboard,
+  deliveries: RouteIcon,
+  finance: Wallet,
+  maintenance: Wrench,
+  goals: Target,
+  scanner: ScanLine,
+  reports: FileBarChart,
+};
 
 export function AppShell({
   title,
@@ -45,16 +46,16 @@ export function AppShell({
   const profile = useProfile(Boolean(session));
   const access = useSystemAccess(Boolean(session));
   const isSuperAdmin = access.data?.role === "super_admin";
-  const visibleNav = nav.filter(
-    (item) => isSuperAdmin || access.data?.modules[item.module] !== false,
-  );
+  const visibleNav = visibleModules(access.data).map((item) => ({
+    ...item,
+    icon: moduleIcons[item.module],
+  }));
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [open, setOpen] = useState(false);
-  const currentModule = nav.find((item) => item.to === pathname);
-  const moduleDisabled = Boolean(
-    currentModule && !isSuperAdmin && access.data?.modules[currentModule.module] === false,
-  );
+  const moduleDisabled = moduleIsDisabled(pathname, access.data);
+  const fallbackRoute = visibleNav[0]?.to ?? (isSuperAdmin ? "/admin" : null);
+  const allowedActions = moduleDisabled ? undefined : actions;
 
   useEffect(() => {
     if (!loading && !session) void navigate({ to: "/auth" });
@@ -64,8 +65,22 @@ export function AppShell({
     setOpen(false);
   }, [pathname]);
 
-  if (loading || !session || profile.isLoading) {
+  if (loading || !session || profile.isLoading || access.isPending) {
     return <BrandLoading vehicle={profile.data?.vehicle} />;
+  }
+
+  if (!access.data) {
+    return (
+      <div className="surface-card mx-auto mt-12 max-w-lg p-8 text-center" role="alert">
+        <h2 className="text-lg font-semibold">Não foi possível verificar os módulos disponíveis</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Verifique sua conexão e tente novamente.
+        </p>
+        <Button className="mt-5" onClick={() => void access.refetch()}>
+          Tentar novamente
+        </Button>
+      </div>
+    );
   }
 
   return (
@@ -117,10 +132,14 @@ export function AppShell({
                 <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
               ) : null}
             </div>
-            {actions ? <div className="hidden shrink-0 sm:block">{actions}</div> : null}
+            {allowedActions ? (
+              <div className="hidden shrink-0 sm:block">{allowedActions}</div>
+            ) : null}
           </div>
-          {actions ? (
-            <div className="flex justify-end overflow-x-auto px-4 pb-3 sm:hidden">{actions}</div>
+          {allowedActions ? (
+            <div className="flex justify-end overflow-x-auto px-4 pb-3 sm:hidden">
+              {allowedActions}
+            </div>
           ) : null}
 
           {open ? (
@@ -157,9 +176,17 @@ export function AppShell({
               <p className="mt-2 text-sm text-muted-foreground">
                 Este recurso foi desativado pela administração do sistema.
               </p>
-              <Button className="mt-5" onClick={() => void navigate({ to: "/dashboard" })}>
-                Voltar ao dashboard
-              </Button>
+              {fallbackRoute ? (
+                <Button className="mt-5" onClick={() => void navigate({ to: fallbackRoute })}>
+                  {fallbackRoute === "/admin"
+                    ? "Ir para Administração"
+                    : "Ir para módulo disponível"}
+                </Button>
+              ) : (
+                <p className="mt-5 text-sm text-muted-foreground">
+                  Nenhum módulo está disponível no momento.
+                </p>
+              )}
             </div>
           ) : (
             children

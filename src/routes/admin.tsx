@@ -45,6 +45,7 @@ import {
   useSystemSettings,
 } from "@/lib/admin";
 import { brl, dateTimeLabel } from "@/lib/format";
+import { updateModuleAccess } from "@/lib/system-access";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -455,10 +456,14 @@ function ModulesPanel({
 }) {
   const [saving, setSaving] = useState<string | null>(null);
 
+  const queryClient = useQueryClient();
+
   async function updateModule(module: SystemModule, enabled: boolean) {
     setSaving(module.key);
     try {
-      await adminRpc("super_admin_update_module", { _key: module.key, _enabled: enabled });
+      await updateModuleAccess(queryClient, module.key, enabled, () =>
+        adminRpc("super_admin_update_module", { _key: module.key, _enabled: enabled }),
+      );
       await onSaved();
       toast.success(`${module.name} ${enabled ? "ativado" : "desativado"}`);
     } catch (error) {
@@ -471,7 +476,7 @@ function ModulesPanel({
   return (
     <SectionCard
       title="Controle de módulos"
-      description="Disponibilize recursos para todo o ecossistema sem publicar uma nova versão"
+      description="Ative ou desative recursos para todas as contas, incluindo administradores. Outros dispositivos com o app aberto e conectado atualizam em até 15 segundos."
     >
       <div className="grid gap-3 sm:grid-cols-2">
         {modules.map((module) => (

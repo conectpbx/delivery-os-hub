@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { systemAccessOptions } from "./system-access";
 
 export type AdminOverview = {
   totalUsers: number;
@@ -54,8 +55,19 @@ export type AuditLog = {
 };
 
 const adminApi = supabase as unknown as {
-  rpc: (name: string, args?: Record<string, unknown>) => Promise<{ data: unknown; error: Error | null }>;
-  from: (table: string) => { select: (columns?: string) => { order: (column: string, options: { ascending: boolean }) => { limit: (limit: number) => Promise<{ data: unknown; error: Error | null }> }; single: () => Promise<{ data: unknown; error: Error | null }> } };
+  rpc: (
+    name: string,
+    args?: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: Error | null }>;
+  from: (table: string) => {
+    select: (columns?: string) => {
+      order: (
+        column: string,
+        options: { ascending: boolean },
+      ) => { limit: (limit: number) => Promise<{ data: unknown; error: Error | null }> };
+      single: () => Promise<{ data: unknown; error: Error | null }>;
+    };
+  };
 };
 
 export async function adminRpc<T>(name: string, args?: Record<string, unknown>): Promise<T> {
@@ -75,19 +87,20 @@ export function useIsAdmin(enabled = true) {
 }
 
 export function useSystemAccess(enabled = true) {
-  return useQuery({
-    queryKey: ["system", "access"],
-    queryFn: () => adminRpc<SystemAccess>("get_my_system_access"),
-    enabled,
-    staleTime: 30_000,
-  });
+  return useQuery(
+    systemAccessOptions(() => adminRpc<SystemAccess>("get_my_system_access"), enabled),
+  );
 }
 
 export function useSystemModules(enabled = true) {
   return useQuery({
     queryKey: ["admin", "modules"],
     queryFn: async () => {
-      const { data, error } = await adminApi.from("system_modules").select("*").order("position", { ascending: true }).limit(50);
+      const { data, error } = await adminApi
+        .from("system_modules")
+        .select("*")
+        .order("position", { ascending: true })
+        .limit(50);
       if (error) throw error;
       return data as SystemModule[];
     },
@@ -127,11 +140,14 @@ export function useAuditLogs(enabled = true) {
   return useQuery({
     queryKey: ["admin", "audit"],
     queryFn: async () => {
-      const { data, error } = await adminApi.from("admin_audit_logs").select("*").order("created_at", { ascending: false }).limit(50);
+      const { data, error } = await adminApi
+        .from("admin_audit_logs")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(50);
       if (error) throw error;
       return data as AuditLog[];
     },
     enabled,
   });
 }
-
