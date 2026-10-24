@@ -15,6 +15,8 @@ export const getRouter = () => {
   });
 
   setupQueryPersistence(queryClient);
+  installChunkReloadRecovery();
+
 
 
   const router = createRouter({
