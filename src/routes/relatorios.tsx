@@ -1,3 +1,4 @@
+import { AppComparison } from "@/components/AppComparison";
 import { createFileRoute } from "@tanstack/react-router";
 import { Suspense, lazy, useMemo, useState } from "react";
 
@@ -21,7 +22,6 @@ import {
   paymentMethodLabel,
 } from "@/lib/format";
 import {
-  byApp,
   byMonth,
   byMonthRecordedCosts,
   costPerKm,
@@ -115,10 +115,6 @@ function Relatorios() {
   const operationalMonths = useMemo(
     () => byMonth(deliveriesData, expensesData, cpk + maintenanceReserve.costPerKm).slice(-12),
     [deliveriesData, expensesData, cpk, maintenanceReserve.costPerKm],
-  );
-  const ranking = useMemo(
-    () => byApp(perDeliveries, cpk + maintenanceReserve.costPerKm),
-    [perDeliveries, cpk, maintenanceReserve.costPerKm],
   );
   const categories = useMemo(() => costsByCategory(perExpenses), [perExpenses]);
   const totalCost = total.fuelCost + total.otherCost + total.maintenanceCost;
@@ -606,39 +602,7 @@ function Relatorios() {
           )}
         </SectionCard>
 
-        <SectionCard title="Desempenho por aplicativo" description={`Período: ${period.label}`}>
-          {ranking.length ? (
-            <ul className="space-y-2">
-              {ranking.map((r, index) => (
-                <li key={r.app} className="rounded-lg border border-border/70 p-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold">
-                        <span className="mr-2 text-xs text-muted-foreground">#{index + 1}</span>
-                        {r.app}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {r.count} entregas · {num(r.km)} km · {brl(r.perKm)}/km
-                      </p>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <span className="block text-sm font-semibold tabular-nums text-success">
-                        {brl(r.profit)}
-                      </span>
-                      <span className="text-xs text-muted-foreground">lucro estimado</span>
-                    </div>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between border-t border-border/60 pt-2 text-xs">
-                    <span className="text-muted-foreground">Receita</span>
-                    <span className="font-medium tabular-nums">{brl(r.revenue)}</span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <EmptyState>Nenhuma entrega registrada.</EmptyState>
-          )}
-        </SectionCard>
+        <AppComparison detailed deliveries={perDeliveries} costPerKm={cpk + maintenanceReserve.costPerKm} periodLabel={`Período: ${period.label}`} />
       </div>
     </AppShell>
   );
