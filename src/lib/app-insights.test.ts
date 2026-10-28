@@ -23,5 +23,5 @@ test("separa receita, participação e lucro por aplicativo", () => {
   assert.equal(ifood.revenueShare, 0.6);
   assert.equal(uber.perKm, 20);
   assert.equal(uber.payments.credito, 40);
-  assert.equal(rows[0].app, "iFood");
+  assert.equal(rows[0]?.app, "iFood");
 });

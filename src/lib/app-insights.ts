@@ -51,7 +51,7 @@ export function appInsights(deliveries: Delivery[], costPerKm: number): AppInsig
     cur.idleMin += Number(d.idle_min) || 0;
     if (d.payment_method in cur.payments) cur.payments[d.payment_method] += revenue;
     cur.days.add(`${at.getFullYear()}-${at.getMonth()}-${at.getDate()}`);
-    cur.hours[at.getHours()] += revenue;
+    cur.hours[at.getHours()] = (cur.hours[at.getHours()] ?? 0) + revenue;
     totalRevenue += revenue;
     map.set(app, cur);
   }
@@ -61,7 +61,7 @@ export function appInsights(deliveries: Delivery[], costPerKm: number): AppInsig
       const cost = r.km * costPerKm;
       let bestHour: number | null = null;
       hours.forEach((v, h) => {
-        if (v > 0 && (bestHour === null || v > hours[bestHour])) bestHour = h;
+        if (v > 0 && (bestHour === null || v > (hours[bestHour] ?? 0))) bestHour = h;
       });
       return {
         ...r,
