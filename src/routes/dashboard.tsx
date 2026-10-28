@@ -7,6 +7,7 @@ import { AppShell } from "@/components/AppShell";
 import { OperationTimeStats } from "@/components/OperationTimeStats";
 import { useOperationTime } from "@/lib/use-operation-time";
 import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
+import { AppComparison } from "@/components/AppComparison";
 import { SmartAlerts } from "@/components/SmartAlerts";
 import { Button } from "@/components/ui/button";
 import {
@@ -320,28 +321,7 @@ function Dashboard() {
           )}
         </SectionCard>
 
-        <SectionCard title="Ranking de aplicativos" description="Ordenado por lucro no período">
-          {ranking.length ? (
-            <ul className="space-y-3">
-              {ranking.map((r, i) => (
-                <li key={r.app} className="flex items-center gap-3">
-                  <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-accent text-xs font-semibold text-accent-foreground">
-                    {i + 1}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{r.app}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {r.count} entregas · {brl(r.perKm)}/km
-                    </p>
-                  </div>
-                  <span className="text-sm font-semibold tabular-nums">{brl(r.profit)}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <EmptyState>Sem entregas neste período.</EmptyState>
-          )}
-        </SectionCard>
+        <AppComparison deliveries={periodDeliveries} costPerKm={operationalCpk} periodLabel={range.label} />
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
