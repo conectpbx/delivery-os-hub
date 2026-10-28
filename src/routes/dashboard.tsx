@@ -23,7 +23,6 @@ import { useGoalCelebrations } from "@/lib/celebrate";
 import { useSmartAlerts } from "@/lib/alerts";
 import {
   adaptiveDailyRevenueGoal,
-  byApp,
   costPerKm,
   endOfDay,
   heatmap,
@@ -134,10 +133,6 @@ function Dashboard() {
     [periodDeliveries, expensesData, cpk, maintenanceReserve, from, to],
   );
   const operationalCpk = cpk + maintenanceReserve.costPerKm;
-  const ranking = useMemo(
-    () => byApp(periodDeliveries, operationalCpk),
-    [periodDeliveries, operationalCpk],
-  );
   const { chainKm, km: periodKm } = useChainedDistance(periodDeliveries);
   const { grid, max } = useMemo(() => heatmap(deliveriesData), [deliveriesData]);
 

@@ -22,7 +22,6 @@ import {
   paymentMethodLabel,
 } from "@/lib/format";
 import {
-  byApp,
   byMonth,
   byMonthRecordedCosts,
   costPerKm,
@@ -116,10 +115,6 @@ function Relatorios() {
   const operationalMonths = useMemo(
     () => byMonth(deliveriesData, expensesData, cpk + maintenanceReserve.costPerKm).slice(-12),
     [deliveriesData, expensesData, cpk, maintenanceReserve.costPerKm],
-  );
-  const ranking = useMemo(
-    () => byApp(perDeliveries, cpk + maintenanceReserve.costPerKm),
-    [perDeliveries, cpk, maintenanceReserve.costPerKm],
   );
   const categories = useMemo(() => costsByCategory(perExpenses), [perExpenses]);
   const totalCost = total.fuelCost + total.otherCost + total.maintenanceCost;
