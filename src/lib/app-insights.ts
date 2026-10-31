@@ -1,5 +1,5 @@
 import type { Delivery } from "@/lib/data";
-import { deliveryMinutes } from "@/lib/operation-time";
+import { operationTime, type WorkJourney } from "@/lib/operation-time";
 
 export type AppInsight = {
   app: string;
@@ -23,8 +23,25 @@ export type AppInsight = {
 };
 
 /** Detailed per-app comparison for users working with more than one delivery app. */
-export function appInsights(deliveries: Delivery[], costPerKm: number): AppInsight[] {
-  type Acc = Omit<AppInsight, "cost" | "profit" | "perKm" | "perHour" | "ticket" | "revenueShare" | "countShare" | "activeDays" | "bestHour"> & {
+export type AppInsightTime = { from: Date; to: Date; journeys: WorkJourney[]; now: Date };
+
+export function appInsights(
+  deliveries: Delivery[],
+  costPerKm: number,
+  time?: AppInsightTime,
+): AppInsight[] {
+  type Acc = Omit<
+    AppInsight,
+    | "cost"
+    | "profit"
+    | "perKm"
+    | "perHour"
+    | "ticket"
+    | "revenueShare"
+    | "countShare"
+    | "activeDays"
+    | "bestHour"
+  > & {
     days: Set<string>;
     hours: number[];
   };
@@ -35,8 +52,17 @@ export function appInsights(deliveries: Delivery[], costPerKm: number): AppInsig
     const cur =
       map.get(app) ??
       ({
-        app, count: 0, revenue: 0, earnings: 0, tips: 0, km: 0, minutes: 0, idleMin: 0,
-        payments: { credito: 0, pix: 0, dinheiro: 0 }, days: new Set(), hours: new Array(24).fill(0),
+        app,
+        count: 0,
+        revenue: 0,
+        earnings: 0,
+        tips: 0,
+        km: 0,
+        minutes: 0,
+        idleMin: 0,
+        payments: { credito: 0, pix: 0, dinheiro: 0 },
+        days: new Set(),
+        hours: new Array(24).fill(0),
       } as Acc);
     const earnings = Number(d.earnings) || 0;
     const tip = Number(d.tip) || 0;
@@ -47,13 +73,26 @@ export function appInsights(deliveries: Delivery[], costPerKm: number): AppInsig
     cur.tips += tip;
     cur.revenue += revenue;
     cur.km += Number(d.distance_km) || 0;
-    cur.minutes += deliveryMinutes(d);
+
     cur.idleMin += Number(d.idle_min) || 0;
     if (d.payment_method in cur.payments) cur.payments[d.payment_method] += revenue;
     cur.days.add(`${at.getFullYear()}-${at.getMonth()}-${at.getDate()}`);
     cur.hours[at.getHours()] = (cur.hours[at.getHours()] ?? 0) + revenue;
     totalRevenue += revenue;
     map.set(app, cur);
+  }
+  // Merge overlapping delivery intervals instead of counting simultaneous routes twice.
+  for (const [app, row] of map) {
+    const appDeliveries = deliveries.filter(
+      (d) => (d.app_name?.trim() || "Sem aplicativo") === app,
+    );
+    row.minutes = operationTime(
+      appDeliveries,
+      time?.journeys ?? [],
+      time?.from ?? new Date(0),
+      time?.to ?? new Date(8640000000000000),
+      time?.now,
+    ).deliveryMin;
   }
   const total = deliveries.length;
   return [...map.values()]

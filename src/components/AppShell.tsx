@@ -1,3 +1,4 @@
+import { PwaInstall } from "@/components/PwaInstall";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard,
@@ -169,6 +170,7 @@ export function AppShell({
           ) : null}
         </header>
         <main className="mx-auto w-full max-w-6xl px-4 pb-24 pt-5 sm:px-6 lg:pb-10">
+          <PwaInstall />
           {moduleDisabled ? (
             <div className="surface-card mx-auto mt-12 max-w-lg p-8 text-center">
               <ShieldCheck className="mx-auto size-10 text-muted-foreground" />

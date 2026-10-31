@@ -1,3 +1,4 @@
+import { BrandSpinner } from "@/components/BrandLoader";
 import { createFileRoute } from "@tanstack/react-router";
 import { Suspense, lazy, useMemo, useState } from "react";
 
@@ -7,6 +8,7 @@ import { AppShell } from "@/components/AppShell";
 import { OperationTimeStats } from "@/components/OperationTimeStats";
 import { useOperationTime } from "@/lib/use-operation-time";
 import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
+import { AppPerformance } from "@/components/AppPerformance";
 import { AppComparison } from "@/components/AppComparison";
 import { SmartAlerts } from "@/components/SmartAlerts";
 import { Button } from "@/components/ui/button";
@@ -134,7 +136,7 @@ function Dashboard() {
   );
   const operationalCpk = cpk + maintenanceReserve.costPerKm;
   const { chainKm, km: periodKm } = useChainedDistance(periodDeliveries);
-  const { grid, max } = useMemo(() => heatmap(deliveriesData), [deliveriesData]);
+  const { grid, max } = useMemo(() => heatmap(periodDeliveries), [periodDeliveries]);
 
   const series = useMemo(() => {
     const deliveriesByDay = new Map<string, typeof deliveriesData>();
@@ -294,6 +296,13 @@ function Dashboard() {
         />
       </div>
 
+      <AppPerformance
+        deliveries={periodDeliveries}
+        costPerKm={operationalCpk}
+        periodLabel={range.label}
+        time={{ from: from, to, journeys: time.records, now: time.now }}
+      />
+
       <OperationTimeStats from={from} to={to} />
       <div className="mt-4">
         <SmartAlerts alerts={smartAlerts} />
@@ -307,7 +316,14 @@ function Dashboard() {
         >
           {series.some((d) => d.receita > 0) ? (
             <div className="h-72 sm:h-80 lg:h-72">
-              <Suspense fallback={<div className="size-full animate-pulse rounded-md bg-muted" />}>
+              <Suspense
+                fallback={
+                  <div className="flex size-full flex-col items-center justify-center gap-3">
+                    <BrandSpinner vehicle={profile.data?.vehicle} />
+                    <p className="text-sm text-muted-foreground">Carregando gráfico…</p>
+                  </div>
+                }
+              >
                 <RevenueAreaChart data={series} />
               </Suspense>
             </div>
@@ -316,13 +332,18 @@ function Dashboard() {
           )}
         </SectionCard>
 
-        <AppComparison deliveries={periodDeliveries} costPerKm={operationalCpk} periodLabel={range.label} />
+        <AppComparison
+          deliveries={periodDeliveries}
+          costPerKm={operationalCpk}
+          periodLabel={range.label}
+          time={{ from, to, journeys: time.records, now: time.now }}
+        />
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <SectionCard
           title="Mapa de calor de entregas"
-          description="Ganhos por dia da semana e hora (histórico completo)"
+          description="Ganhos por dia da semana e hora no período selecionado"
         >
           <div className="overflow-x-auto">
             <div className="min-w-[520px] space-y-1">
@@ -350,10 +371,13 @@ function Dashboard() {
           </div>
         </SectionCard>
 
-        <SectionCard title="Histórico recente" description="Últimas entregas registradas">
-          {deliveriesData.length ? (
+        <SectionCard
+          title="Histórico recente"
+          description="Últimas entregas do período selecionado"
+        >
+          {periodDeliveries.length ? (
             <ul className="divide-y divide-border">
-              {deliveriesData.slice(0, 8).map((d) => (
+              {periodDeliveries.slice(0, 8).map((d) => (
                 <li key={d.id} className="flex items-center justify-between gap-3 py-2.5">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{d.app_name}</p>

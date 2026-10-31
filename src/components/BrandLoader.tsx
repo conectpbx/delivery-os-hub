@@ -1,4 +1,4 @@
-import { Bike, Car, Footprints, Motorbike, Scooter, Truck, type LucideIcon } from "lucide-react";
+import { Bike, Car, Footprints, Motorbike, Scooter, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 function normalizeVehicle(vehicle?: string | null) {
@@ -19,7 +19,7 @@ function vehicleLoadingIcon(vehicle?: string | null): LucideIcon {
   if (/carro|automovel|veiculo leve/.test(normalizedVehicle)) return Car;
   if (/a pe|pedestre|caminhando/.test(normalizedVehicle)) return Footprints;
 
-  return Truck;
+  return Motorbike;
 }
 
 /** Spinner com a identidade do Delivery OS (anel em gradiente + ícone). */
@@ -39,7 +39,7 @@ export function BrandSpinner({
       className={cn("relative inline-flex size-12 items-center justify-center", className)}
     >
       <span
-        className="absolute inset-0 animate-spin rounded-full brand-gradient"
+        className="absolute inset-0 animate-spin motion-reduce:animate-none rounded-full brand-gradient"
         style={{
           maskImage: "radial-gradient(farthest-side, transparent 62%, #000 64%)",
           WebkitMaskImage: "radial-gradient(farthest-side, transparent 62%, #000 64%)",
@@ -47,7 +47,7 @@ export function BrandSpinner({
         }}
       />
       <span className="absolute inset-0 rounded-full border-2 border-border/60" />
-      <VehicleIcon className="size-5 animate-pulse text-primary" />
+      <VehicleIcon className="size-5 animate-pulse motion-reduce:animate-none text-primary" />
     </span>
   );
 }

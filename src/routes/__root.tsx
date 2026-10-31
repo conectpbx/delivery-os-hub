@@ -14,7 +14,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
 import { OfflineSync } from "@/lib/offline-sync";
-import { registerServiceWorker } from "@/lib/pwa";
+import { registerServiceWorker, captureInstallPrompt } from "@/lib/pwa";
 
 function NotFoundComponent() {
   return (
@@ -130,7 +130,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="pt-BR">
       <head>
         <HeadContent />
       </head>
@@ -146,7 +146,9 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   useEffect(() => {
+    const stopCapture = captureInstallPrompt();
     void registerServiceWorker();
+    return stopCapture;
   }, []);
 
   return (

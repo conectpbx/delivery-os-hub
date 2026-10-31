@@ -3,7 +3,7 @@ import { Download, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState, SectionCard } from "@/components/ui-kit";
 import type { Delivery } from "@/lib/data";
-import { appInsights, type AppInsight } from "@/lib/app-insights";
+import { appInsights, type AppInsight, type AppInsightTime } from "@/lib/app-insights";
 import { brl, downloadCsv, minutesLabel, num } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -31,33 +31,89 @@ export function AppComparison({
   costPerKm,
   periodLabel,
   detailed = false,
+  time,
 }: {
   deliveries: Delivery[];
   costPerKm: number;
   periodLabel: string;
   detailed?: boolean;
+  time?: AppInsightTime;
 }) {
   const [sort, setSort] = useState<SortKey>("profit");
-  const rows = useMemo(() => appInsights(deliveries, costPerKm), [deliveries, costPerKm]);
+  const rows = useMemo(
+    () => appInsights(deliveries, costPerKm, time),
+    [deliveries, costPerKm, time],
+  );
   const sorted = useMemo(() => [...rows].sort((a, b) => b[sort] - a[sort]), [rows, sort]);
   const multi = rows.length > 1;
   const leaders = multi
     ? [
         { label: "Mais lucro", r: leader(rows, "profit"), v: (r: AppInsight) => brl(r.profit) },
-        { label: "Melhor R$/hora", r: leader(rows.filter((r) => r.minutes > 0), "perHour"), v: (r: AppInsight) => brl(r.perHour) },
-        { label: "Melhor R$/km", r: leader(rows.filter((r) => r.km > 0), "perKm"), v: (r: AppInsight) => brl(r.perKm) },
+        {
+          label: "Melhor R$/hora",
+          r: leader(
+            rows.filter((r) => r.minutes > 0),
+            "perHour",
+          ),
+          v: (r: AppInsight) => brl(r.perHour),
+        },
+        {
+          label: "Melhor R$/km",
+          r: leader(
+            rows.filter((r) => r.km > 0),
+            "perKm",
+          ),
+          v: (r: AppInsight) => brl(r.perKm),
+        },
         { label: "Maior ticket", r: leader(rows, "ticket"), v: (r: AppInsight) => brl(r.ticket) },
       ]
     : [];
 
   const exportCsv = () =>
     downloadCsv("aplicativos-delivery-os.csv", [
-      ["Aplicativo", "Entregas", "% entregas", "Ganhos", "Gorjetas", "Receita", "% receita", "Km", "Custo est.", "Lucro", "R$/km", "R$/hora", "Ticket médio", "Tempo em entregas (min)", "Tempo parado (min)", "Dias ativos", "Melhor horário", "Crédito", "Pix", "Dinheiro"],
+      [
+        "Aplicativo",
+        "Entregas",
+        "% entregas",
+        "Ganhos",
+        "Gorjetas",
+        "Receita",
+        "% receita",
+        "Km",
+        "Custo est.",
+        "Lucro",
+        "R$/km",
+        "R$/hora",
+        "Ticket médio",
+        "Tempo em entregas (min)",
+        "Tempo parado (min)",
+        "Dias ativos",
+        "Melhor horário",
+        "Crédito",
+        "Pix",
+        "Dinheiro",
+      ],
       ...sorted.map((r) => [
-        r.app, r.count, pct(r.countShare), r.earnings.toFixed(2), r.tips.toFixed(2), r.revenue.toFixed(2), pct(r.revenueShare),
-        r.km.toFixed(1), r.cost.toFixed(2), r.profit.toFixed(2), r.perKm.toFixed(2), r.perHour.toFixed(2), r.ticket.toFixed(2),
-        Math.round(r.minutes), Math.round(r.idleMin), r.activeDays, r.bestHour === null ? "" : `${r.bestHour}h`,
-        r.payments.credito.toFixed(2), r.payments.pix.toFixed(2), r.payments.dinheiro.toFixed(2),
+        r.app,
+        r.count,
+        pct(r.countShare),
+        r.earnings.toFixed(2),
+        r.tips.toFixed(2),
+        r.revenue.toFixed(2),
+        pct(r.revenueShare),
+        r.km.toFixed(1),
+        r.cost.toFixed(2),
+        r.profit.toFixed(2),
+        r.perKm.toFixed(2),
+        r.perHour.toFixed(2),
+        r.ticket.toFixed(2),
+        Math.round(r.minutes),
+        Math.round(r.idleMin),
+        r.activeDays,
+        r.bestHour === null ? "" : `${r.bestHour}h`,
+        r.payments.credito.toFixed(2),
+        r.payments.pix.toFixed(2),
+        r.payments.dinheiro.toFixed(2),
       ]),
     ]);
 
@@ -69,7 +125,13 @@ export function AppComparison({
         rows.length ? (
           <div className="flex flex-wrap gap-1">
             {SORTS.slice(0, detailed ? SORTS.length : 3).map((s) => (
-              <Button key={s.key} size="sm" variant={sort === s.key ? "default" : "outline"} className="h-7 px-2 text-xs" onClick={() => setSort(s.key)}>
+              <Button
+                key={s.key}
+                size="sm"
+                variant={sort === s.key ? "default" : "outline"}
+                className="h-7 px-2 text-xs"
+                onClick={() => setSort(s.key)}
+              >
                 {s.label}
               </Button>
             ))}
@@ -82,6 +144,10 @@ export function AppComparison({
         ) : null
       }
     >
+      <p className="mb-3 text-xs text-muted-foreground">
+        Resultado após custo estimado por km, sem rateio de despesas gerais. R$/hora considera o
+        tempo em entregas, com pausas descontadas quando registradas.
+      </p>
       {!rows.length ? (
         <EmptyState>Sem entregas neste período.</EmptyState>
       ) : (
@@ -92,7 +158,15 @@ export function AppComparison({
                 <p className="mb-1 text-xs text-muted-foreground">Participação na receita</p>
                 <div className="flex h-3 overflow-hidden rounded-full bg-muted">
                   {rows.map((r, i) => (
-                    <div key={r.app} title={`${r.app}: ${pct(r.revenueShare)}`} style={{ width: `${r.revenueShare * 100}%`, opacity: 1 - i * (0.6 / rows.length) }} className="bg-primary first:rounded-l-full last:rounded-r-full border-r border-background last:border-r-0" />
+                    <div
+                      key={r.app}
+                      title={`${r.app}: ${pct(r.revenueShare)}`}
+                      style={{
+                        width: `${r.revenueShare * 100}%`,
+                        opacity: 1 - i * (0.6 / rows.length),
+                      }}
+                      className="bg-primary first:rounded-l-full last:rounded-r-full border-r border-background last:border-r-0"
+                    />
                   ))}
                 </div>
               </div>
@@ -101,7 +175,10 @@ export function AppComparison({
                   {leaders.map((l) =>
                     l.r ? (
                       <div key={l.label} className="rounded-lg border border-border/70 p-2">
-                        <p className="flex items-center gap-1 text-[11px] text-muted-foreground"><Trophy className="size-3 text-primary" />{l.label}</p>
+                        <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                          <Trophy className="size-3 text-primary" />
+                          {l.label}
+                        </p>
                         <p className="truncate text-sm font-semibold">{l.r.app}</p>
                         <p className="text-xs tabular-nums text-muted-foreground">{l.v(l.r)}</p>
                       </div>
@@ -116,16 +193,35 @@ export function AppComparison({
             {sorted.map((r, i) => (
               <li key={r.app} className="rounded-lg border border-border/70 p-3">
                 <div className="flex items-start gap-3">
-                  <span className={cn("grid size-7 shrink-0 place-items-center rounded-lg text-xs font-semibold", i === 0 ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground")}>{i + 1}</span>
+                  <span
+                    className={cn(
+                      "grid size-7 shrink-0 place-items-center rounded-lg text-xs font-semibold",
+                      i === 0
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-accent text-accent-foreground",
+                    )}
+                  >
+                    {i + 1}
+                  </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold">{r.app}</p>
                     <p className="text-xs text-muted-foreground">
-                      {r.count} entregas{multi ? ` (${pct(r.countShare)})` : ""} · {num(r.km)} km · {brl(r.perKm)}/km
+                      {r.count} entregas{multi ? ` (${pct(r.countShare)})` : ""} · {num(r.km)} km ·{" "}
+                      {brl(r.perKm)}/km
                     </p>
                   </div>
                   <div className="shrink-0 text-right">
-                    <span className={cn("block text-sm font-semibold tabular-nums", r.profit >= 0 ? "text-success" : "text-destructive")}>{brl(r.profit)}</span>
-                    <span className="text-[11px] text-muted-foreground">lucro{multi ? ` · ${pct(r.revenueShare)} receita` : ""}</span>
+                    <span
+                      className={cn(
+                        "block text-sm font-semibold tabular-nums",
+                        r.profit >= 0 ? "text-success" : "text-destructive",
+                      )}
+                    >
+                      {brl(r.profit)}
+                    </span>
+                    <span className="text-[11px] text-muted-foreground">
+                      resultado estimado{multi ? ` · ${pct(r.revenueShare)} receita` : ""}
+                    </span>
                   </div>
                 </div>
                 <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 border-t border-border/60 pt-2 text-xs sm:grid-cols-3">
@@ -139,7 +235,10 @@ export function AppComparison({
                       <Item k="Em entregas" v={minutesLabel(r.minutes)} />
                       <Item k="Tempo parado" v={minutesLabel(r.idleMin)} />
                       <Item k="Dias ativos" v={String(r.activeDays)} />
-                      <Item k="Melhor horário" v={r.bestHour === null ? "—" : `${r.bestHour}h–${r.bestHour + 1}h`} />
+                      <Item
+                        k="Melhor horário"
+                        v={r.bestHour === null ? "—" : `${r.bestHour}h–${r.bestHour + 1}h`}
+                      />
                       <Item k="Pix" v={brl(r.payments.pix)} />
                       <Item k="Crédito" v={brl(r.payments.credito)} />
                       <Item k="Dinheiro" v={brl(r.payments.dinheiro)} />

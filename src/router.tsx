@@ -1,3 +1,4 @@
+import { RouteLoading } from "./components/RouteLoading";
 import { QueryClient } from "@tanstack/react-query";
 import { createRouter } from "@tanstack/react-router";
 import { routeTree } from "./routeTree.gen";
@@ -18,12 +19,13 @@ export const getRouter = () => {
   setupQueryPersistence(queryClient);
   installChunkReloadRecovery();
 
-
-
   const router = createRouter({
     routeTree,
     context: { queryClient },
     scrollRestoration: true,
+    defaultPendingComponent: RouteLoading,
+    defaultPendingMs: 250,
+    defaultPendingMinMs: 300,
     defaultPreloadStaleTime: 0,
   });
 

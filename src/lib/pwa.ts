@@ -54,3 +54,35 @@ export async function registerServiceWorker() {
     console.error("[pwa] service worker registration failed", error);
   }
 }
+
+export type AppInstallPrompt = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+};
+
+let pendingInstallPrompt: AppInstallPrompt | null = null;
+export const getInstallPrompt = () => pendingInstallPrompt;
+
+/** Capture before authentication finishes so the install action stays available in the shell. */
+export function captureInstallPrompt() {
+  const capture = (event: Event) => {
+    event.preventDefault();
+    pendingInstallPrompt = event as AppInstallPrompt;
+    window.dispatchEvent(new Event("deliveryos:install-available"));
+  };
+  const clear = () => {
+    pendingInstallPrompt = null;
+  };
+  window.addEventListener("beforeinstallprompt", capture);
+  window.addEventListener("appinstalled", clear);
+  return () => {
+    window.removeEventListener("beforeinstallprompt", capture);
+    window.removeEventListener("appinstalled", clear);
+  };
+}
+
+export function consumeInstallPrompt() {
+  const event = pendingInstallPrompt;
+  pendingInstallPrompt = null;
+  return event;
+}

@@ -1,3 +1,4 @@
+import { MapsNavigationLink } from "@/components/MapsNavigationLink";
 import { createFileRoute } from "@tanstack/react-router";
 import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -985,9 +986,9 @@ function Entregas() {
                     </Button>
                     {formNav ? (
                       <Button asChild size="sm" variant="outline">
-                        <a href={formNav} target="_blank" rel="noreferrer">
-                          <Navigation className="mr-1 size-4" /> Navegar
-                        </a>
+                        <MapsNavigationLink href={formNav}>
+                          <Navigation className="mr-1 size-4" /> Abrir no Google Maps
+                        </MapsNavigationLink>
                       </Button>
                     ) : null}
                   </div>
@@ -1107,10 +1108,10 @@ function Entregas() {
                           ) : null}
                         </div>
                         {nav ? (
-                          <Button asChild variant="ghost" size="icon" aria-label="Navegar">
-                            <a target="_blank" rel="noreferrer" href={nav}>
+                          <Button asChild variant="ghost" size="icon" aria-label="Abrir no Google Maps">
+                            <MapsNavigationLink href={nav}>
                               <Navigation className="size-4" />
-                            </a>
+                            </MapsNavigationLink>
                           </Button>
                         ) : null}
                         <Button

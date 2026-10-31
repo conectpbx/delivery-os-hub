@@ -1,3 +1,5 @@
+import { BrandSpinner } from "@/components/BrandLoader";
+import { AppPerformance } from "@/components/AppPerformance";
 import { AppComparison } from "@/components/AppComparison";
 import { createFileRoute } from "@tanstack/react-router";
 import { Suspense, lazy, useMemo, useState } from "react";
@@ -20,6 +22,7 @@ import {
   monthLabel,
   num,
   paymentMethodLabel,
+  localDateValue,
 } from "@/lib/format";
 import {
   byMonth,
@@ -120,7 +123,8 @@ function Relatorios() {
   const totalCost = total.fuelCost + total.otherCost + total.maintenanceCost;
   const totalMinutes = time.totalMin;
   const activeDays = useMemo(
-    () => new Set(perDeliveries.map((delivery) => delivery.occurred_at.slice(0, 10))).size,
+    () =>
+      new Set(perDeliveries.map((delivery) => localDateValue(new Date(delivery.occurred_at)))).size,
     [perDeliveries],
   );
   const breakdown = useMemo(
@@ -311,6 +315,13 @@ function Relatorios() {
       }
     >
       <PeriodSummary selection={period} />
+      <AppPerformance
+        detailed
+        deliveries={perDeliveries}
+        costPerKm={cpk + maintenanceReserve.costPerKm}
+        periodLabel={period.label}
+        time={{ from: period.fromDate, to: period.toDate, journeys: time.records, now: time.now }}
+      />
       <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Receita acumulada"
@@ -367,7 +378,12 @@ function Relatorios() {
       </div>
 
       <OperationTimeStats from={period.fromDate} to={period.toDate} />
-      <JourneyPauseReport journeys={time.records} from={period.fromDate} to={period.toDate} now={time.now} />
+      <JourneyPauseReport
+        journeys={time.records}
+        from={period.fromDate}
+        to={period.toDate}
+        now={time.now}
+      />
       <SectionCard
         className="mt-4"
         title="Detalhamento da operação"
@@ -475,7 +491,9 @@ function Relatorios() {
                       <td className="px-2 py-3 text-right tabular-nums">
                         {minutesLabel(row.unassignedMin)}
                       </td>
-                      <td className="px-2 py-3 text-right tabular-nums">{minutesLabel(row.pauseMin)}</td>
+                      <td className="px-2 py-3 text-right tabular-nums">
+                        {minutesLabel(row.pauseMin)}
+                      </td>
                       <td className="px-2 py-3 text-right tabular-nums">
                         <span>{minutesLabel(row.totalMin)}</span>
                       </td>
@@ -559,7 +577,14 @@ function Relatorios() {
       >
         {chart.length ? (
           <div className="h-80 sm:h-96">
-            <Suspense fallback={<div className="size-full animate-pulse rounded-md bg-muted" />}>
+            <Suspense
+              fallback={
+                <div className="flex size-full flex-col items-center justify-center gap-3">
+                  <BrandSpinner vehicle={profile.data?.vehicle} />
+                  <p className="text-sm text-muted-foreground">Carregando gráfico…</p>
+                </div>
+              }
+            >
               <MonthsBarChart data={chart} />
             </Suspense>
           </div>
@@ -602,7 +627,13 @@ function Relatorios() {
           )}
         </SectionCard>
 
-        <AppComparison detailed deliveries={perDeliveries} costPerKm={cpk + maintenanceReserve.costPerKm} periodLabel={`Período: ${period.label}`} />
+        <AppComparison
+          detailed
+          deliveries={perDeliveries}
+          costPerKm={cpk + maintenanceReserve.costPerKm}
+          periodLabel={`Período: ${period.label}`}
+          time={{ from: period.fromDate, to: period.toDate, journeys: time.records, now: time.now }}
+        />
       </div>
     </AppShell>
   );
