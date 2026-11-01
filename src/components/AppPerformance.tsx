@@ -1,3 +1,4 @@
+import { receivedBonuses, normalizedApp, type AppChallenge } from "@/lib/app-challenges";
 import { useMemo, useState } from "react";
 import type { Delivery } from "@/lib/data";
 import { appInsights, type AppInsightTime } from "@/lib/app-insights";
@@ -22,18 +23,27 @@ export function AppPerformance({
   periodLabel,
   detailed = false,
   time,
+  bonuses = [],
 }: {
   deliveries: Delivery[];
   costPerKm: number;
   periodLabel: string;
   detailed?: boolean;
   time: AppInsightTime;
+  bonuses?: AppChallenge[];
 }) {
   const [selected, setSelected] = useState("");
   const [page, setPage] = useState(0);
+  const paidBonuses = useMemo(
+    () => receivedBonuses(bonuses, time.from, time.to),
+    [bonuses, time.from, time.to],
+  );
   const apps = useMemo(
-    () => [...new Set(deliveries.map(appName))].sort((a, b) => a.localeCompare(b)),
-    [deliveries],
+    () =>
+      [...new Set([...deliveries.map(appName), ...paidBonuses.map((b) => b.app_name)])].sort(
+        (a, b) => a.localeCompare(b),
+      ),
+    [deliveries, paidBonuses],
   );
   // A period change must never leave an invisible application filter active.
   const active = apps.includes(selected) ? selected : "";
@@ -48,6 +58,10 @@ export function AppPerformance({
     () => appInsights(filtered, costPerKm, time),
     [filtered, costPerKm, time],
   );
+  const selectedBonuses = paidBonuses.filter(
+    (b) => !active || normalizedApp(b.app_name) === normalizedApp(active),
+  );
+  const bonusRevenue = selectedBonuses.reduce((n, b) => n + Number(b.reward), 0);
   const revenue = summaries.reduce((v, r) => v + r.revenue, 0);
   const tips = summaries.reduce((v, r) => v + r.tips, 0);
   const cost = summaries.reduce((v, r) => v + r.cost, 0);
@@ -73,12 +87,13 @@ export function AppPerformance({
   const exportSelection = () =>
     downloadCsv("visao-aplicativo-delivery-os.csv", [
       [
+        "Tipo",
         "Período",
         "Data",
         "Aplicativo",
         "Recebimento",
         "Ganhos",
-        "Gorjeta",
+        "Gratificação do cliente",
         "Receita",
         "Km",
         "Custo por km estimado",
@@ -89,6 +104,7 @@ export function AppPerformance({
         const income = Number(d.earnings) + Number(d.tip);
         const estimated = Number(d.distance_km) * costPerKm;
         return [
+          "Entrega",
           periodLabel,
           dateTimeLabel(d.occurred_at),
           appName(d),
@@ -102,6 +118,20 @@ export function AppPerformance({
           d.dropoff_address ?? "",
         ];
       }),
+      ...selectedBonuses.map((b) => [
+        "Bonificação",
+        periodLabel,
+        dateTimeLabel(b.received_at!),
+        b.app_name,
+        "",
+        0,
+        0,
+        Number(b.reward),
+        0,
+        0,
+        Number(b.reward),
+        b.title,
+      ]),
     ]);
   return (
     <SectionCard
@@ -133,7 +163,7 @@ export function AppPerformance({
               className="no-print"
               variant="outline"
               size="sm"
-              disabled={!filtered.length}
+              disabled={!filtered.length && !selectedBonuses.length}
               onClick={exportSelection}
             >
               Exportar seleção (Excel)
@@ -142,19 +172,21 @@ export function AppPerformance({
         </div>
       }
     >
-      {!filtered.length ? (
+      {!filtered.length && !selectedBonuses.length ? (
         <EmptyState>Sem entregas no período selecionado.</EmptyState>
       ) : (
         <>
           <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[
-              ["Receita", brl(revenue)],
-              ["Resultado estimado", brl(revenue - cost)],
+              ["Receita de entregas", brl(revenue)],
+              ["Bonificações recebidas", brl(bonusRevenue)],
+              ["Receita total", brl(revenue + bonusRevenue)],
+              ["Resultado estimado", brl(revenue + bonusRevenue - cost)],
               ["Entregas", String(filtered.length)],
               ["Quilometragem", `${num(km)} km`],
-              ["Gorjetas", brl(tips)],
+              ["Gratificações do cliente", brl(tips)],
               ["Custo estimado por km", brl(cost)],
-              ["Ticket médio", brl(revenue / filtered.length)],
+              ["Ticket médio de entregas", filtered.length ? brl(revenue / filtered.length) : "—"],
               ["Receita por km", km > 0 ? brl(revenue / km) : "—"],
             ].map(([label, value]) => (
               <div key={label} className="rounded-lg bg-muted/50 p-3">
@@ -164,7 +196,7 @@ export function AppPerformance({
             ))}
           </dl>
           {detailed && (
-            <dl className="mt-3 grid grid-cols-3 gap-2">
+            <dl className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
               {(
                 [
                   ["Pix", "pix"],
@@ -182,14 +214,30 @@ export function AppPerformance({
             </dl>
           )}
           <p className="mt-3 text-xs text-muted-foreground">
-            Resultado estimado = receita com gorjetas menos combustível e reserva de manutenção por
-            km. Despesas gerais, manutenção por dia e tempo fora das entregas não são rateados por
-            aplicativo. Os totais gerais da página permanecem no período completo.
+            Resultado estimado = receita com gratificações do cliente e bonificações recebidas menos
+            combustível e reserva de manutenção por km. Despesas gerais, manutenção por dia e tempo
+            fora das entregas não são rateados por aplicativo. Os totais gerais da página permanecem
+            no período completo.
           </p>
+          {selectedBonuses.length > 0 && (
+            <div className="mt-3">
+              <h3 className="text-sm font-semibold">Bonificações da seleção</h3>
+              <ul className="divide-y divide-border">
+                {selectedBonuses.map((b) => (
+                  <li key={b.id} className="flex justify-between gap-3 py-2 text-sm">
+                    <span>
+                      {b.app_name} · {b.title} · {dateTimeLabel(b.received_at!)}
+                    </span>
+                    <strong className="shrink-0">{brl(Number(b.reward))}</strong>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-sm">
               <caption className="mb-2 text-left font-medium">
-                Evolução diária por aplicativo
+                Evolução diária das entregas por aplicativo (sem bonificações)
               </caption>
               <thead>
                 <tr className="border-b text-left text-xs text-muted-foreground">
@@ -225,7 +273,7 @@ export function AppPerformance({
               </tbody>
             </table>
           </div>
-          {detailed && (
+          {detailed && filtered.length > 0 && (
             <div className="mt-5">
               <h3 className="text-sm font-semibold">
                 Detalhes das entregas · {filtered.length} registros
@@ -243,7 +291,7 @@ export function AppPerformance({
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {paymentMethodLabel(d.payment_method)} · {num(Number(d.distance_km))} km ·
-                      gorjeta {brl(Number(d.tip))} ·{" "}
+                      gratificação do cliente {brl(Number(d.tip))} ·{" "}
                       {d.status === "em_rota" ? "Em rota" : "Registrada"}
                     </p>
                     <p className="mt-1 break-words text-xs text-muted-foreground">
@@ -276,7 +324,7 @@ export function AppPerformance({
               </div>
               <p className="mt-2 text-xs text-muted-foreground">
                 A impressão inclui a página de entregas exibida. A exportação inclui todas as
-                entregas da seleção.
+                entregas e bonificações da seleção.
               </p>
             </div>
           )}

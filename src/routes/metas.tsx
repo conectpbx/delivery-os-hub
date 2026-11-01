@@ -1,3 +1,4 @@
+import { AppChallenges } from "@/components/AppChallenges";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -223,6 +224,10 @@ function Metas() {
 
   return (
     <AppShell title="Metas" subtitle="Planejamento mensal e acompanhamento diário">
+      <p className="mb-3 text-xs text-muted-foreground">
+        Metas pessoais consideram a receita das entregas. Desafios e bonificações dos aplicativos
+        são acompanhados separadamente nesta tela.
+      </p>
       <div className="grid gap-3 sm:grid-cols-3">
         <StatCard label="Receita do mês" value={brl(currentSummary?.revenue ?? 0)} tone="primary" />
         <StatCard label="Lucro do mês" value={brl(currentSummary?.profit ?? 0)} tone="success" />
@@ -610,6 +615,7 @@ function Metas() {
           </SectionCard>
         </div>
       </div>
+      <AppChallenges />
     </AppShell>
   );
 }

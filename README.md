@@ -191,3 +191,38 @@ git pull origin main
 docker compose up -d --force-recreate
 ```
 Isso só reinicia o container com o que já estiver sincronizado em `output/` — não builda nada. Para builds manuais, veja os comandos de referência em `DEPLOY.md`.
+
+## Desafios e bonificações por aplicativo
+
+Em **Metas**, cadastre o aplicativo, a descrição, a validade, a quantidade de entregas
+ou receita necessária e o valor da bonificação. O progresso considera entregas concluídas
+do aplicativo no intervalo informado; metas de receita incluem a **Gratificação do cliente**
+(antigo campo Gorjeta, mantido na coluna `tip` para preservar os dados existentes).
+Regras particulares de cada plataforma devem ser conferidas no aplicativo de origem.
+
+Após atingir a meta, confirme o recebimento com a data efetiva. Apenas recebimentos
+confirmados entram na receita total e no lucro do dashboard, financeiro e relatórios.
+Cada desafio possui um único recebimento, que pode ser estornado. Não registre como
+bonificação um valor já incluído nos ganhos de uma entrega. Desafios recebidos não podem
+ser editados ou excluídos sem estornar antes.
+
+A visão por aplicativo inclui as bonificações recebidas no período, inclusive quando não
+há entregas naquele período. Quantidade de entregas, distância, ticket médio de entregas,
+metas pessoais e progresso dos desafios não recebem entregas fictícias. Gráficos,
+ranking de entregas e detalhamentos históricos de operação continuam específicos às
+entregas e são identificados como sem bonificações. O relatório de composição da receita
+lista e exporta os recebimentos separadamente; a exportação da seleção por aplicativo
+identifica cada linha como entrega ou bonificação.
+
+**Ativação do banco:** aplique `supabase/migrations/20261101090000_app_challenges.sql`
+no projeto Supabase antes de publicar esta versão. A migração cria `app_challenges`,
+políticas de acesso por usuário, validações e a assinatura Realtime. Não exige alterações
+na tabela de entregas nem reescrita dos valores existentes. Sem a migração ou sem conexão,
+a interface avisa que as bonificações estão indisponíveis; não considere os totais completos.
+As alterações de desafios e confirmações de pagamento exigem conexão.
+
+Teste das regras e da apresentação por aplicativo:
+
+```bash
+node --import tsx --input-type=module -e 'await import("./src/lib/app-challenges.test.ts"); await import("./src/components/AppPerformance.test.tsx")'
+```

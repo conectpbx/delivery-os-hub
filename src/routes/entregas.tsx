@@ -741,7 +741,11 @@ function Entregas() {
               <Field label="Valor bruto (R$)" value={form.earnings} onChange={setGross} />
               <Field label="Taxa do app (R$)" value={form.fee_amount} onChange={setFeeAmount} />
               <Field label="Taxa do app (%)" value={form.fee_percent} onChange={setFeePercent} />
-              <Field label="Gorjeta (R$)" value={form.tip} onChange={(v) => set("tip", v)} />
+              <Field
+                label="Gratificação do cliente (R$)"
+                value={form.tip}
+                onChange={(v) => set("tip", v)}
+              />
               <div className="col-span-2 space-y-2">
                 <Label htmlFor="payment-method">Forma de recebimento</Label>
                 <select

@@ -41,7 +41,7 @@ test("relatório mostra apps, evolução, pagamentos e entrega com endereço aus
     "Uber",
     "Evolução diária",
     "Pix",
-    "Gorjetas",
+    "Gratificações do cliente",
     "Origem não informada",
     "Exportar seleção",
     "não são rateados",
@@ -71,4 +71,34 @@ test("paginação limita detalhes a vinte e mantém o total informado", () => {
   );
   assert.equal((html.match(/Origem não informada/g) ?? []).length, 20);
   assert.ok(html.includes("21 registros"));
+});
+
+test("bonificação sem entregas aparece no seletor e no resultado sem criar ticket fictício", () => {
+  const html = renderToStaticMarkup(
+    <AppPerformance
+      detailed
+      deliveries={[]}
+      costPerKm={1}
+      periodLabel="Outubro"
+      time={time}
+      bonuses={[
+        {
+          id: "bonus",
+          app_name: "Uber",
+          title: "Desafio recebido",
+          starts_at: time.from.toISOString(),
+          ends_at: time.to.toISOString(),
+          received_at: "2026-10-20T15:00:00Z",
+          metric: "deliveries",
+          target: 1,
+          reward: 50,
+        },
+      ]}
+    />,
+  );
+  assert.ok(html.includes('value="Uber"'));
+  assert.ok(html.includes("Desafio recebido"));
+  assert.ok(html.includes("Bonificações recebidas"));
+  assert.ok(!html.includes("Sem entregas no período selecionado"));
+  assert.ok(!html.includes("Página 1 de 0"));
 });

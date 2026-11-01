@@ -1,3 +1,6 @@
+import { BonusIncome } from "@/components/BonusIncome";
+import { bonusTotal, addBonusIncome } from "@/lib/app-challenges";
+import { useAppChallenges } from "@/lib/data";
 import { BrandSpinner } from "@/components/BrandLoader";
 import { AppPerformance } from "@/components/AppPerformance";
 import { AppComparison } from "@/components/AppComparison";
@@ -60,6 +63,7 @@ export const Route = createFileRoute("/relatorios")({
 });
 
 function Relatorios() {
+  const challenges = useAppChallenges();
   const deliveries = useDeliveries();
   const expenses = useExpenses();
   const fuelings = useFuelings();
@@ -101,11 +105,11 @@ function Relatorios() {
       byMonthRecordedCosts(deliveriesData, expensesData, fuelingsData, maintenancesData).slice(-12),
     [deliveriesData, expensesData, fuelingsData, maintenancesData],
   );
-  const total = useMemo(
+  const totalBase = useMemo(
     () => summarizeRecordedCosts(perDeliveries, perExpenses, perMaint, perFuelings),
     [perDeliveries, perExpenses, perFuelings, perMaint],
   );
-  const operational = useMemo(
+  const operationalBase = useMemo(
     () =>
       summarizeOperational(perDeliveries, expensesData, cpk, maintenanceReserve.costPerKm, {
         from: period.fromDate,
@@ -115,6 +119,9 @@ function Relatorios() {
       }),
     [perDeliveries, expensesData, cpk, maintenanceReserve, period.fromDate, period.toDate],
   );
+  const bonusIncome = bonusTotal(challenges.data ?? [], period.fromDate, period.toDate);
+  const total = addBonusIncome(totalBase, bonusIncome);
+  const operational = addBonusIncome(operationalBase, bonusIncome);
   const operationalMonths = useMemo(
     () => byMonth(deliveriesData, expensesData, cpk + maintenanceReserve.costPerKm).slice(-12),
     [deliveriesData, expensesData, cpk, maintenanceReserve.costPerKm],
@@ -181,7 +188,7 @@ function Relatorios() {
         "Aplicativo",
         "Forma de recebimento",
         "Ganho",
-        "Gorjeta",
+        "Gratificação do cliente",
         "KM",
         "Duração (min)",
         "Parado (min)",
@@ -211,7 +218,14 @@ function Relatorios() {
 
   function exportMonths() {
     downloadCsv("resumo-mensal-delivery-os.csv", [
-      ["Mês", "Receita", "KM", "Custos", "Lucro", "Entregas"],
+      [
+        "Mês",
+        "Receita de entregas (sem bonificações)",
+        "KM",
+        "Custos",
+        "Lucro (sem bonificações)",
+        "Entregas",
+      ],
       ...months.map((m) => [monthLabel(m.month), m.revenue, m.km, m.cost, m.profit, m.count]),
     ]);
   }
@@ -236,12 +250,12 @@ function Relatorios() {
         "Horas totais consideradas",
         "Horas fora das entregas",
         "Horas em pausas",
-        "Receita",
+        "Receita de entregas (sem bonificações)",
         "Combustível",
         "Outros gastos",
         "Manutenção",
         "Custos totais",
-        "Lucro",
+        "Lucro (sem bonificações)",
         "Receita/KM",
         "Custo/KM",
         "Lucro/Hora",
@@ -315,7 +329,9 @@ function Relatorios() {
       }
     >
       <PeriodSummary selection={period} />
+      <BonusIncome from={period.fromDate} to={period.toDate} deliveryRevenue={totalBase.revenue} />
       <AppPerformance
+        bonuses={challenges.data ?? []}
         detailed
         deliveries={perDeliveries}
         costPerKm={cpk + maintenanceReserve.costPerKm}
@@ -387,7 +403,7 @@ function Relatorios() {
       <SectionCard
         className="mt-4"
         title="Detalhamento da operação"
-        description="Veja quilômetros, horas, gastos e rentabilidade em cada período"
+        description="Entregas, gastos e rentabilidade por período, sem bonificações; os recebimentos estão na composição da receita"
         actions={
           <div className="no-print flex flex-wrap items-center gap-2">
             <div className="flex rounded-lg bg-muted p-1">
@@ -573,7 +589,7 @@ function Relatorios() {
       <SectionCard
         className="mt-4"
         title="Comparação entre meses"
-        description="Receita x lucro operacional"
+        description="Receita x lucro operacional das entregas, sem bonificações"
       >
         {chart.length ? (
           <div className="h-80 sm:h-96">
@@ -594,7 +610,7 @@ function Relatorios() {
       </SectionCard>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <SectionCard title="Resumo mensal">
+        <SectionCard title="Resumo mensal de entregas (sem bonificações)">
           {months.length ? (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

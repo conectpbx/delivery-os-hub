@@ -1,3 +1,6 @@
+import { BonusIncome } from "@/components/BonusIncome";
+import { bonusTotal, addBonusIncome } from "@/lib/app-challenges";
+import { useAppChallenges } from "@/lib/data";
 import { createFileRoute, useHydrated } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Copy, Link2, LocateFixed, Play, Smartphone, Square, Trash2, Unplug } from "lucide-react";
@@ -85,6 +88,7 @@ function Financeiro() {
   const gpsEndpoint = hydrated ? `${window.location.origin}/api/public/gps` : "/api/public/gps";
   const fuelings = useFuelings();
   const expenses = useExpenses();
+  const challenges = useAppChallenges();
   const deliveries = useDeliveries();
   const maintenances = useMaintenances();
   const profile = useProfile();
@@ -186,8 +190,8 @@ function Financeiro() {
     period.fromDate,
     period.toDate,
   );
-  const cash = summarizeRecordedCosts(perDeliveries, perExpenses, perMaint, perFuelings);
-  const operational = summarizeOperational(
+  const cashBase = summarizeRecordedCosts(perDeliveries, perExpenses, perMaint, perFuelings);
+  const operationalBase = summarizeOperational(
     perDeliveries,
     expenses.data ?? [],
     cpk,
@@ -199,6 +203,9 @@ function Financeiro() {
       maintenanceItems: maintenanceReserve.items,
     },
   );
+  const bonusIncome = bonusTotal(challenges.data ?? [], period.fromDate, period.toDate);
+  const cash = addBonusIncome(cashBase, bonusIncome);
+  const operational = addBonusIncome(operationalBase, bonusIncome);
   const fuelTotal = perFuelings.reduce((a, f) => a + Number(f.total), 0);
   const lastOdometer = (fuelings.data ?? []).find((f) => f.odometer != null)?.odometer ?? null;
   const estimatedOdometer =
@@ -233,6 +240,7 @@ function Financeiro() {
       actions={<PeriodFilter selection={period} />}
     >
       <PeriodSummary selection={period} />
+      <BonusIncome from={period.fromDate} to={period.toDate} deliveryRevenue={cashBase.revenue} />
       <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Receita total"
@@ -294,7 +302,12 @@ function Financeiro() {
             </p>
           </div>
           <div className="ml-auto flex flex-wrap gap-2">
-            <JourneyPauseControl active={trip.active} pauses={trip.pauses} pause={pause} resume={resume} />
+            <JourneyPauseControl
+              active={trip.active}
+              pauses={trip.pauses}
+              pause={pause}
+              resume={resume}
+            />
             {trip.active || trip.pendingSave ? (
               <Button variant="destructive" onClick={finish} disabled={saving}>
                 <Square className="mr-2 size-4" />{" "}

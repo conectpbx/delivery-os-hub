@@ -76,7 +76,7 @@ export function AppComparison({
         "Entregas",
         "% entregas",
         "Ganhos",
-        "Gorjetas",
+        "Gratificações do cliente",
         "Receita",
         "% receita",
         "Km",
@@ -119,7 +119,9 @@ export function AppComparison({
 
   return (
     <SectionCard
-      title={detailed ? "Comparativo de aplicativos" : "Ranking de aplicativos"}
+      title={
+        detailed ? "Comparativo de entregas por aplicativo" : "Ranking de entregas por aplicativo"
+      }
       description={`${periodLabel} · ${rows.length} ${rows.length === 1 ? "aplicativo" : "aplicativos"}`}
       actions={
         rows.length ? (
@@ -145,8 +147,9 @@ export function AppComparison({
       }
     >
       <p className="mb-3 text-xs text-muted-foreground">
-        Resultado após custo estimado por km, sem rateio de despesas gerais. R$/hora considera o
-        tempo em entregas, com pausas descontadas quando registradas.
+        Somente entregas, sem bonificações. Resultado após custo estimado por km, sem rateio de
+        despesas gerais. R$/hora considera o tempo em entregas, com pausas descontadas quando
+        registradas.
       </p>
       {!rows.length ? (
         <EmptyState>Sem entregas neste período.</EmptyState>
@@ -230,7 +233,7 @@ export function AppComparison({
                   <Item k="Ticket médio" v={brl(r.ticket)} />
                   {detailed ? (
                     <>
-                      <Item k="Gorjetas" v={brl(r.tips)} />
+                      <Item k="Gratificações do cliente" v={brl(r.tips)} />
                       <Item k="Custo estimado" v={brl(r.cost)} />
                       <Item k="Em entregas" v={minutesLabel(r.minutes)} />
                       <Item k="Tempo parado" v={minutesLabel(r.idleMin)} />

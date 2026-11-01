@@ -1,3 +1,4 @@
+import type { AppChallenge } from "./app-challenges";
 import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -183,6 +184,9 @@ export const useFuelings = () => useList<Fueling>("fuelings", "fuelings", "occur
 export const useMaintenances = () =>
   useList<Maintenance>("maintenances", "maintenances", "performed_at");
 export const useExpenses = () => useList<Expense>("expenses", "expenses", "occurred_at");
+export const useAppChallenges = () =>
+  useList<AppChallenge>("app_challenges", "app_challenges", "starts_at");
+
 export const useGoals = () => useList<Goal>("goals", "goals", "month");
 export const useApps = () => useList<App>("apps", "apps", "name");
 export const useJourneys = () =>

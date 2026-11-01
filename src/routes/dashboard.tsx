@@ -1,3 +1,6 @@
+import { BonusIncome } from "@/components/BonusIncome";
+import { bonusTotal, addBonusIncome } from "@/lib/app-challenges";
+import { useAppChallenges } from "@/lib/data";
 import { BrandSpinner } from "@/components/BrandLoader";
 import { createFileRoute } from "@tanstack/react-router";
 import { Suspense, lazy, useMemo, useState } from "react";
@@ -74,6 +77,7 @@ const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 function Dashboard() {
   const now = useCalendarNow();
   const [range, setRange] = useState<(typeof RANGES)[number]>(RANGES[2]);
+  const challenges = useAppChallenges();
   const deliveries = useDeliveries();
   const fuelings = useFuelings();
   const expenses = useExpenses();
@@ -120,11 +124,11 @@ function Dashboard() {
     () => fuelingsData.filter((f) => inRange(f.occurred_at, from, to)),
     [fuelingsData, from, to],
   );
-  const cash = useMemo(
+  const cashBase = useMemo(
     () => summarizeRecordedCosts(periodDeliveries, periodExpenses, periodMaint, periodFuelings),
     [periodDeliveries, periodExpenses, periodFuelings, periodMaint],
   );
-  const s = useMemo(
+  const summaryBase = useMemo(
     () =>
       summarizeOperational(periodDeliveries, expensesData, cpk, maintenanceReserve.costPerKm, {
         from,
@@ -134,6 +138,9 @@ function Dashboard() {
       }),
     [periodDeliveries, expensesData, cpk, maintenanceReserve, from, to],
   );
+  const bonusIncome = bonusTotal(challenges.data ?? [], from, to);
+  const cash = addBonusIncome(cashBase, bonusIncome);
+  const s = addBonusIncome(summaryBase, bonusIncome);
   const operationalCpk = cpk + maintenanceReserve.costPerKm;
   const { chainKm, km: periodKm } = useChainedDistance(periodDeliveries);
   const { grid, max } = useMemo(() => heatmap(periodDeliveries), [periodDeliveries]);
@@ -296,7 +303,9 @@ function Dashboard() {
         />
       </div>
 
+      <BonusIncome from={from} to={to} deliveryRevenue={summaryBase.revenue} />
       <AppPerformance
+        bonuses={challenges.data ?? []}
         deliveries={periodDeliveries}
         costPerKm={operationalCpk}
         periodLabel={range.label}
@@ -311,7 +320,7 @@ function Dashboard() {
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <SectionCard
           title="Receita x lucro operacional"
-          description="Evolução diária"
+          description="Evolução diária das entregas, sem bonificações"
           className="lg:col-span-2"
         >
           {series.some((d) => d.receita > 0) ? (
