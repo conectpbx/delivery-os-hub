@@ -1,4 +1,5 @@
 import { PwaInstall } from "@/components/PwaInstall";
+import { VehicleSettings } from "@/components/VehicleSettings";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard,
@@ -133,6 +134,7 @@ export function AppShell({
                 <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
               ) : null}
             </div>
+            <VehicleSettings profile={profile.data} userId={session.user.id} />
             {allowedActions ? (
               <div className="hidden shrink-0 sm:block">{allowedActions}</div>
             ) : null}
