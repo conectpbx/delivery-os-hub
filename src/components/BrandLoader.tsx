@@ -11,7 +11,7 @@ function normalizeVehicle(vehicle?: string | null) {
 }
 
 /** Retorna o ícone mais próximo do veículo informado no perfil do entregador. */
-function vehicleLoadingIcon(vehicle?: string | null): LucideIcon {
+export function vehicleLoadingIcon(vehicle?: string | null): LucideIcon {
   const normalizedVehicle = normalizeVehicle(vehicle) ?? "";
 
   if (/moto|motocicl|motorbike/.test(normalizedVehicle)) return Motorbike;
