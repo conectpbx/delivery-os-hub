@@ -36,6 +36,20 @@
       "when": 1792375779603,
       "tag": "0004_active_work_journeys",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793580159018,
+      "tag": "0005_add_expense_allocation_method",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793580167357,
+      "tag": "0006_app_challenges",
+      "breakpoints": true
     }
   ]
 }
