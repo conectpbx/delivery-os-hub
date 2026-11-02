@@ -232,6 +232,8 @@ export function useProfile(enabled = true) {
       return data as Profile | null;
     },
     staleTime: 1000 * 60 * 5,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: "always",
   });
 }
 

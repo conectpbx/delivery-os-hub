@@ -16,3 +16,4 @@
 - [x] Disponibilizar tempos separados no detalhamento dos relatórios e exportações
 - [x] Adicionar pausas por motivo em Entregas e detalhar nos relatórios, com uso offline e telas adaptáveis
 - [ ] Conferir pausa, retomada e relatório na conta do usuário (aguarda login na prévia)
+- [x] Disponibilizar seleção do veículo da conta e refletir nos carregamentos; salvamento e reabertura autenticados e janela móvel verificados

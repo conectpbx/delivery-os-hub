@@ -1,5 +1,6 @@
 import { Bike, Car, Footprints, Motorbike, Scooter, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useEffect, useState } from "react";
 
 function normalizeVehicle(vehicle?: string | null) {
   return vehicle
@@ -10,7 +11,7 @@ function normalizeVehicle(vehicle?: string | null) {
 }
 
 /** Retorna o ícone mais próximo do veículo informado no perfil do entregador. */
-function vehicleLoadingIcon(vehicle?: string | null): LucideIcon {
+export function vehicleLoadingIcon(vehicle?: string | null): LucideIcon {
   const normalizedVehicle = normalizeVehicle(vehicle) ?? "";
 
   if (/moto|motocicl|motorbike/.test(normalizedVehicle)) return Motorbike;
@@ -30,7 +31,9 @@ export function BrandSpinner({
   className?: string;
   vehicle?: string | null | undefined;
 }) {
-  const VehicleIcon = vehicleLoadingIcon(vehicle);
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
+  const VehicleIcon = vehicleLoadingIcon(hydrated ? vehicle : null);
 
   return (
     <span
