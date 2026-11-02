@@ -1,5 +1,6 @@
 import { Bike, Car, Footprints, Motorbike, Scooter, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useEffect, useState } from "react";
 
 function normalizeVehicle(vehicle?: string | null) {
   return vehicle
@@ -30,7 +31,9 @@ export function BrandSpinner({
   className?: string;
   vehicle?: string | null | undefined;
 }) {
-  const VehicleIcon = vehicleLoadingIcon(vehicle);
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
+  const VehicleIcon = vehicleLoadingIcon(hydrated ? vehicle : null);
 
   return (
     <span
