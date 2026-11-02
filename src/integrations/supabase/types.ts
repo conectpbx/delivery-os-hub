@@ -86,6 +86,48 @@ export type Database = {
         }
         Relationships: []
       }
+      app_challenges: {
+        Row: {
+          app_name: string
+          created_at: string
+          ends_at: string
+          id: string
+          metric: string
+          received_at: string | null
+          reward: number
+          starts_at: string
+          target: number
+          title: string
+          user_id: string
+        }
+        Insert: {
+          app_name: string
+          created_at?: string
+          ends_at: string
+          id?: string
+          metric: string
+          received_at?: string | null
+          reward: number
+          starts_at: string
+          target: number
+          title: string
+          user_id: string
+        }
+        Update: {
+          app_name?: string
+          created_at?: string
+          ends_at?: string
+          id?: string
+          metric?: string
+          received_at?: string | null
+          reward?: number
+          starts_at?: string
+          target?: number
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       apps: {
         Row: {
           color: string | null
@@ -190,6 +232,7 @@ export type Database = {
       }
       expenses: {
         Row: {
+          allocation_method: string
           amount: number
           category: string
           created_at: string
@@ -199,6 +242,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          allocation_method?: string
           amount?: number
           category: string
           created_at?: string
@@ -208,6 +252,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          allocation_method?: string
           amount?: number
           category?: string
           created_at?: string
