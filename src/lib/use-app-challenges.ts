@@ -48,7 +48,7 @@ export function useSaveChallenge() {
       } else if (action.kind === "reverse") {
         request = db
           .from("app_challenges")
-          .update({ received_at: null })
+          .update({ received_at: null, auto_receive: false })
           .eq("id", action.challenge.id)
           .eq("received_at", action.challenge.received_at!);
       } else {

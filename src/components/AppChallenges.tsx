@@ -1,7 +1,12 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { useAppChallenges, useApps, useDeliveries } from "@/lib/data";
-import { challengeProgress, challengeSchema, type AppChallenge } from "@/lib/app-challenges";
+import { useAppChallenges, useApps, useDeliveries, type Delivery } from "@/lib/data";
+import {
+  challengeProgress,
+  challengeSchema,
+  normalizedApp,
+  type AppChallenge,
+} from "@/lib/app-challenges";
 import { useSaveChallenge } from "@/lib/use-app-challenges";
 import { useCalendarNow } from "@/hooks/useCalendarNow";
 import { brl, dateTimeLabel, dec, localDateValue, num } from "@/lib/format";
@@ -18,6 +23,7 @@ const initialForm = () => ({
   metric: "deliveries" as "deliveries" | "revenue",
   target: "",
   reward: "",
+  auto_receive: true,
 });
 const localDateTime = (date: Date) =>
   `${localDateValue(date)}T${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
@@ -32,14 +38,28 @@ export function AppChallenges() {
   const [form, setForm] = useState(initialForm);
   const [editing, setEditing] = useState<string | undefined>();
   const [receipt, setReceipt] = useState(() => localDateTime(new Date()));
-  const appNames = [
-    ...new Set([
-      ...(apps.data ?? []).map((a) => a.name),
-      ...(deliveries.data ?? []).map((d) => d.app_name),
-    ]),
-  ]
-    .filter(Boolean)
-    .sort();
+  const appNames = useMemo(
+    () =>
+      [
+        ...new Set([
+          ...(apps.data ?? []).map((a) => a.name),
+          ...(deliveries.data ?? []).map((d) => d.app_name),
+        ]),
+      ]
+        .filter(Boolean)
+        .sort(),
+    [apps.data, deliveries.data],
+  );
+  const deliveriesByApp = useMemo(() => {
+    const groups = new Map<string, Delivery[]>();
+    for (const delivery of deliveries.data ?? []) {
+      const key = normalizedApp(delivery.app_name ?? "");
+      const rows = groups.get(key) ?? [];
+      rows.push(delivery);
+      groups.set(key, rows);
+    }
+    return groups;
+  }, [deliveries.data]);
   const change = (key: keyof typeof form, value: string) =>
     setForm((f) => ({ ...f, [key]: value }));
   const reset = () => {
@@ -56,6 +76,7 @@ export function AppChallenges() {
       metric: c.metric,
       target: String(c.target),
       reward: String(c.reward),
+      auto_receive: c.auto_receive ?? false,
     });
   };
   const run = async (action: Parameters<typeof mutation.mutateAsync>[0]) => {
@@ -76,7 +97,7 @@ export function AppChallenges() {
     <SectionCard
       className="mt-4"
       title="Desafios e bonificações por aplicativo"
-      description="Acompanhe a meta e registre o valor apenas quando ele for recebido."
+      description="Ao atingir a meta, a bonificação automática é incluída uma única vez na receita e no lucro."
     >
       {challenges.isError ? (
         <div role="alert" className="rounded-lg border border-destructive p-3 text-sm">
@@ -94,6 +115,7 @@ export function AppChallenges() {
               e.preventDefault();
               if (!form.start || !form.end) return;
               const parsed = challengeSchema.safeParse({
+                auto_receive: form.auto_receive,
                 app_name: form.app_name,
                 title: form.title,
                 starts_at: new Date(`${form.start}T00:00:00`).toISOString(),
@@ -182,6 +204,14 @@ export function AppChallenges() {
                 onChange={(e) => change("reward", e.target.value)}
               />
             </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={form.auto_receive}
+                onChange={(e) => setForm((f) => ({ ...f, auto_receive: e.target.checked }))}
+              />
+              Creditar automaticamente ao atingir a meta
+            </label>
             <div className="flex items-end gap-2">
               <Button disabled={mutation.isPending || challenges.isPending} type="submit">
                 {mutation.isPending
@@ -201,7 +231,9 @@ export function AppChallenges() {
             O progresso usa o aplicativo e as datas das entregas concluídas, incluindo gratificações
             do cliente em metas de receita. Regras adicionais da plataforma (aceitação, região,
             horário) devem ser conferidas no aplicativo de origem. Cadastre somente bonificações que
-            ainda não estejam incluídas no valor das entregas.
+            ainda não estejam incluídas no valor das entregas. O crédito automático é registrado na
+            data da validação pelo servidor, após sincronizar as entregas. Ele não confirma um
+            pagamento realizado pelo aplicativo. Desmarque a automação para confirmar manualmente.
           </p>
           {challenges.isPending ? (
             <p role="status">Carregando desafios…</p>
@@ -210,7 +242,11 @@ export function AppChallenges() {
           ) : (
             <div className="grid gap-3 lg:grid-cols-2">
               {(challenges.data ?? []).map((c) => {
-                const progress = challengeProgress(c, deliveries.data ?? [], now);
+                const progress = challengeProgress(
+                  c,
+                  deliveriesByApp.get(normalizedApp(c.app_name)) ?? [],
+                  now,
+                );
                 return (
                   <article key={c.id} className="rounded-lg border border-border p-4">
                     <div className="flex justify-between gap-3">
@@ -227,12 +263,21 @@ export function AppChallenges() {
                       · {num(progress.percent, 0)}%
                     </p>
                     <Progress value={progress.percent} aria-label={`Progresso de ${c.title}`} />
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {c.auto_receive ? "Crédito automático ativado" : "Recebimento manual"}
+                    </p>
                     <p className="mt-3 text-sm">
                       Bonificação: <strong>{brl(Number(c.reward))}</strong>
                       {c.received_at
-                        ? ` · recebida em ${dateTimeLabel(c.received_at)}`
+                        ? ` · creditada em ${dateTimeLabel(c.received_at)}`
                         : " · ainda não incluída na receita"}
                     </p>
+                    {c.auto_receive && !c.received_at && progress.achieved && (
+                      <p role="status" className="mt-2 text-sm text-muted-foreground">
+                        Meta atingida. Aguardando validação do crédito pelo servidor.
+                      </p>
+                    )}
+                    {deliveries.isPending && <p role="status">Atualizando progresso…</p>}
                     {deliveries.isError && (
                       <p role="alert" className="mt-2 text-sm text-destructive">
                         Não foi possível atualizar as entregas. Confira o progresso antes de
@@ -248,7 +293,7 @@ export function AppChallenges() {
                           onClick={() => {
                             if (
                               window.confirm(
-                                "Estornar o recebimento? O valor será retirado da receita, mantendo o desafio.",
+                                "Estornar o recebimento? O valor será retirado da receita, mantendo o desafio e desativando seu crédito automático.",
                               )
                             )
                               void run({ kind: "reverse", challenge: c });
@@ -277,7 +322,7 @@ export function AppChallenges() {
                           >
                             Excluir
                           </Button>
-                          {progress.achieved && (
+                          {progress.achieved && !c.auto_receive && (
                             <>
                               <label className="text-xs">
                                 Recebido em

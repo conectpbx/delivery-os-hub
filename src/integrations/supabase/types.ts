@@ -88,6 +88,7 @@ export type Database = {
       }
       app_challenges: {
         Row: {
+          auto_receive: boolean
           app_name: string
           created_at: string
           ends_at: string
@@ -101,6 +102,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          auto_receive?: boolean
           app_name: string
           created_at?: string
           ends_at: string
@@ -114,6 +116,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          auto_receive?: boolean
           app_name?: string
           created_at?: string
           ends_at?: string

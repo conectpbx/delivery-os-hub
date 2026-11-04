@@ -166,6 +166,10 @@ function useList<T>(key: string, table: string, orderCol: string) {
   return useQuery({
     queryKey: [key],
     queryFn: async () => {
+      if (table === "app_challenges") {
+        const { error } = await db.rpc("reconcile_app_challenges");
+        if (error) throw error;
+      }
       const { data, error } = await db
         .from(table)
         .select("*")

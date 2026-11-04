@@ -20,7 +20,7 @@ export function BonusIncome({
     <SectionCard
       className="mt-4"
       title="Composição da receita e bonificações"
-      description="Bonificações pela data de recebimento; conquistas ainda não recebidas não entram nos totais."
+      description="Bonificações pela data do crédito automático ou da confirmação manual; metas pendentes não entram nos totais."
       actions={
         <Button
           className="no-print"
@@ -29,7 +29,7 @@ export function BonusIncome({
           disabled={query.isPending || query.isError || !rows.length}
           onClick={() =>
             downloadCsv("bonificacoes-delivery-os.csv", [
-              ["Aplicativo", "Desafio", "Recebido em", "Valor"],
+              ["Aplicativo", "Desafio", "Creditado em", "Valor"],
               ...rows.map((r) => [
                 r.app_name,
                 r.title,
@@ -57,7 +57,7 @@ export function BonusIncome({
           <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             {[
               ["Entregas e gratificações do cliente", deliveryRevenue],
-              ["Bonificações recebidas", bonus],
+              ["Bonificações creditadas", bonus],
               ["Receita total", deliveryRevenue + bonus],
             ].map(([label, value]) => (
               <div key={label} className="rounded-lg bg-muted/50 p-3">
@@ -82,7 +82,7 @@ export function BonusIncome({
             </ul>
           ) : (
             <div className="mt-3">
-              <EmptyState>Nenhuma bonificação recebida neste período.</EmptyState>
+              <EmptyState>Nenhuma bonificação creditada neste período.</EmptyState>
             </div>
           )}
         </>

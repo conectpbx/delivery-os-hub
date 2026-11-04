@@ -9,6 +9,7 @@ export const challengeSchema = z
     ends_at: z.string().datetime(),
     metric: z.enum(["deliveries", "revenue"]),
     target: z.number().finite().positive("A meta deve ser maior que zero").lt(1e9),
+    auto_receive: z.boolean().default(true),
     reward: z.number().finite().positive("A bonificação deve ser maior que zero").lt(1e9),
   })
   .superRefine((v, ctx) => {
@@ -25,7 +26,8 @@ export const challengeSchema = z
         message: "Informe uma quantidade inteira de entregas",
       });
   });
-export type AppChallenge = z.infer<typeof challengeSchema> & {
+export type AppChallenge = Omit<z.infer<typeof challengeSchema>, "auto_receive"> & {
+  auto_receive?: boolean;
   id: string;
   received_at: string | null;
 };
@@ -50,7 +52,9 @@ export function challengeProgress(challenge: AppChallenge, deliveries: Delivery[
       : eligible.reduce((n, d) => n + Number(d.earnings) + Number(d.tip), 0);
   const achieved = value >= Number(challenge.target);
   const status = challenge.received_at
-    ? "Recebida"
+    ? challenge.auto_receive
+      ? "Creditada"
+      : "Recebida"
     : achieved
       ? "Conquistada"
       : now.getTime() < start

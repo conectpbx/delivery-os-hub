@@ -40,6 +40,12 @@ const delivery = (overrides: Partial<Delivery> = {}): Delivery => ({
 });
 const now = new Date("2026-10-21T12:00:00Z");
 
+test("novos desafios usam crédito automático e permitem optar pelo recebimento manual", () => {
+  assert.equal(challengeSchema.parse(challenge()).auto_receive, true);
+  assert.equal(challengeSchema.parse(challenge({ auto_receive: false })).auto_receive, false);
+  assert.equal(challengeSchema.safeParse({ ...challenge(), auto_receive: "false" }).success, false);
+});
+
 test("progresso isola aplicativo e validade, incluindo os limites, sem contar rotas abertas", () => {
   const c = challenge();
   const rows = [

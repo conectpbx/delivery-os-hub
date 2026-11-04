@@ -200,9 +200,16 @@ do aplicativo no intervalo informado; metas de receita incluem a **Gratificaçã
 (antigo campo Gorjeta, mantido na coluna `tip` para preservar os dados existentes).
 Regras particulares de cada plataforma devem ser conferidas no aplicativo de origem.
 
-Após atingir a meta, confirme o recebimento com a data efetiva. Apenas recebimentos
-confirmados entram na receita total e no lucro do dashboard, financeiro e relatórios.
-Cada desafio possui um único recebimento, que pode ser estornado. Não registre como
+Ao atingir a meta, o banco credita automaticamente a bonificação uma única vez na receita
+e no lucro do dashboard, financeiro e relatórios. A data contábil é a data da validação
+pelo servidor, inclusive para entregas sincronizadas depois de uso offline ou desafios
+cadastrados após as entregas. Isso não confirma um pagamento externo pelo aplicativo.
+Desmarque **Creditar automaticamente ao atingir a meta** para confirmar manualmente
+o recebimento e informar sua data efetiva.
+Cada desafio possui um único recebimento, que pode ser estornado. O estorno desativa
+a automação desse desafio; para reativar, edite-o e marque novamente a opção. Alterações
+ou exclusões posteriores das entregas não estornam créditos existentes: confira e estorne
+o desafio quando necessário. Não registre como
 bonificação um valor já incluído nos ganhos de uma entrega. Desafios recebidos não podem
 ser editados ou excluídos sem estornar antes.
 
@@ -215,8 +222,14 @@ lista e exporta os recebimentos separadamente; a exportação da seleção por a
 identifica cada linha como entrega ou bonificação.
 
 **Ativação do banco:** aplique `supabase/migrations/20261101090000_app_challenges.sql`
-no projeto Supabase antes de publicar esta versão. A migração cria `app_challenges`,
-políticas de acesso por usuário, validações e a assinatura Realtime. Não exige alterações
+e depois `supabase/migrations/20261104090000_automatic_app_challenges.sql`
+no projeto Supabase antes de publicar esta versão. A segunda migração ativa a automação
+nos desafios existentes sem recebimento e credita imediatamente os elegíveis, na data
+da migração. Recebimentos já registrados são preservados. Revise os desafios pendentes
+antes da aplicação, inclusive estornos antigos que ainda não tinham uma opção de automação. A migração cria `app_challenges`,
+políticas de acesso por usuário, validações e a assinatura Realtime. A automação usa
+gatilhos transacionais, bloqueio por desafio, índice de progresso e reconciliação autenticada
+ao consultar os desafios, sem depender da tela de Metas aberta. Não exige alterações
 na tabela de entregas nem reescrita dos valores existentes. Sem a migração ou sem conexão,
 a interface avisa que as bonificações estão indisponíveis; não considere os totais completos.
 As alterações de desafios e confirmações de pagamento exigem conexão.
@@ -226,3 +239,15 @@ Teste das regras e da apresentação por aplicativo:
 ```bash
 node --import tsx --input-type=module -e 'await import("./src/lib/app-challenges.test.ts"); await import("./src/components/AppPerformance.test.tsx")'
 ```
+
+
+Teste isolado da automação no PostgreSQL (não acessa produção):
+
+```bash
+npm install --prefix /tmp/delivery-db-validation --no-save --no-audit --no-fund @electric-sql/pglite
+PGLITE_MODULE_PATH=/tmp/delivery-db-validation/node_modules/@electric-sql/pglite/dist/index.js node scripts/test-app-challenges-db.mjs
+```
+
+O teste cobre metas de quantidade e receita com gratificações, normalização do aplicativo,
+entregas em rota e fora da validade, repetição sem duplicidade, confirmação manual,
+estorno, reativação, proteção de créditos e isolamento entre contas com RLS.
