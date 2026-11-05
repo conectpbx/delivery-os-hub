@@ -1,3 +1,5 @@
+import { useAuth, authStore } from "@/hooks/useAuth";
+import { loadAllPages } from "./list-pages";
 import type { AppChallenge } from "./app-challenges";
 import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -20,26 +22,32 @@ type SharedRealtimeSubscription = {
 
 const realtimeSubscriptions = new Map<string, SharedRealtimeSubscription>();
 
-function subscribeToTable(table: string, listener: RealtimeListener) {
-  let subscription = realtimeSubscriptions.get(table);
+function subscribeToTable(table: string, userId: string, listener: RealtimeListener) {
+  const subscriptionKey = `${table}:${userId}`;
+  let subscription = realtimeSubscriptions.get(subscriptionKey);
 
   if (!subscription) {
     const listeners = new Set<RealtimeListener>();
     const uniqueChannelName = `${table}-live-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const notify = () => {
+      const current = realtimeSubscriptions.get(subscriptionKey);
+      if (!current || current.notificationTimer) return;
+      current.notificationTimer = setTimeout(() => {
+        current.notificationTimer = undefined;
+        listeners.forEach((listener) => listener());
+      }, 250);
+    };
+    const filter = `${table === "profiles" ? "id" : "user_id"}=eq.${userId}`;
     const channel = supabase
       .channel(uniqueChannelName)
-      .on("postgres_changes", { event: "*", schema: "public", table }, () => {
-        const current = realtimeSubscriptions.get(table);
-        if (!current || current.notificationTimer) return;
-        current.notificationTimer = setTimeout(() => {
-          current.notificationTimer = undefined;
-          listeners.forEach((notify) => notify());
-        }, 250);
-      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table, filter }, notify)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table, filter }, notify)
+      // Supabase cannot filter DELETE events; keep deletion invalidation working across devices.
+      .on("postgres_changes", { event: "DELETE", schema: "public", table }, notify)
       .subscribe();
 
     subscription = { channel, listeners, removalTimer: undefined, notificationTimer: undefined };
-    realtimeSubscriptions.set(table, subscription);
+    realtimeSubscriptions.set(subscriptionKey, subscription);
   }
 
   if (subscription.removalTimer) {
@@ -50,18 +58,18 @@ function subscribeToTable(table: string, listener: RealtimeListener) {
   subscription.listeners.add(listener);
 
   return () => {
-    const current = realtimeSubscriptions.get(table);
+    const current = realtimeSubscriptions.get(subscriptionKey);
     if (!current) return;
 
     current.listeners.delete(listener);
     if (current.listeners.size > 0) return;
 
     current.removalTimer = setTimeout(() => {
-      const latest = realtimeSubscriptions.get(table);
+      const latest = realtimeSubscriptions.get(subscriptionKey);
       if (latest !== current || latest.listeners.size > 0) return;
 
       if (latest.notificationTimer) clearTimeout(latest.notificationTimer);
-      realtimeSubscriptions.delete(table);
+      realtimeSubscriptions.delete(subscriptionKey);
       void supabase.removeChannel(latest.channel);
     }, 500);
   };
@@ -155,31 +163,41 @@ export type Profile = {
 };
 
 function useList<T>(key: string, table: string, orderCol: string) {
+  const { user } = useAuth();
+  const userId = user?.id;
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    return subscribeToTable(table, () => {
+    if (!userId) return;
+    return subscribeToTable(table, userId, () => {
       void queryClient.invalidateQueries({ queryKey: [key] });
     });
-  }, [key, queryClient, table]);
+  }, [key, queryClient, table, userId]);
 
   return useQuery({
     queryKey: [key],
-    queryFn: async () => {
+    enabled: Boolean(userId),
+    queryFn: async ({ signal }) => {
       if (table === "app_challenges") {
-        const { error } = await db.rpc("reconcile_app_challenges");
+        const { error } = await db.rpc("reconcile_app_challenges").abortSignal(signal);
         if (error) throw error;
       }
-      const { data, error } = await db
-        .from(table)
-        .select("*")
-        .order(orderCol, { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as T[];
+      return loadAllPages<T>(async (from, to) => {
+        const { data, error } = await db
+          .from(table)
+          .select("*")
+          .eq("user_id", userId!)
+          .order(orderCol, { ascending: false })
+          .order("id", { ascending: false })
+          .range(from, to)
+          .abortSignal(signal);
+        if (error) throw error;
+        return (data ?? []) as T[];
+      }, signal);
     },
     staleTime: table === "apps" || table === "goals" ? 1000 * 60 * 5 : 1000 * 60,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: "always",
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -217,27 +235,35 @@ export function useUpdate<T extends Record<string, unknown>>(table: string, key:
 export const useUpdateApp = () => useUpdate<{ fee_percent: number }>("apps", "apps");
 
 export function useProfile(enabled = true) {
+  const { user } = useAuth();
+  const userId = user?.id;
+  const active = enabled && Boolean(userId);
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!active || !userId) return;
 
-    return subscribeToTable("profiles", () => {
+    return subscribeToTable("profiles", userId, () => {
       void queryClient.invalidateQueries({ queryKey: ["profile"] });
     });
-  }, [enabled, queryClient]);
+  }, [active, userId, queryClient]);
 
   return useQuery({
     queryKey: ["profile"],
-    enabled,
-    queryFn: async () => {
-      const { data, error } = await db.from("profiles").select("*").maybeSingle();
+    enabled: active,
+    queryFn: async ({ signal }) => {
+      const { data, error } = await db
+        .from("profiles")
+        .select("*")
+        .eq("id", userId!)
+        .abortSignal(signal)
+        .maybeSingle();
       if (error) throw error;
       return data as Profile | null;
     },
     staleTime: 1000 * 60 * 5,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: "always",
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -253,7 +279,7 @@ export function useInsert<T extends Record<string, unknown>>(table: string, key:
 
       if (isOffline()) {
         const queued = await enqueueInsert(table, key, payload, auth.user.id);
-        return { id: payload["id"] ?? queued.id, occurred_at: queued.createdAt, ...payload };
+        return { occurred_at: queued.createdAt, ...queued.values };
       }
 
       const write =
@@ -265,6 +291,7 @@ export function useInsert<T extends Record<string, unknown>>(table: string, key:
       return data as Record<string, unknown>;
     },
     onSuccess: async (created) => {
+      if (created["user_id"] !== authStore.getSnapshot().session?.user.id) return;
       qc.setQueryData([key], (old: unknown) => {
         const current = (old as Record<string, unknown>[] | undefined) ?? [];
         return [created, ...current.filter((item) => item["id"] !== created["id"])];

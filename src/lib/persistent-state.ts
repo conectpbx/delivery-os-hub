@@ -1,43 +1,43 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type SetStateAction } from "react";
 import { useAuth } from "@/hooks/useAuth";
 
 const PREFIX = "delivery-os-draft:";
 
-/**
- * Estado que sobrevive a trocas de app / recarregamentos do navegador.
- * Salva no localStorage (com hidratação segura para SSR) e restaura ao voltar.
- */
+/** Drafts are scoped during render as well as storage, so an account switch cannot show/save another draft. */
 export function usePersistentState<T>(key: string, initial: T) {
   const { user, loading } = useAuth();
-  const [value, setValue] = useState<T>(initial);
-  const [restored, setRestored] = useState(false);
   const storageKey = user ? `${PREFIX}${user.id}:${key}` : null;
   const initialValue = useRef(initial);
-  const latest = useRef(value);
-  latest.current = value;
+  const [state, setState] = useState<{ owner: string | null; value: T }>({
+    owner: null,
+    value: initial,
+  });
+  const [restoredKey, setRestoredKey] = useState<string | null>(null);
+  const value = state.owner === storageKey ? state.value : initialValue.current;
+  const latest = useRef({ owner: storageKey, value });
+  latest.current = { owner: storageKey, value };
 
-  // Restaura o rascunho depois da hidratação.
   useEffect(() => {
     if (loading || !storageKey) return;
-    setRestored(false);
-    setValue(initialValue.current);
+    let restored = initialValue.current;
     try {
       const raw = window.localStorage.getItem(storageKey);
-      if (raw) setValue(JSON.parse(raw) as T);
+      if (raw) restored = JSON.parse(raw) as T;
     } catch {
-      /* rascunho inválido — ignora */
+      /* Invalid or unavailable storage must not break the form. */
     }
-    setRestored(true);
+    setState({ owner: storageKey, value: restored });
+    setRestoredKey(storageKey);
   }, [loading, storageKey]);
 
-  // Agrupa alterações rápidas para não bloquear o celular a cada tecla.
   useEffect(() => {
-    if (!restored || !storageKey) return;
+    if (!storageKey || restoredKey !== storageKey) return;
     const save = () => {
+      if (latest.current.owner !== storageKey) return;
       try {
-        window.localStorage.setItem(storageKey, JSON.stringify(latest.current));
+        window.localStorage.setItem(storageKey, JSON.stringify(latest.current.value));
       } catch {
-        /* storage cheio — ignora */
+        /* Keep the form usable when storage is full. */
       }
     };
     const timer = window.setTimeout(save, 350);
@@ -51,15 +51,26 @@ export function usePersistentState<T>(key: string, initial: T) {
       document.removeEventListener("visibilitychange", onHide);
       window.removeEventListener("pagehide", save);
     };
-  }, [restored, storageKey, value]);
+  }, [restoredKey, storageKey, value]);
 
+  const setValue = useCallback(
+    (next: SetStateAction<T>) => {
+      setState((current) => {
+        const previous = current.owner === storageKey ? current.value : initialValue.current;
+        return {
+          owner: storageKey,
+          value: typeof next === "function" ? (next as (value: T) => T)(previous) : next,
+        };
+      });
+    },
+    [storageKey],
+  );
   const clear = () => {
     try {
       if (storageKey) window.localStorage.removeItem(storageKey);
     } catch {
-      /* ignora */
+      /* Ignore unavailable storage. */
     }
   };
-
   return [value, setValue, clear] as const;
 }

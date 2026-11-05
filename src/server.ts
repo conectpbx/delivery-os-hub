@@ -1,4 +1,6 @@
 import "./lib/error-capture";
+import { readBodyBytes, RequestBodyError } from "./lib/request-body";
+import { secureResponse } from "./lib/response-security";
 
 import { consumeLastCapturedError, isExpectedRequestAbort } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
@@ -51,18 +53,42 @@ function isH3SwallowedErrorBody(body: string): boolean {
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
+      if (request.method === "POST" && new URL(request.url).pathname.startsWith("/_server")) {
+        const bytes = await readBodyBytes(request, 8_100_000);
+        request = new Request(request.url, {
+          method: request.method,
+          headers: request.headers,
+          signal: request.signal,
+          body: bytes.buffer,
+        });
+      }
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
-      return await normalizeCatastrophicSsrResponse(response);
+      return secureResponse(
+        request,
+        await normalizeCatastrophicSsrResponse(response),
+        import.meta.env.PROD,
+      );
     } catch (error) {
+      if (error instanceof RequestBodyError) {
+        return secureResponse(
+          request,
+          Response.json({ error: error.code }, { status: error.status }),
+          import.meta.env.PROD,
+        );
+      }
       if (isExpectedRequestAbort(error)) {
-        return new Response(null, { status: 499 });
+        return secureResponse(request, new Response(null, { status: 499 }), import.meta.env.PROD);
       }
       console.error(error);
-      return new Response(renderErrorPage(), {
-        status: 500,
-        headers: { "content-type": "text/html; charset=utf-8" },
-      });
+      return secureResponse(
+        request,
+        new Response(renderErrorPage(), {
+          status: 500,
+          headers: { "content-type": "text/html; charset=utf-8" },
+        }),
+        import.meta.env.PROD,
+      );
     }
   },
 };

@@ -1,3 +1,4 @@
+import { readJsonBody, RequestBodyError } from "@/lib/request-body";
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { publicSupabaseFetch } from "@/lib/public-supabase-fetch";
@@ -42,8 +43,10 @@ export const Route = createFileRoute("/api/public/gps/finish")({
 
         let body: unknown;
         try {
-          body = await request.json();
-        } catch {
+          body = await readJsonBody(request);
+        } catch (error) {
+          if (error instanceof RequestBodyError)
+            return json({ accepted: false, error: error.code }, error.status);
           return json({ accepted: false, error: "invalid_json" }, 400);
         }
 
@@ -84,7 +87,10 @@ export const Route = createFileRoute("/api/public/gps/finish")({
           if (result?.reason === "unauthorized")
             return json({ accepted: false, error: "unauthorized" }, 401);
 
-          return json({ accepted: result?.accepted === true }, result?.accepted === true ? 202 : 404);
+          return json(
+            { accepted: result?.accepted === true },
+            result?.accepted === true ? 202 : 404,
+          );
         } catch (error) {
           console.error("GPS route finish server error", error);
           return json({ accepted: false, error: "server_error" }, 503);

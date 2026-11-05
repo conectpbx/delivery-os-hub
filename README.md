@@ -251,3 +251,22 @@ PGLITE_MODULE_PATH=/tmp/delivery-db-validation/node_modules/@electric-sql/pglite
 O teste cobre metas de quantidade e receita com gratificações, normalização do aplicativo,
 entregas em rota e fora da validade, repetição sem duplicidade, confirmação manual,
 estorno, reativação, proteção de créditos e isolamento entre contas com RLS.
+
+
+## Segurança, desempenho e testes
+
+As proteções e otimizações compartilhadas, os cenários verificados e os limites da
+validação estão em [SECURITY_REVIEW.md](./SECURITY_REVIEW.md). Para executar os testes:
+
+```sh
+npm ci
+npm test
+npm run typecheck
+npm run test:db
+npm run build
+```
+
+Os testes de banco usam PostgreSQL embarcado e não acessam o Supabase remoto.
+Antes de publicar essas correções, aplique as duas migrações de segurança indicadas
+no documento sobre a instalação existente. O push/deploy do frontend não aplica
+migrações automaticamente.

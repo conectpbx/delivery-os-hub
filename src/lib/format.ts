@@ -1,13 +1,26 @@
-export const brl = (v: number) =>
-  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
-    Number.isFinite(v) ? v : 0,
-  );
+const currencyFormatter = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+const numberFormatters = new Map<number, Intl.NumberFormat>();
+const shortDateFormatter = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit" });
+const dateTimeFormatter = new Intl.DateTimeFormat("pt-BR", {
+  day: "2-digit",
+  month: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+const monthFormatter = new Intl.DateTimeFormat("pt-BR", { month: "short", year: "numeric" });
 
-export const num = (v: number, digits = 1) =>
-  new Intl.NumberFormat("pt-BR", {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  }).format(Number.isFinite(v) ? v : 0);
+export const brl = (v: number) => currencyFormatter.format(Number.isFinite(v) ? v : 0);
+export const num = (v: number, digits = 1) => {
+  let formatter = numberFormatters.get(digits);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat("pt-BR", {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    });
+    numberFormatters.set(digits, formatter);
+  }
+  return formatter.format(Number.isFinite(v) ? v : 0);
+};
 
 /** Data civil local, sem passar por UTC (evita exibir o dia anterior no Brasil). */
 export const localDateValue = (date = new Date()) =>
@@ -22,26 +35,21 @@ export function parseDateValue(value: string) {
   return new Date(value);
 }
 
-export const dateLabel = (iso: string) =>
-  parseDateValue(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-
-export const dateTimeLabel = (iso: string) =>
-  new Date(iso).toLocaleString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+export const dateLabel = (iso: string) => {
+  const date = parseDateValue(iso);
+  return Number.isNaN(date.getTime()) ? "Invalid Date" : shortDateFormatter.format(date);
+};
+export const dateTimeLabel = (iso: string) => {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? "Invalid Date" : dateTimeFormatter.format(date);
+};
 
 export const monthKey = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 
 export const monthLabel = (key: string) => {
   const [y, m] = key.split("-").map(Number);
-  return new Date(y!, (m ?? 1) - 1, 1).toLocaleDateString("pt-BR", {
-    month: "short",
-    year: "numeric",
-  });
+  return monthFormatter.format(new Date(y!, (m ?? 1) - 1, 1));
 };
 
 export const minutesLabel = (min: number) => {
@@ -56,17 +64,15 @@ export const paymentMethodLabel = (method: string | null | undefined) => {
   return "Crédito";
 };
 
+/** Neutralize spreadsheet formulas in user text; keep actual numeric cells numeric. */
+export function csvCell(cell: string | number): string {
+  let value = String(cell ?? "");
+  if (typeof cell === "string" && /^[\s\uFEFF]*[=+@-]/u.test(value)) value = "'" + value;
+  return /[";\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
 export function downloadCsv(filename: string, rows: (string | number)[][]) {
-  const csv = rows
-    .map((r) =>
-      r
-        .map((cell) => {
-          const s = String(cell ?? "");
-          return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-        })
-        .join(";"),
-    )
-    .join("\n");
+  const csv = rows.map((row) => row.map(csvCell).join(";")).join("\n");
   const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

@@ -2,7 +2,7 @@ import { BonusIncome } from "@/components/BonusIncome";
 import { bonusTotal, addBonusIncome } from "@/lib/app-challenges";
 import { useAppChallenges } from "@/lib/data";
 import { createFileRoute, useHydrated } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Copy, Link2, LocateFixed, Play, Smartphone, Square, Trash2, Unplug } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
@@ -164,50 +164,86 @@ function Financeiro() {
   const createGpsDevice = useCreateGpsDevice();
   const revokeGpsDevice = useRevokeGpsDevice();
 
-  const cpk = costPerKm(fuelings.data ?? [], profile.data);
-  const maintenanceReserve = maintenanceReservePerKm(maintenances.data ?? []);
-  const perDeliveries = filterByRange(
-    deliveries.data ?? [],
-    (d) => d.occurred_at,
-    period.fromDate,
-    period.toDate,
-  );
-  const perExpenses = filterByRange(
-    expenses.data ?? [],
-    (e) => e.occurred_at,
-    period.fromDate,
-    period.toDate,
-  );
-  const perMaint = filterByRange(
-    maintenances.data ?? [],
-    (m) => m.performed_at,
-    period.fromDate,
-    period.toDate,
-  );
-  const perFuelings = filterByRange(
-    fuelings.data ?? [],
-    (f) => f.occurred_at,
-    period.fromDate,
-    period.toDate,
-  );
-  const cashBase = summarizeRecordedCosts(perDeliveries, perExpenses, perMaint, perFuelings);
-  const operationalBase = summarizeOperational(
-    perDeliveries,
-    expenses.data ?? [],
+  const {
     cpk,
-    maintenanceReserve.costPerKm,
-    {
-      from: period.fromDate,
-      to: period.toDate,
-      maintenanceCostPerDay: maintenanceReserve.costPerDay,
-      maintenanceItems: maintenanceReserve.items,
-    },
-  );
-  const bonusIncome = bonusTotal(challenges.data ?? [], period.fromDate, period.toDate);
-  const cash = addBonusIncome(cashBase, bonusIncome);
-  const operational = addBonusIncome(operationalBase, bonusIncome);
-  const fuelTotal = perFuelings.reduce((a, f) => a + Number(f.total), 0);
-  const lastOdometer = (fuelings.data ?? []).find((f) => f.odometer != null)?.odometer ?? null;
+    maintenanceReserve,
+    perExpenses,
+    perFuelings,
+    cashBase,
+    cash,
+    operational,
+    fuelTotal,
+    lastOdometer,
+  } = useMemo(() => {
+    const cpk = costPerKm(fuelings.data ?? [], profile.data);
+    const maintenanceReserve = maintenanceReservePerKm(maintenances.data ?? []);
+    const perDeliveries = filterByRange(
+      deliveries.data ?? [],
+      (d) => d.occurred_at,
+      period.fromDate,
+      period.toDate,
+    );
+    const perExpenses = filterByRange(
+      expenses.data ?? [],
+      (e) => e.occurred_at,
+      period.fromDate,
+      period.toDate,
+    );
+    const perMaint = filterByRange(
+      maintenances.data ?? [],
+      (m) => m.performed_at,
+      period.fromDate,
+      period.toDate,
+    );
+    const perFuelings = filterByRange(
+      fuelings.data ?? [],
+      (f) => f.occurred_at,
+      period.fromDate,
+      period.toDate,
+    );
+    const cashBase = summarizeRecordedCosts(perDeliveries, perExpenses, perMaint, perFuelings);
+    const operationalBase = summarizeOperational(
+      perDeliveries,
+      expenses.data ?? [],
+      cpk,
+      maintenanceReserve.costPerKm,
+      {
+        from: period.fromDate,
+        to: period.toDate,
+        maintenanceCostPerDay: maintenanceReserve.costPerDay,
+        maintenanceItems: maintenanceReserve.items,
+      },
+    );
+    const bonusIncome = bonusTotal(challenges.data ?? [], period.fromDate, period.toDate);
+    const cash = addBonusIncome(cashBase, bonusIncome);
+    const operational = addBonusIncome(operationalBase, bonusIncome);
+    const fuelTotal = perFuelings.reduce((a, f) => a + Number(f.total), 0);
+    const lastOdometer = (fuelings.data ?? []).find((f) => f.odometer != null)?.odometer ?? null;
+    return {
+      cpk,
+      maintenanceReserve,
+      perDeliveries,
+      perExpenses,
+      perMaint,
+      perFuelings,
+      cashBase,
+      operationalBase,
+      bonusIncome,
+      cash,
+      operational,
+      fuelTotal,
+      lastOdometer,
+    };
+  }, [
+    fuelings.data,
+    expenses.data,
+    challenges.data,
+    deliveries.data,
+    maintenances.data,
+    profile.data,
+    period.fromDate,
+    period.toDate,
+  ]);
   const estimatedOdometer =
     lastOdometer != null ? Math.round(Number(lastOdometer) + trip.distanceKm) : null;
 

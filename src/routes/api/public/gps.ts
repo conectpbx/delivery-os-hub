@@ -1,3 +1,4 @@
+import { readJsonBody, RequestBodyError } from "@/lib/request-body";
 import { createFileRoute } from "@tanstack/react-router";
 import { gpsPayloadSchema, gpsTimestampIso } from "@/lib/gps-payload";
 import { publicSupabaseFetch } from "@/lib/public-supabase-fetch";
@@ -24,18 +25,16 @@ export const Route = createFileRoute("/api/public/gps")({
     handlers: {
       OPTIONS: async () => new Response(null, { status: 204, headers: corsHeaders }),
       POST: async ({ request }) => {
-        const contentLength = Number(request.headers.get("content-length") ?? 0);
-        if (contentLength > 16_384)
-          return json({ accepted: false, error: "payload_too_large" }, 413);
-
         const authorization = request.headers.get("authorization") ?? "";
         const match = authorization.match(/^Bearer\s+(dos_gps_[a-f0-9]{64})$/i);
         if (!match?.[1]) return json({ accepted: false, error: "unauthorized" }, 401);
 
         let body: unknown;
         try {
-          body = await request.json();
-        } catch {
+          body = await readJsonBody(request);
+        } catch (error) {
+          if (error instanceof RequestBodyError)
+            return json({ accepted: false, error: error.code }, error.status);
           return json({ accepted: false, error: "invalid_json" }, 400);
         }
         const parsed = gpsPayloadSchema.safeParse(body);
@@ -99,6 +98,10 @@ export const Route = createFileRoute("/api/public/gps")({
         const result = data as { accepted?: boolean; reason?: string } | null;
         if (result?.reason === "unauthorized")
           return json({ accepted: false, error: "unauthorized" }, 401);
+        if (result?.reason === "invalid_payload")
+          return json({ accepted: false, error: "invalid_payload" }, 400);
+        if (result?.reason === "route_closed")
+          return json({ accepted: false, error: "route_closed" }, 409);
         if (result?.reason === "stale")
           return json({ accepted: false, error: "stale_reading" }, 409);
         if (result?.accepted !== true)
