@@ -88,8 +88,8 @@ export type Database = {
       }
       app_challenges: {
         Row: {
-          auto_receive: boolean
           app_name: string
+          auto_receive: boolean
           created_at: string
           ends_at: string
           id: string
@@ -102,8 +102,8 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          auto_receive?: boolean
           app_name: string
+          auto_receive?: boolean
           created_at?: string
           ends_at: string
           id?: string
@@ -116,8 +116,8 @@ export type Database = {
           user_id: string
         }
         Update: {
-          auto_receive?: boolean
           app_name?: string
+          auto_receive?: boolean
           created_at?: string
           ends_at?: string
           id?: string
@@ -865,6 +865,7 @@ export type Database = {
           last_used_at: string
         }[]
       }
+      reconcile_app_challenges: { Args: never; Returns: undefined }
       revoke_my_gps_device_token: {
         Args: { _token_id: string }
         Returns: boolean

@@ -50,6 +50,13 @@
       "when": 1793580167357,
       "tag": "0006_app_challenges",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793757489723,
+      "tag": "0007_automatic_app_challenges",
+      "breakpoints": true
     }
   ]
 }
