@@ -737,6 +737,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      sync_active_work_journey: {
+        Args: { _user_id: string; _state: Json; _action: string }
+        Returns: Json
+      }
       admin_list_users: {
         Args: { _limit?: number; _search?: string }
         Returns: {

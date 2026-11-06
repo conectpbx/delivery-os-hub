@@ -1,65 +1,42 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth, authStore } from "@/hooks/useAuth";
 import { useInsert } from "./data";
 import { supabase } from "@/integrations/supabase/client";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const remoteDb = supabase as unknown as SupabaseClient;
-const REMOTE_PULL_MS = 15_000;
-const REMOTE_PUSH_MIN_MS = 30_000;
+import { createTripSync, type TripSyncAction } from "./trip-sync";
+export { mergeRemoteTrip } from "./trip-sync";
+const REMOTE_PULL_MS = 5_000;
 
-async function pushRemote(userId: string, state: TripState) {
-  if (state.active || state.pendingSave) {
-    const { error } = await remoteDb.from("active_work_journeys").upsert({
-      user_id: userId,
-      state: { ...state, last: null, synced: true },
-      updated_at: new Date().toISOString(),
-    });
-    return !error;
-  }
-  const { error } = await remoteDb.from("active_work_journeys").delete().eq("user_id", userId);
-  return !error;
+async function pushRemote(
+  userId: string,
+  state: TripState,
+  action: TripSyncAction,
+): Promise<TripState> {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) throw new Error("offline");
+  const { data, error } = await remoteDb
+    .rpc("sync_active_work_journey", {
+      _user_id: userId,
+      _state: { ...state, last: null, pendingSave: false, synced: true },
+      _action: action,
+    })
+    .abortSignal(AbortSignal.timeout(10_000));
+  if (error) throw error;
+  return { ...EMPTY, ...(data as TripState), last: null, synced: true };
 }
 
-async function pullRemote(userId: string): Promise<TripState | null | undefined> {
+async function pullRemote(userId: string): Promise<TripState | null> {
   const { data, error } = await remoteDb
     .from("active_work_journeys")
     .select("state")
     .eq("user_id", userId)
+    .abortSignal(AbortSignal.timeout(10_000))
     .maybeSingle();
-  if (error) return undefined; // falha de rede: não altera nada
-  return data ? ({ ...EMPTY, ...(data.state as TripState), last: null } as TripState) : null;
+  if (error) throw error;
+  return data ? { ...EMPTY, ...(data.state as TripState), last: null, synced: true } : null;
 }
 
-/** Decide qual estado prevalece entre este dispositivo e o servidor. */
-export function mergeRemoteTrip(
-  local: TripState,
-  remote: TripState | null,
-): TripState | "push" | null {
-  if (!remote) {
-    // Outro dispositivo finalizou (registro removido) depois que este já havia sincronizado.
-    if ((local.active || local.pendingSave) && local.synced) return { ...EMPTY };
-    if (local.active || local.pendingSave) return "push";
-    return null;
-  }
-  if (!local.active && !local.pendingSave) return remote;
-  if (remote.journeyId !== local.journeyId) {
-    return (remote.updatedAt ?? remote.startedAt ?? "") >=
-      (local.updatedAt ?? local.startedAt ?? "")
-      ? remote
-      : "push";
-  }
-  const remoteNewer = (remote.updatedAt ?? "") > (local.updatedAt ?? "");
-  if (remoteNewer)
-    return {
-      ...remote,
-      distanceKm: Math.max(remote.distanceKm, local.distanceKm),
-      points: Math.max(remote.points, local.points),
-    };
-  if ((local.updatedAt ?? "") > (remote.updatedAt ?? "") || local.distanceKm > remote.distanceKm)
-    return "push";
-  return null;
-}
 import { beginPause, endPause, type JourneyPause } from "./operation-time";
 import { sendNativeTripCommand, subscribeNativeGps } from "@/lib/native-gps-bridge";
 import type { GpsDeviceState } from "./gps-integration";
@@ -151,6 +128,10 @@ export function useTripTracker() {
   const storageKey = user ? `${PREFIX}${user.id}` : null;
   const [state, setState] = useState<TripState>(EMPTY);
   const [error, setError] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const syncRef = useRef<ReturnType<typeof createTripSync> | null>(null);
+  const finishInFlight = useRef(false);
+  const [finishing, setFinishing] = useState(false);
   const watchId = useRef<number | null>(null);
   const locationDenied = useRef(false);
   const stateRef = useRef<TripState>(EMPTY);
@@ -176,6 +157,7 @@ export function useTripTracker() {
   useEffect(
     () => () => {
       if (saveTimer.current != null) clearTimeout(saveTimer.current);
+      saveTimer.current = null;
       save(storageKey, stateRef.current);
     },
     [storageKey],
@@ -188,71 +170,105 @@ export function useTripTracker() {
   }, [storageKey]);
 
   useEffect(() => {
-    if (loading || !storageKey) return;
+    finishInFlight.current = false;
+    setFinishing(false);
+    setSyncError(null);
+    if (loading || !storageKey) {
+      stateRef.current = { ...EMPTY };
+      setState(stateRef.current);
+      setSyncError(null);
+      return;
+    }
     const loaded = load(storageKey);
     stateRef.current = loaded;
     setState(loaded);
   }, [loading, storageKey]);
 
   const userId = user?.id ?? null;
-  const lastPush = useRef(0);
   const syncNow = useCallback(
-    (next: TripState) => {
-      if (!userId) return;
-      lastPush.current = Date.now();
-      void pushRemote(userId, next).then((ok) => {
-        if (
-          ok &&
-          (next.active || next.pendingSave) &&
-          !stateRef.current.synced &&
-          stateRef.current.journeyId === next.journeyId
-        ) {
-          stateRef.current = { ...stateRef.current, synced: true };
-          setState(stateRef.current);
-          save(storageKey, stateRef.current);
-        }
-      });
-    },
-    [userId, storageKey],
+    (next: TripState, action: TripSyncAction = "update") =>
+      syncRef.current?.publish(next, action) ?? Promise.resolve(),
+    [],
   );
+  const retrySync = useCallback(() => {
+    void syncRef.current?.refresh();
+  }, []);
 
-  // Sincroniza a jornada entre dispositivos (Android, iPhone, computador).
   useEffect(() => {
     if (loading || !userId) return;
-    let cancelled = false;
-    const pull = async () => {
-      if (typeof navigator !== "undefined" && navigator.onLine === false) return;
-      const remote = await pullRemote(userId);
-      if (cancelled || remote === undefined) return;
-      const merged = mergeRemoteTrip(stateRef.current, remote);
-      if (merged === "push") syncNow(stateRef.current);
-      else if (merged) {
-        stateRef.current = merged;
-        setState(merged);
-        save(storageKey, merged);
-      } else if (
-        stateRef.current.active &&
-        Date.now() - lastPush.current > REMOTE_PUSH_MIN_MS &&
-        remote &&
-        stateRef.current.distanceKm > remote.distanceKm
-      ) {
-        syncNow(stateRef.current);
-      }
+    const sync = createTripSync({
+      local: () => stateRef.current,
+      canWrite: () => authStore.getSnapshot().session?.user.id === userId,
+      apply: (next) => {
+        stateRef.current = next;
+        setState(next);
+        save(storageKey, next);
+      },
+      read: () => pullRemote(userId),
+      write: (next, action) => pushRemote(userId, next, action),
+      error: (error) =>
+        setSyncError(
+          error
+            ? "Não foi possível sincronizar a jornada. Confira a conexão e tente novamente."
+            : null,
+        ),
+    });
+    syncRef.current = sync;
+    const refresh = () => {
+      if (navigator.onLine !== false) void sync.refresh();
     };
-    void pull();
-    const id = setInterval(pull, REMOTE_PULL_MS);
     const onVisible = () => {
-      if (document.visibilityState === "visible") void pull();
+      if (document.visibilityState === "visible") refresh();
     };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== storageKey || !storageKey) return;
+      const next = load(storageKey);
+      stateRef.current = next;
+      setState(next);
+      refresh();
+    };
+    const channel = remoteDb
+      .channel(`active-journey:${userId}:${crypto.randomUUID()}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "active_work_journeys",
+          filter: `user_id=eq.${userId}`,
+        },
+        refresh,
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "active_work_journeys",
+          filter: `user_id=eq.${userId}`,
+        },
+        refresh,
+      )
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") refresh();
+      });
+    refresh();
+    const timer = setInterval(refresh, REMOTE_PULL_MS);
     document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("online", pull);
+    window.addEventListener("online", refresh);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("storage", onStorage);
     return () => {
-      cancelled = true;
-      clearInterval(id);
+      sync.stop(authStore.getSnapshot().session?.user.id === userId);
+      if (syncRef.current === sync) syncRef.current = null;
+      void remoteDb.removeChannel(channel);
+      clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("online", pull);
+      window.removeEventListener("online", refresh);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("storage", onStorage);
     };
-  }, [loading, userId, storageKey, syncNow]);
+  }, [loading, userId, storageKey]);
 
   const startWatch = useCallback(() => {
     if (
@@ -405,7 +421,7 @@ export function useTripTracker() {
       };
       apply(next);
       save(storageKey, next);
-      syncNow(next);
+      void syncNow(next, "start");
       if (next.source === "browser") startWatch();
       else stopWatch();
       sendNativeTripCommand("start");
@@ -415,7 +431,11 @@ export function useTripTracker() {
 
   const finish = async () => {
     const current = stateRef.current;
-    if (!current.startedAt || (!current.active && !current.pendingSave)) return;
+    if (finishInFlight.current || !current.startedAt || (!current.active && !current.pendingSave))
+      return;
+    finishInFlight.current = true;
+    setFinishing(true);
+    const owner = userId;
     stopWatch();
     const endedAt = current.endedAt ?? new Date().toISOString();
     const next = {
@@ -431,22 +451,36 @@ export function useTripTracker() {
     apply(next);
     save(storageKey, next);
     sendNativeTripCommand("finish");
-    syncNow(next);
     try {
+      await syncNow(next, "finish");
+      if (authStore.getSnapshot().session?.user.id !== owner) return;
+      const record = stateRef.current.journeyId === next.journeyId ? stateRef.current : next;
       await addJourney.mutateAsync({
-        id: next.journeyId,
-        started_at: next.startedAt,
-        ended_at: next.endedAt,
-        distance_km: next.distanceKm,
-        source: next.source,
-        pauses: next.pauses,
+        id: record.journeyId,
+        started_at: record.startedAt,
+        ended_at: record.endedAt,
+        distance_km: record.distanceKm,
+        source: record.source,
+        pauses: record.pauses,
       });
+      if (
+        authStore.getSnapshot().session?.user.id !== owner ||
+        stateRef.current.journeyId !== next.journeyId
+      )
+        return;
       const saved = { ...stateRef.current, pendingSave: false };
       apply(saved);
       save(storageKey, saved);
-      syncNow(saved);
+      await syncNow(saved, "finish");
+      retrySync();
     } catch {
-      setError("Jornada preservada neste dispositivo. Tente salvar novamente.");
+      if (authStore.getSnapshot().session?.user.id === owner)
+        setError("Jornada preservada neste dispositivo. Tente salvar novamente.");
+    } finally {
+      if (authStore.getSnapshot().session?.user.id === owner) {
+        finishInFlight.current = false;
+        setFinishing(false);
+      }
     }
   };
 
@@ -486,13 +520,15 @@ export function useTripTracker() {
 
   return {
     trip: state,
+    syncError,
+    retrySync,
     error,
     start,
     finish,
     reset,
     pushGps,
     pushIntegratedGps,
-    saving: addJourney.isPending,
+    saving: finishing || addJourney.isPending,
     retryBrowserGps,
     pause,
     resume,

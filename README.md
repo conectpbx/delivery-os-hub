@@ -270,3 +270,33 @@ Os testes de banco usam PostgreSQL embarcado e não acessam o Supabase remoto.
 Antes de publicar essas correções, aplique as duas migrações de segurança indicadas
 no documento sobre a instalação existente. O push/deploy do frontend não aplica
 migrações automaticamente.
+
+
+## Jornada compartilhada entre dispositivos
+
+Com a mesma conta autenticada, iniciar, pausar, retomar e finalizar a jornada atualiza
+os outros dispositivos por Realtime. Uma consulta de recuperação a cada cinco segundos,
+ao recuperar a conexão e ao voltar para a tela mantém o estado mesmo sem o canal ao vivo.
+O navegador precisa estar aberto e conectado; o iOS pode suspender atividade em segundo
+plano e revalida ao retornar.
+
+A finalização fica registrada no snapshot compartilhado: mensagens atrasadas não reabrem
+a jornada nem encerram uma jornada nova. O salvamento do histórico também fecha o snapshot,
+mesmo se uma navegação interromper a fila do dispositivo original. Rascunhos de histórico
+pendentes continuam apenas no dispositivo responsável até serem salvos. Falhas de rede
+ou de atualização do servidor aparecem nas telas Entregas e Financeiro com **Tentar sincronizar**.
+
+**Ativação:** aplicar `supabase/migrations/20261106090000_active_journey_sync.sql` sobre uma
+instalação que já tenha `active_work_journeys` e `work_journeys`. A mesma migração está
+registrada como `drizzle/migrations/0008_active_journey_sync.sql` para o fluxo Drizzle/Lovable.
+Use o fluxo de migrações adotado pelo projeto; não é necessário executá-la pelos dois.
+Ela registra a tabela no Realtime quando a publicação existe e restringe escritas à RPC
+que valida conta, jornada e operação. Atualize/reabra o aplicativo nos demais dispositivos:
+versões anteriores que escrevem diretamente na tabela não podem continuar sincronizando.
+O push do frontend não substitui a aplicação da migração.
+
+`npm test` cobre ordenação de requisições, respostas atrasadas, reconexão e troca de conta.
+`npm run test:db` inclui dois clientes simulados usando PostgreSQL local para verificar
+os botões de início/fim, mensagens antigas, concorrência de inícios, encerramento pelo
+histórico, isolamento por conta e configuração da publicação. Não substitui a confirmação
+em dois aparelhos reais com a migração aplicada.

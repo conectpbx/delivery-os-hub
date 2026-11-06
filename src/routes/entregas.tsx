@@ -1,3 +1,4 @@
+import { JourneySyncStatus } from "@/components/JourneySyncStatus";
 import { MapsNavigationLink } from "@/components/MapsNavigationLink";
 import { createFileRoute } from "@tanstack/react-router";
 import { Suspense, lazy, useEffect, useMemo, useState } from "react";
@@ -582,6 +583,7 @@ function Entregas() {
 
   return (
     <AppShell title="Entregas" subtitle="Registro de corridas, rota no mapa e navegação">
+      <JourneySyncStatus error={tracker.syncError} retry={tracker.retrySync} />
       <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold">Jornada de trabalho</h2>

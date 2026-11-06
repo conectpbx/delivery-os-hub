@@ -1,3 +1,4 @@
+import { JourneySyncStatus } from "@/components/JourneySyncStatus";
 import { BonusIncome } from "@/components/BonusIncome";
 import { bonusTotal, addBonusIncome } from "@/lib/app-challenges";
 import { useAppChallenges } from "@/lib/data";
@@ -120,6 +121,8 @@ function Financeiro() {
   const {
     trip,
     error: tripError,
+    syncError,
+    retrySync,
     start,
     finish,
     reset,
@@ -276,6 +279,7 @@ function Financeiro() {
       actions={<PeriodFilter selection={period} />}
     >
       <PeriodSummary selection={period} />
+      <JourneySyncStatus error={syncError} retry={retrySync} />
       <BonusIncome from={period.fromDate} to={period.toDate} deliveryRevenue={cashBase.revenue} />
       <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard

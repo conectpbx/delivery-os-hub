@@ -12,7 +12,7 @@
     "format": "prettier --write .",
     "test": "node --import tsx scripts/test.mjs",
     "typecheck": "tsc --noEmit",
-    "test:db": "node scripts/test-security-db.mjs && node scripts/test-gps-security-db.mjs && node scripts/test-app-challenges-db.mjs"
+    "test:db": "node scripts/test-security-db.mjs && node scripts/test-gps-security-db.mjs && node scripts/test-app-challenges-db.mjs && node --import tsx scripts/test-trip-sync-db.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
