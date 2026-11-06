@@ -1,3 +1,4 @@
+import { recoverFromChunkError } from "@/lib/chunk-reload";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
