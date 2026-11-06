@@ -288,7 +288,7 @@ ou de atualização do servidor aparecem nas telas Entregas e Financeiro com **T
 
 **Ativação:** aplicar `supabase/migrations/20261106090000_active_journey_sync.sql` sobre uma
 instalação que já tenha `active_work_journeys` e `work_journeys`. A mesma migração está
-registrada como `drizzle/migrations/0008_active_journey_sync.sql` para o fluxo Drizzle/Lovable.
+registrada como `drizzle/migrations/0010_active_journey_sync.sql` para o fluxo Drizzle/Lovable.
 Use o fluxo de migrações adotado pelo projeto; não é necessário executá-la pelos dois.
 Ela registra a tabela no Realtime quando a publicação existe e restringe escritas à RPC
 que valida conta, jornada e operação. Atualize/reabra o aplicativo nos demais dispositivos:

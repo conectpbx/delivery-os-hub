@@ -1,3 +1,4 @@
+import { recoverFromChunkError } from "@/lib/chunk-reload";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
@@ -42,16 +43,7 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
   console.error(error);
   const router = useRouter();
   useEffect(() => {
-    if (/Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module/i.test(String((error as Error)?.message ?? ""))) {
-      try {
-        const last = Number(sessionStorage.getItem("deliveryos.chunk-reload-at") || 0);
-        if (Date.now() - last > 10_000) {
-          sessionStorage.setItem("deliveryos.chunk-reload-at", String(Date.now()));
-          window.location.reload();
-          return;
-        }
-      } catch {}
-    }
+    if (recoverFromChunkError(error)) return;
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
 

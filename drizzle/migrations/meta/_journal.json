@@ -61,8 +61,22 @@
     {
       "idx": 8,
       "version": "7",
-      "when": 1793923200000,
-      "tag": "0008_active_journey_sync",
+      "when": 1793925607205,
+      "tag": "0008_security_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793925634192,
+      "tag": "0009_gps_route_security",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793925634193,
+      "tag": "0010_active_journey_sync",
       "breakpoints": true
     }
   ]
