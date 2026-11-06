@@ -738,6 +738,50 @@ function Entregas() {
                   </Button>
                 </div>
               )}
+              {!addingApp && (apps.data ?? []).length > 0 ? (
+                <div className="flex flex-wrap gap-2" role="group" aria-label="Seleção rápida de aplicativo">
+                  {(apps.data ?? []).slice(0, 8).map((a) => (
+                    <Button
+                      key={a.id}
+                      type="button"
+                      size="sm"
+                      variant={form.app_name === a.name ? "default" : "outline"}
+                      className="h-10 rounded-full px-4"
+                      aria-pressed={form.app_name === a.name}
+                      onClick={() => selectApp(a.name)}
+                    >
+                      {a.name}
+                    </Button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <div className="space-y-2">
+              <Label>Valor rápido</Label>
+              <div className="flex flex-wrap gap-2">
+                {[5, 10, 15].map((inc) => (
+                  <Button
+                    key={inc}
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="h-10 flex-1 rounded-full"
+                    onClick={() => setGross(String(round2(gross + inc)))}
+                  >
+                    +R$ {inc}
+                  </Button>
+                ))}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-10 rounded-full"
+                  disabled={!form.earnings}
+                  onClick={() => setGross("")}
+                >
+                  Limpar
+                </Button>
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
               <Field label="Valor bruto (R$)" value={form.earnings} onChange={setGross} />
