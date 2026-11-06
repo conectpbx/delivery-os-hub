@@ -176,11 +176,11 @@ export const scanRideScreenshot = createServerFn({ method: "POST" })
     if (!response.ok) throw new Error("Não foi possível ler o print agora.");
     const json = (await response.json()) as { choices?: { message?: { content?: string } }[] };
     const raw = json.choices?.[0]?.message?.content ?? "";
-    let p: Record<string, unknown> = {};
+    let p: { app?: unknown; gross?: unknown; tip?: unknown; distanceKm?: unknown; durationMin?: unknown } = {};
     const m = raw.match(/\{[\s\S]*\}/);
     if (m) {
       try {
-        p = JSON.parse(m[0]) as Record<string, unknown>;
+        p = JSON.parse(m[0]) as typeof p;
       } catch {
         p = {};
       }

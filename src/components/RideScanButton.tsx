@@ -21,8 +21,14 @@ export function RideScanButton({
 
   async function handle(file: File) {
     const mimeType = TYPES.find((t) => t === file.type);
-    if (!mimeType) return toast.error("Use uma imagem JPG, PNG ou WEBP.");
-    if (file.size > 5_500_000) return toast.error("Imagem muito grande (máx. 5 MB).");
+    if (!mimeType) {
+      toast.error("Use uma imagem JPG, PNG ou WEBP.");
+      return;
+    }
+    if (file.size > 5_500_000) {
+      toast.error("Imagem muito grande (máx. 5 MB).");
+      return;
+    }
     setBusy(true);
     try {
       const buf = new Uint8Array(await file.arrayBuffer());
