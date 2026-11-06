@@ -187,6 +187,15 @@ function Entregas() {
   } | null>("entregas.finishing", null);
   const [finishGeo, setFinishGeo] = useState<string | null>(null);
   const [histRange, setHistRange] = useState<"hoje" | "7d" | "mes" | "tudo">("hoje");
+  const [histLimit, setHistLimit] = useState(20);
+  const [quickMode, setQuickMode] = useState(false);
+  useEffect(() => {
+    setQuickMode(localStorage.getItem("deliveryos.quick-mode") === "1");
+  }, []);
+  function toggleQuick(v: boolean) {
+    setQuickMode(v);
+    localStorage.setItem("deliveryos.quick-mode", v ? "1" : "0");
+  }
   const [deliveryStartedAt, setDeliveryStartedAt] = usePersistentState<string | null>(
     "entregas.started-at",
     null,
@@ -653,6 +662,21 @@ function Entregas() {
             }}
             className="space-y-3"
           >
+            <div className="grid grid-cols-2 rounded-full border border-border bg-muted/40 p-1" role="group" aria-label="Tipo de registro">
+              {([[true, "Rápido"], [false, "Completo"]] as const).map(([v, label]) => (
+                <Button
+                  key={label}
+                  type="button"
+                  size="sm"
+                  variant={quickMode === v ? "default" : "ghost"}
+                  className="h-9 rounded-full"
+                  aria-pressed={quickMode === v}
+                  onClick={() => toggleQuick(v)}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
             <div className="space-y-2">
               <Label htmlFor="app">Aplicativo</Label>
               {addingApp ? (
@@ -785,6 +809,12 @@ function Entregas() {
             </div>
             <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
               <Field label="Valor bruto (R$)" value={form.earnings} onChange={setGross} />
+              <Field
+                label="Distância (km)"
+                value={form.distance_km}
+                onChange={(v) => set("distance_km", v)}
+              />
+              {quickMode ? null : (<>
               <Field label="Taxa do app (R$)" value={form.fee_amount} onChange={setFeeAmount} />
               <Field label="Taxa do app (%)" value={form.fee_percent} onChange={setFeePercent} />
               <Field
@@ -805,11 +835,6 @@ function Entregas() {
                   <option value="dinheiro">Dinheiro</option>
                 </select>
               </div>
-              <Field
-                label="Distância (km)"
-                value={form.distance_km}
-                onChange={(v) => set("distance_km", v)}
-              />
               <Field
                 label="Duração informada/estimada (min)"
                 value={form.duration_min}
@@ -847,6 +872,7 @@ function Entregas() {
                 value={form.idle_min}
                 onChange={(v) => set("idle_min", v)}
               />
+              </>)}
             </div>
             <div className="rounded-md border border-border bg-muted/40 p-3 text-xs">
               <div className="flex justify-between">
@@ -1109,7 +1135,10 @@ function Entregas() {
                   type="button"
                   size="sm"
                   variant={histRange === k ? "default" : "outline"}
-                  onClick={() => setHistRange(k)}
+                  onClick={() => {
+                    setHistRange(k);
+                    setHistLimit(20);
+                  }}
                 >
                   {label}
                 </Button>
@@ -1117,7 +1146,7 @@ function Entregas() {
             </div>
             {data.length ? (
               <ul className="divide-y divide-border">
-                {data.map((d) => {
+                {data.slice(0, histLimit).map((d) => {
                   const raw = historyStops(d);
                   const status = d.status ?? "concluida";
                   const pickupCount = raw.filter((stop) => stop.kind === "coleta").length;
