@@ -1492,7 +1492,18 @@ function Entregas() {
                   );
                 })}
               </ul>
-            ) : (
+            ) : null}
+            {data.length > histLimit ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-3 w-full"
+                onClick={() => setHistLimit((n) => n + 20)}
+              >
+                Carregar mais ({data.length - histLimit} restantes)
+              </Button>
+            ) : null}
+            {data.length ? null : (
               <EmptyState>Nenhuma entrega registrada hoje.</EmptyState>
             )}
           </SectionCard>
