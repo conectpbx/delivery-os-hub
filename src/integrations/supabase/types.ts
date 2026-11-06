@@ -854,6 +854,7 @@ export type Database = {
         }
         Returns: Json
       }
+      is_admin: { Args: { _user_id?: string }; Returns: boolean }
       is_super_admin: { Args: { _user_id?: string }; Returns: boolean }
       list_my_gps_devices: {
         Args: never

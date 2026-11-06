@@ -57,6 +57,20 @@
       "when": 1793757489723,
       "tag": "0007_automatic_app_challenges",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793925607205,
+      "tag": "0008_security_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793925634192,
+      "tag": "0009_gps_route_security",
+      "breakpoints": true
     }
   ]
 }
