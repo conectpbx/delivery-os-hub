@@ -117,3 +117,80 @@ function numberOrNull(v: unknown) {
   const n = Number(v);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
+
+export type RideScanResult = {
+  app: string | null;
+  gross: number | null;
+  tip: number | null;
+  distanceKm: number | null;
+  durationMin: number | null;
+  remaining: number;
+};
+
+/** Lê o print de uma corrida (app de entrega) — usa a mesma cota diária. */
+export const scanRideScreenshot = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) => Input.parse(input))
+  .handler(async ({ data, context }): Promise<RideScanResult> => {
+    const key = process.env["LOVABLE_API_KEY"];
+    if (!key) throw new Error("IA indisponível no momento.");
+    const { data: used, error: quotaError } = await context.supabase.rpc(
+      "consume_ai_scan_quota",
+      { _limit: DAILY_SCAN_LIMIT },
+    );
+    if (quotaError) throw new Error("Não foi possível validar seu limite de leituras.");
+    if (typeof used !== "number" || used < 0)
+      throw new Error(`Você atingiu o limite de ${DAILY_SCAN_LIMIT} leituras de IA hoje.`);
+    const remaining = Math.max(0, DAILY_SCAN_LIMIT - used);
+    let response: Response;
+    try {
+      response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+        body: JSON.stringify({
+          model: AI_MODEL,
+          max_tokens: 160,
+          temperature: 0,
+          messages: [
+            {
+              role: "system",
+              content:
+                'Você extrai dados de prints de corridas de apps de entrega brasileiros (iFood, Rappi, Uber, 99, Lalamove etc.). Responda apenas JSON: {"app":string|null,"gross":number|null,"tip":number|null,"distanceKm":number|null,"durationMin":number|null}. gross = valor da corrida sem gorjeta. Ponto decimal.',
+            },
+            {
+              role: "user",
+              content: [
+                { type: "text", text: "Extraia os dados desta corrida." },
+                { type: "image_url", image_url: { url: `data:${data.mimeType};base64,${data.imageBase64}` } },
+              ],
+            },
+          ],
+        }),
+        signal: AbortSignal.timeout(30000),
+      });
+    } catch {
+      throw new Error("A IA não respondeu a tempo. Tente novamente.");
+    }
+    if (response.status === 429) throw new Error("Limite de uso da IA atingido. Tente em instantes.");
+    if (response.status === 402) throw new Error("Créditos de IA esgotados.");
+    if (!response.ok) throw new Error("Não foi possível ler o print agora.");
+    const json = (await response.json()) as { choices?: { message?: { content?: string } }[] };
+    const raw = json.choices?.[0]?.message?.content ?? "";
+    let p: { app?: unknown; gross?: unknown; tip?: unknown; distanceKm?: unknown; durationMin?: unknown } = {};
+    const m = raw.match(/\{[\s\S]*\}/);
+    if (m) {
+      try {
+        p = JSON.parse(m[0]) as typeof p;
+      } catch {
+        p = {};
+      }
+    }
+    return {
+      app: typeof p.app === "string" ? p.app : null,
+      gross: numberOrNull(p.gross),
+      tip: numberOrNull(p.tip),
+      distanceKm: numberOrNull(p.distanceKm),
+      durationMin: numberOrNull(p.durationMin),
+      remaining,
+    };
+  });

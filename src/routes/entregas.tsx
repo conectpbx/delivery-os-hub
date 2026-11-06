@@ -20,6 +20,7 @@ import { AppShell } from "@/components/AppShell";
 import { OperationTimeStats } from "@/components/OperationTimeStats";
 import { JourneyPauseControl } from "@/components/JourneyPauseControl";
 import { useTripTracker } from "@/lib/trip-tracker";
+import { RideScanButton } from "@/components/RideScanButton";
 import { GpsTrackingStatus } from "@/components/GpsTrackingStatus";
 import { useGpsDevices, useGpsDeviceState } from "@/lib/gps-integration";
 import { deliveryMinutes } from "@/lib/operation-time";
@@ -189,6 +190,7 @@ function Entregas() {
   const [histRange, setHistRange] = useState<"hoje" | "7d" | "mes" | "tudo">("hoje");
   const [histLimit, setHistLimit] = useState(20);
   const [quickMode, setQuickMode] = useState(false);
+  const [odoStart, setOdoStart] = useState<number | null>(null);
   useEffect(() => {
     setQuickMode(localStorage.getItem("deliveryos.quick-mode") === "1");
   }, []);
@@ -677,6 +679,19 @@ function Entregas() {
                 </Button>
               ))}
             </div>
+            <RideScanButton
+              apps={(apps.data ?? []).map((a) => a.name)}
+              onResult={(r) => {
+                if (r.app) selectApp(r.app);
+                if (r.gross) setGross(String(r.gross));
+                setForm((f) => ({
+                  ...f,
+                  tip: r.tip ? String(r.tip) : f.tip,
+                  distance_km: r.distanceKm ? String(r.distanceKm) : f.distance_km,
+                  duration_min: r.durationMin ? String(r.durationMin) : f.duration_min,
+                }));
+              }}
+            />
             <div className="space-y-2">
               <Label htmlFor="app">Aplicativo</Label>
               {addingApp ? (
@@ -814,6 +829,19 @@ function Entregas() {
                 value={form.distance_km}
                 onChange={(v) => set("distance_km", v)}
               />
+              {odoStart != null && Number(externalGps.data?.total_km) > odoStart ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="col-span-2 h-10"
+                  onClick={() =>
+                    set("distance_km", String(Math.round((Number(externalGps.data?.total_km) - odoStart) * 100) / 100))
+                  }
+                >
+                  Usar km do odômetro ({num(Number(externalGps.data?.total_km) - odoStart)} km)
+                </Button>
+              ) : null}
               {quickMode ? null : (<>
               <Field label="Taxa do app (R$)" value={form.fee_amount} onChange={setFeeAmount} />
               <Field label="Taxa do app (%)" value={form.fee_percent} onChange={setFeePercent} />
@@ -846,7 +874,11 @@ function Entregas() {
                   variant="outline"
                   size="sm"
                   disabled={!!deliveryStartedAt}
-                  onClick={() => setDeliveryStartedAt(new Date().toISOString())}
+                  onClick={() => {
+                    setDeliveryStartedAt(new Date().toISOString());
+                    const t = Number(externalGps.data?.total_km);
+                    setOdoStart(Number.isFinite(t) && t > 0 ? t : null);
+                  }}
                 >
                   Iniciar entrega
                 </Button>
