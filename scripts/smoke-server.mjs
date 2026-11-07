@@ -45,7 +45,7 @@ for (const file of actionFiles) {
   const source = await readFile(new URL(file, ssr), "utf8");
   for (const match of source.matchAll(/id: "([a-f0-9]+)"/g)) actionIds.add(match[1]);
 }
-assert.equal(actionIds.size, 2, "both OCR server functions exist");
+assert.equal(actionIds.size, 3, "all OCR server functions exist");
 for (const actionId of actionIds) {
   const action = `${base}/_serverFn/${actionId}`;
   const crossSite = await fetch(action, {

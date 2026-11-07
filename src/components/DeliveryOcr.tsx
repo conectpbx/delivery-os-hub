@@ -22,6 +22,9 @@ export function DeliveryOcr({ apply }: { apply: (scan: DeliveryScan) => void }) 
   const [fields, setFields] = useState({
     appName: "",
     gross: "",
+    tip: "",
+    distanceKm: "",
+    durationMin: "",
     feeAmount: "",
     feePercent: "",
     pickupAddress: "",
@@ -65,6 +68,9 @@ export function DeliveryOcr({ apply }: { apply: (scan: DeliveryScan) => void }) 
       setFields({
         appName: result.appName ?? "",
         gross: result.gross == null ? "" : String(result.gross),
+        tip: result.tip == null ? "" : String(result.tip),
+        distanceKm: result.distanceKm == null ? "" : String(result.distanceKm),
+        durationMin: result.durationMin == null ? "" : String(result.durationMin),
         feeAmount: result.feeAmount == null ? "" : String(result.feeAmount),
         feePercent: result.feePercent == null ? "" : String(result.feePercent),
         pickupAddress: result.pickupAddress ?? "",
@@ -146,6 +152,9 @@ export function DeliveryOcr({ apply }: { apply: (scan: DeliveryScan) => void }) 
                   apply({
                     appName: fields.appName.trim() || null,
                     gross,
+                    tip: fields.tip.trim() ? dec(fields.tip) : null,
+                    distanceKm: fields.distanceKm.trim() ? dec(fields.distanceKm) : null,
+                    durationMin: fields.durationMin.trim() ? dec(fields.durationMin) : null,
                     feeAmount: amount,
                     feePercent: percent,
                     pickupAddress: fields.pickupAddress.trim() || null,
@@ -163,6 +172,9 @@ export function DeliveryOcr({ apply }: { apply: (scan: DeliveryScan) => void }) 
                 [
                   ["appName", "Aplicativo"],
                   ["gross", "Valor bruto (R$)"],
+                  ["tip", "Gorjeta (R$)"],
+                  ["distanceKm", "Distância (km)"],
+                  ["durationMin", "Duração (min)"],
                   ["feeAmount", "Taxa em R$"],
                   ["feePercent", "Taxa (%)"],
                   ["pickupAddress", "Coleta"],
@@ -174,7 +186,16 @@ export function DeliveryOcr({ apply }: { apply: (scan: DeliveryScan) => void }) 
                   <Input
                     maxLength={key === "appName" ? 100 : 500}
                     inputMode={
-                      ["gross", "feeAmount", "feePercent"].includes(key) ? "decimal" : "text"
+                      [
+                        "gross",
+                        "tip",
+                        "distanceKm",
+                        "durationMin",
+                        "feeAmount",
+                        "feePercent",
+                      ].includes(key)
+                        ? "decimal"
+                        : "text"
                     }
                     value={fields[key]}
                     onChange={(event) =>

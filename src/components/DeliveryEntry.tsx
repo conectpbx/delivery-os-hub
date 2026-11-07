@@ -494,6 +494,9 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
         ...old,
         app_name: known?.name ?? result.appName ?? old.app_name,
         earnings: result.gross == null ? old.earnings : String(result.gross),
+        tip: result.tip == null ? old.tip : String(result.tip),
+        distance_km: result.distanceKm == null ? old.distance_km : String(result.distanceKm),
+        duration_min: result.durationMin == null ? old.duration_min : String(result.durationMin),
         fee_percent: String(fee),
         fee_amount: String(Math.round(gross * fee) / 100),
       };

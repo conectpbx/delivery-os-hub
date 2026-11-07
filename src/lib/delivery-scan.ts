@@ -4,6 +4,9 @@ const amount = z.number().finite().min(0).lt(1e9).nullable().optional();
 export const deliveryScanSchema = z.object({
   appName: text(100),
   gross: amount,
+  tip: amount,
+  distanceKm: amount,
+  durationMin: amount,
   feeAmount: amount,
   feePercent: z.number().finite().min(0).max(100).nullable().optional(),
   pickupAddress: text(500),
