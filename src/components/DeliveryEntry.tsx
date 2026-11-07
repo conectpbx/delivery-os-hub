@@ -594,6 +594,19 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
               variant="outline"
               className="min-h-11"
               onClick={() => {
+                setStops((current) =>
+                  current[0]?.kind === "coleta" ? current : [newStop("coleta"), ...current],
+                );
+                setShowRoute(true);
+              }}
+            >
+              Definir ponto inicial
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-11"
+              onClick={() => {
                 setStops((current) => {
                   const next = [...current];
                   let final = -1;
@@ -637,7 +650,7 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
                       {i === stops.length - 1 && s.kind === "entrega"
                         ? "Ponto final da entrega"
                         : i === 0 && s.kind === "coleta"
-                          ? "Coleta"
+                          ? "Ponto inicial / coleta"
                           : "Ponto adicional"}
                     </span>
                     <select
@@ -667,7 +680,9 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
                       aria-label={
                         i === stops.length - 1 && s.kind === "entrega"
                           ? "Endereço do ponto final"
-                          : `Endereço do ponto ${i + 1}`
+                          : i === 0 && s.kind === "coleta"
+                            ? "Endereço do ponto inicial"
+                            : `Endereço do ponto ${i + 1}`
                       }
                       value={s.address}
                       onChange={(e) =>

@@ -32,8 +32,10 @@ rows = []
 for index in range(45 + 800):
     at = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(minutes=index + 1) if index < 45 else now - timedelta(days=400, minutes=index)
     rows.append({"id": str(uuid.uuid4()), "user_id": USER_ID, "app_name": "iFood", "gross_earnings": 20, "fee_percent": 10, "earnings": 18, "tip": 0, "payment_method": "credito", "distance_km": 1, "duration_min": 10, "idle_min": 0, "occurred_at": iso(at), "status": "concluida", "started_at": None, "ended_at": None, "pickup_address": None, "dropoff_address": None, "lat": None, "lng": None, "stops": []})
+rows[44]["status"] = "em_rota"
 requests = []
 created = []
+updated = []
 
 def timestamp(value):
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
@@ -72,6 +74,11 @@ def handle(route):
                 rows.append(record)
                 created.append(record)
             result = [existing or record]
+        elif request.method == "PATCH":
+            record = next(item for item in rows if "eq." + item["id"] in params.get("id", []))
+            record.update(request.post_data_json)
+            updated.append(dict(record))
+            result = [record]
         else:
             result = list(rows)
             for condition in params.get("app_name", []):
@@ -128,10 +135,27 @@ with sync_playwright() as p:
     history_requests = [query for method, path, query in requests if method == "GET" and path.endswith("/deliveries") and query.get("limit") == ["20"]]
     assert any(query.get("offset") == ["20"] for query in history_requests), "history fetched only the requested next page"
     assert all("occurred_at" in query or "or" in query or query.get("limit") == ["20"] for method, path, query in requests if method == "GET" and path.endswith("/deliveries")), "no implicit full-history fetch"
+    active_card = page.locator("li").filter(has=page.get_by_role("button", name="Entregue (GPS)", exact=True))
+    expect(active_card.get_by_role("button", name="Adicionar ponto adicional", exact=True)).to_be_visible()
+    expect(active_card.get_by_role("button", name="Definir ponto final", exact=True)).to_be_visible()
+    active_card.get_by_role("button", name="Adicionar ponto adicional", exact=True).click()
+    active_card.get_by_label("Endereço adicional 1", exact=True).fill("Parada intermediária em rota")
+    expect(active_card.get_by_role("button", name="Concluir", exact=True)).to_be_disabled()
+    active_card.get_by_role("button", name="Salvar pontos", exact=True).click()
+    expect(active_card.get_by_text("Parada intermediária em rota", exact=True)).to_be_visible()
+    assert updated[-1]["status"] == "em_rota"
+    active_card.get_by_role("button", name="Definir ponto final", exact=True).click()
+    active_card.get_by_label("Endereço final da entrega em rota", exact=True).fill("Destino final em rota")
+    active_card.get_by_role("button", name="Concluir", exact=True).click()
+    expect(page.get_by_text("Destino final em rota", exact=True)).to_be_visible(timeout=20000)
+    assert updated[-1]["status"] == "concluida"
+    assert updated[-1]["dropoff_address"] == "Destino final em rota"
+    assert [stop["address"] for stop in updated[-1]["stops"]] == ["Parada intermediária em rota", "Destino final em rota"]
     entry = page.locator("section").filter(has=page.get_by_role("heading", name="Nova entrega", exact=True))
     entry.get_by_role("button", name="iFood", exact=True).click()
+    entry.get_by_role("button", name="Definir ponto inicial", exact=True).click()
     entry.get_by_role("button", name="Definir ponto final", exact=True).click()
-    entry.get_by_label("Endereço do ponto 1", exact=True).fill("Restaurante Central")
+    entry.get_by_label("Endereço do ponto inicial", exact=True).fill("Restaurante Central")
     entry.get_by_label("Endereço do ponto final", exact=True).fill("Rua Destino, 100")
     entry.get_by_role("button", name="Adicionar ponto adicional", exact=True).click()
     entry.get_by_label("Endereço do ponto 2", exact=True).fill("Rua Intermediária, 50")
