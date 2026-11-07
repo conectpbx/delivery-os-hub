@@ -300,3 +300,47 @@ O push do frontend não substitui a aplicação da migração.
 os botões de início/fim, mensagens antigas, concorrência de inícios, encerramento pelo
 histórico, isolamento por conta e configuração da publicação. Não substitui a confirmação
 em dois aparelhos reais com a migração aplicada.
+
+### Entregas: carregamento e registro rápido
+
+A tela consulta o período selecionado no banco e carrega o histórico em blocos de
+20 registros. **Tudo** libera a consulta sem limite de datas, mantendo a paginação.
+Os indicadores de aprendizagem usam uma projeção reduzida do mês e dos 56 dias
+anteriores ao início dele; jornadas que atravessam a meia-noite continuam incluídas
+nos cálculos por intervalo. Financeiro também filtra entregas pelo período escolhido.
+
+O modo **Rápido** oferece aplicativos, valores frequentes, incrementos e conserva o
+último pagamento escolhido. O modo **Completo** mantém endereços, paradas e mapa.
+Formulário, resumo, mapa e histórico têm estado separado. Rotas repetidas e endereços
+usam cache limitado em memória; o cálculo automático aguarda 600 ms e a geocodificação
+respeita uma fila de uma chamada por segundo. Coordenadas não são persistidas por
+esse cache.
+
+A medição de uma entrega usa a diferença dos contadores da mesma jornada e desconta
+pausas. Sugestões exigem leitura recente; **Medir esta entrega** define uma referência
+explícita quando não há uma referência segura. **Cheguei no restaurante** e **Entregue**
+capturam uma posição nova. Finalizar pelo histórico preserva os quilômetros informados.
+O registro rápido funciona offline pela fila local, que sincroniza ao reconectar.
+
+O scanner aceita JPG, PNG e WebP de até 6 MB, reduz a imagem localmente e só a envia
+quando **Ler imagem** é acionado. Os campos extraídos são revisáveis antes da aplicação
+ao formulário; a leitura nunca salva uma entrega automaticamente. Usa a integração
+`LOVABLE_API_KEY` no servidor e a quota autenticada já compartilhada com o scanner de
+combustível. A chave não está configurada neste ambiente de desenvolvimento; a
+integração foi validada com respostas simuladas, sem chamar o provedor real.
+
+Validação: `npm test`, `npm run typecheck`, `npm run build` e `npm run test:db`.
+O teste móvel isolado `python scripts/smoke-deliveries.py` requer Python Playwright,
+Chromium e o servidor Vite na porta 3005 (`npm run dev -- --host 0.0.0.0 --port 3005`).
+Ele intercepta serviços externos e verifica paginação, taxas, pagamento e gravação
+online/offline. `SMOKE_BASE_URL` permite alterar a URL local. Não substitui a validação
+de GPS em aparelhos reais nem a leitura de comprovantes pelo provedor de IA.
+
+A sincronização também compara o histórico de pausas ao proteger comandos contra
+respostas atrasadas. Pausar/retomar avançam a versão mesmo se o relógio local voltar
+ou dois comandos ocorrerem no mesmo milissegundo. Um comando antigo rejeitado pela
+RPC adota o estado confirmado no servidor, evitando manter uma pausa já encerrada
+em outro dispositivo. Os testes com dois clientes PostgreSQL cobrem início, pausa,
+retomada, reconexão com pausa antiga e finalização. A publicação da versão atual e
+a migração de sincronização descrita acima continuam necessárias para uso entre
+aparelhos; esta correção não acrescenta outra migração.

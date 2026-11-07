@@ -17,7 +17,14 @@ const version = (state: TripState) =>
     state.active,
     state.pendingSave,
     state.endedAt,
+    state.pauses,
   ]);
+
+/** Commands remain ordered even when the device clock moves backwards. */
+export function nextTripUpdateAt(state: TripState, now = Date.now()) {
+  const previous = Date.parse(state.updatedAt ?? "");
+  return new Date(Math.max(now, Number.isFinite(previous) ? previous + 1 : now)).toISOString();
+}
 
 export function mergeRemoteTrip(
   local: TripState,
@@ -54,11 +61,19 @@ export function mergeRemoteTrip(
       return "push";
     if (remote.distanceKm > local.distanceKm || remote.points > local.points)
       return {
-        ...local,
+        ...remote,
         distanceKm: Math.max(remote.distanceKm, local.distanceKm),
         points: Math.max(remote.points, local.points),
         last: null,
         synced: true,
+      };
+    if (JSON.stringify(remote.pauses ?? []) !== JSON.stringify(local.pauses ?? []))
+      return {
+        ...remote,
+        synced: true,
+        last: null,
+        distanceKm: Math.max(remote.distanceKm, local.distanceKm),
+        points: Math.max(remote.points, local.points),
       };
     return local.synced ? null : { ...local, synced: true };
   }
@@ -108,8 +123,15 @@ export function createTripSync(options: Options) {
       if (remote.journeyId !== local.journeyId && !local.pendingSave)
         options.apply({ ...remote, synced: true, last: null });
       else if (remote.journeyId === local.journeyId) {
-        const merged = mergeRemoteTrip(local, remote);
-        options.apply(merged && merged !== "push" ? merged : { ...local, synced: true });
+        // The RPC may reject a stale command and return the authoritative snapshot.
+        options.apply({
+          ...remote,
+          synced: true,
+          last: null,
+          pendingSave: Boolean(local.pendingSave),
+          distanceKm: Math.max(remote.distanceKm, local.distanceKm),
+          points: Math.max(remote.points, local.points),
+        });
       }
     }
     options.error(null);

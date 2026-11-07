@@ -8,8 +8,8 @@ import { operationTime, type WorkJourney } from "./operation-time";
 
 export function useOperationTime(from: Date, to: Date) {
   const { user } = useAuth();
-  const deliveries = useDeliveries();
-  const journeys = useJourneys();
+  const deliveries = useDeliveries({ from, to, overlap: true });
+  const journeys = useJourneys({ from, to, overlap: true });
   const [now, setNow] = useState<Date | null>(null);
   const [active, setActive] = useState<WorkJourney | null>(null);
   useEffect(() => {

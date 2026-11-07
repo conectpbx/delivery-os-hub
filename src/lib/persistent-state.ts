@@ -4,10 +4,12 @@ import { useAuth } from "@/hooks/useAuth";
 const PREFIX = "delivery-os-draft:";
 
 /** Drafts are scoped during render as well as storage, so an account switch cannot show/save another draft. */
-export function usePersistentState<T>(key: string, initial: T) {
+export function usePersistentState<T>(key: string, initial: T, validate?: (value: unknown) => T) {
   const { user, loading } = useAuth();
   const storageKey = user ? `${PREFIX}${user.id}:${key}` : null;
   const initialValue = useRef(initial);
+  const validator = useRef(validate);
+  validator.current = validate;
   const [state, setState] = useState<{ owner: string | null; value: T }>({
     owner: null,
     value: initial,
@@ -22,7 +24,10 @@ export function usePersistentState<T>(key: string, initial: T) {
     let restored = initialValue.current;
     try {
       const raw = window.localStorage.getItem(storageKey);
-      if (raw) restored = JSON.parse(raw) as T;
+      if (raw) {
+        const parsed: unknown = JSON.parse(raw);
+        restored = validator.current ? validator.current(parsed) : (parsed as T);
+      }
     } catch {
       /* Invalid or unavailable storage must not break the form. */
     }

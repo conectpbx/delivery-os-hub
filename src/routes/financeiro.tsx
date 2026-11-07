@@ -85,12 +85,13 @@ export const Route = createFileRoute("/financeiro")({
 const CATEGORIES = ["Alimentação", "Aluguel de moto", "Seguro", "Multa", "Pedágio", "Outros"];
 
 function Financeiro() {
+  const period = usePeriodSelection(0);
   const hydrated = useHydrated();
   const gpsEndpoint = hydrated ? `${window.location.origin}/api/public/gps` : "/api/public/gps";
   const fuelings = useFuelings();
   const expenses = useExpenses();
   const challenges = useAppChallenges();
-  const deliveries = useDeliveries();
+  const deliveries = useDeliveries({ from: period.fromDate, to: period.toDate });
   const maintenances = useMaintenances();
   const profile = useProfile();
   const saveProfile = useUpsertProfile();
@@ -116,7 +117,6 @@ function Financeiro() {
   const [eff, setEff] = useState("");
   const [deviceName, setDeviceName] = useState("PainelOverlay");
   const [newGpsToken, setNewGpsToken] = useState<string | null>(null);
-  const period = usePeriodSelection(0);
   const [gps, setGps] = useState(false);
   const {
     trip,
@@ -131,7 +131,7 @@ function Financeiro() {
     pause,
     resume,
   } = useTripTracker();
-  const journeys = useJourneys();
+  const journeys = useJourneys({ from: period.fromDate, to: period.toDate, overlap: true });
   const [clock, setClock] = useState<number | null>(null);
   useEffect(() => {
     setClock(Date.now());

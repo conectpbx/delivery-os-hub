@@ -1,9 +1,11 @@
+import { createAsyncCache } from "./async-cache";
 export type Stop = {
   id: string;
   kind: "coleta" | "entrega";
   address: string;
   lat: number | null;
   lng: number | null;
+  recorded_at?: string | undefined;
 };
 
 export type RouteLeg = {
@@ -108,49 +110,76 @@ export function newStop(kind: Stop["kind"] = "entrega"): Stop {
   };
 }
 
+const geocodeCache = createAsyncCache<{ lat: number; lng: number } | null>();
+const reverseCache = createAsyncCache<{ name: string; address: string } | null>();
+const routeCache = createAsyncCache<RouteResult | null>();
+let lastNominatimAt = 0;
+let nominatimQueue = Promise.resolve();
+function nominatim<T>(load: () => Promise<T>): Promise<T> {
+  const request = nominatimQueue.then(async () => {
+    const wait = Math.min(1000, Math.max(0, lastNominatimAt + 1000 - Date.now()));
+    if (wait) await new Promise((resolve) => setTimeout(resolve, wait));
+    lastNominatimAt = Date.now();
+    return load();
+  });
+  nominatimQueue = request.then(
+    () => {},
+    () => {},
+  );
+  return request;
+}
+
 /** Geocodificação direta gratuita (OpenStreetMap / Nominatim). */
 export async function geocodeAddress(address: string) {
   const q = address.trim();
   if (!q) return null;
-  try {
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language=pt-BR&countrycodes=br&q=${encodeURIComponent(q)}`,
-      { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(12000) },
-    );
-    if (!res.ok) return null;
-    const json = (await res.json()) as Array<{ lat: string; lon: string }>;
-    const hit = json[0];
-    if (!hit) return null;
-    const lat = Number(hit.lat);
-    const lng = Number(hit.lon);
-    return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
-  } catch {
-    return null;
-  }
+  return geocodeCache.get(q.toLocaleLowerCase("pt-BR").replace(/\s+/g, " "), () =>
+    nominatim(async () => {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language=pt-BR&countrycodes=br&q=${encodeURIComponent(q)}`,
+          { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(12000) },
+        );
+        if (!res.ok) return null;
+        const json = (await res.json()) as Array<{ lat: string; lon: string }>;
+        const hit = json[0];
+        if (!hit) return null;
+        const lat = Number(hit.lat);
+        const lng = Number(hit.lon);
+        return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+      } catch {
+        return null;
+      }
+    }),
+  );
 }
 
 /** Geocodificação reversa: coordenadas → endereço legível. */
 export async function reverseGeocodeAddress(lat: number, lng: number) {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  try {
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&addressdetails=1&accept-language=pt-BR&lat=${lat}&lon=${lng}`,
-      { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(12000) },
-    );
-    if (!res.ok) return null;
-    const json = (await res.json()) as {
-      display_name?: string;
-      name?: string;
-      address?: Record<string, string>;
-    };
-    const a = json.address ?? {};
-    const road = a["road"] ?? a["pedestrian"] ?? "";
-    const city = a["city"] ?? a["town"] ?? a["village"] ?? a["municipality"] ?? "";
-    const short = [json.name || road, a["house_number"], city].filter(Boolean).join(", ");
-    return { name: json.name ?? "", address: short || json.display_name || "" };
-  } catch {
-    return null;
-  }
+  return reverseCache.get(`${lat},${lng}`, () =>
+    nominatim(async () => {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&addressdetails=1&accept-language=pt-BR&lat=${lat}&lon=${lng}`,
+          { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(12000) },
+        );
+        if (!res.ok) return null;
+        const json = (await res.json()) as {
+          display_name?: string;
+          name?: string;
+          address?: Record<string, string>;
+        };
+        const a = json.address ?? {};
+        const road = a["road"] ?? a["pedestrian"] ?? "";
+        const city = a["city"] ?? a["town"] ?? a["village"] ?? a["municipality"] ?? "";
+        const short = [json.name || road, a["house_number"], city].filter(Boolean).join(", ");
+        return { name: json.name ?? "", address: short || json.display_name || "" };
+      } catch {
+        return null;
+      }
+    }),
+  );
 }
 
 /** Busca o posto de combustível mais próximo (Overpass / OpenStreetMap). */
@@ -194,36 +223,68 @@ export async function nearestFuelStation(lat: number, lng: number) {
 /** Rota real por ruas usando o OSRM público (gratuito). */
 export async function fetchRoute(points: [number, number][]): Promise<RouteResult | null> {
   if (points.length < 2) return null;
-  try {
-    const path = points.map(([lat, lng]) => `${lng},${lat}`).join(";");
-    const res = await fetch(
-      `https://router.project-osrm.org/route/v1/driving/${path}?overview=full&geometries=geojson`,
-    );
-    if (!res.ok) return null;
-    const json = (await res.json()) as {
-      routes?: Array<{
-        distance: number;
-        duration: number;
-        geometry: { coordinates: [number, number][] };
-        legs?: Array<{ distance: number; duration: number }>;
-      }>;
-    };
-    const route = json.routes?.[0];
-    if (!route) return null;
-    return {
-      distanceKm: Math.round((route.distance / 1000) * 100) / 100,
-      durationMin: Math.round(route.duration / 60),
-      coords: route.geometry.coordinates.map(([lng, lat]) => [lat, lng] as [number, number]),
-      points,
-      legs: (route.legs ?? []).map((l) => ({
-        distanceKm: Math.round((l.distance / 1000) * 100) / 100,
-        durationMin: Math.round(l.duration / 60),
-      })),
-    };
-  } catch {
-    // Servidor de rota público indisponível/instável — quem chamar deve usar o reserva (linha reta).
+  if (
+    points.some(
+      ([lat, lng]) =>
+        !Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180,
+    )
+  )
     return null;
-  }
+  return routeCache.get(JSON.stringify(points), async () => {
+    try {
+      const path = points.map(([lat, lng]) => `${lng},${lat}`).join(";");
+      const res = await fetch(
+        `https://router.project-osrm.org/route/v1/driving/${path}?overview=full&geometries=geojson`,
+        { signal: AbortSignal.timeout(8000) },
+      );
+      if (!res.ok) return null;
+      const json = (await res.json()) as {
+        routes?: Array<{
+          distance: number;
+          duration: number;
+          geometry: { coordinates: [number, number][] };
+          legs?: Array<{ distance: number; duration: number }>;
+        }>;
+      };
+      const route = json.routes?.[0];
+      if (
+        !route ||
+        !Number.isFinite(route.distance) ||
+        route.distance < 0 ||
+        !Number.isFinite(route.duration) ||
+        route.duration < 0 ||
+        !Array.isArray(route.geometry?.coordinates) ||
+        route.geometry.coordinates.some(
+          ([lng, lat]) =>
+            !Number.isFinite(lat) ||
+            !Number.isFinite(lng) ||
+            Math.abs(lat) > 90 ||
+            Math.abs(lng) > 180,
+        ) ||
+        route.legs?.some(
+          (leg) =>
+            !Number.isFinite(leg.distance) ||
+            leg.distance < 0 ||
+            !Number.isFinite(leg.duration) ||
+            leg.duration < 0,
+        )
+      )
+        return null;
+      return {
+        distanceKm: Math.round((route.distance / 1000) * 100) / 100,
+        durationMin: Math.round(route.duration / 60),
+        coords: route.geometry.coordinates.map(([lng, lat]) => [lat, lng] as [number, number]),
+        points,
+        legs: (route.legs ?? []).map((l) => ({
+          distanceKm: Math.round((l.distance / 1000) * 100) / 100,
+          durationMin: Math.round(l.duration / 60),
+        })),
+      };
+    } catch {
+      // Servidor de rota público indisponível/instável — quem chamar deve usar o reserva (linha reta).
+      return null;
+    }
+  });
 }
 
 /** Distância em linha reta entre dois pontos (Haversine), em km. */
@@ -247,6 +308,13 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
 export async function fetchRouteWithFallback(
   points: [number, number][],
 ): Promise<(RouteResult & { approximate?: boolean }) | null> {
+  if (
+    points.some(
+      ([lat, lng]) =>
+        !Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180,
+    )
+  )
+    return null;
   const real = await fetchRoute(points);
   if (real) return real;
   if (points.length < 2) return null;

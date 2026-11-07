@@ -254,3 +254,27 @@ test("newer GPS totals synchronize without double-counting or retaining a local 
 test("missing remote snapshot never discards pending local history", () => {
   assert.equal(mergeRemoteTrip({ ...ended, pendingSave: true, synced: true }, null), "push");
 });
+
+test("a late read cannot erase a pause even with an equal legacy timestamp", async () => {
+  let local: TripState = { ...active, synced: true };
+  const read = deferred<TripState | null>();
+  const sync = createTripSync({
+    local: () => local,
+    apply: (next) => {
+      local = next;
+    },
+    read: () => read.promise,
+    write: async (state) => state,
+    error: () => {},
+  });
+  const pulling = sync.refresh();
+  await turn();
+  local = {
+    ...local,
+    pauses: [{ id: "p", reason: "Almoço", started_at: active.startedAt!, ended_at: null }],
+  };
+  read.resolve(active);
+  await pulling;
+  assert.equal(local.pauses?.[0]?.reason, "Almoço");
+  sync.stop();
+});

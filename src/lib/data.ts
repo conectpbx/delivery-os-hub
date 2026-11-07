@@ -1,8 +1,15 @@
 import { useAuth, authStore } from "@/hooks/useAuth";
+import {
+  listScope,
+  cacheInsertedRow,
+  cacheRemovedRow,
+  type ListRange,
+  type ListScope,
+} from "./delivery-scope";
 import { loadAllPages } from "./list-pages";
 import type { AppChallenge } from "./app-challenges";
 import { useEffect } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { enqueueInsert, isOffline } from "@/lib/offline-queue";
@@ -79,6 +86,8 @@ export type Delivery = {
   id: string;
   app_name: string;
   earnings: number;
+  gross_earnings?: number;
+  fee_percent?: number;
   tip: number;
   distance_km: number;
   duration_min: number;
@@ -162,7 +171,8 @@ export type Profile = {
   monthly_goal: number | null;
 };
 
-function useList<T>(key: string, table: string, orderCol: string) {
+function useList<T>(key: string, table: string, orderCol: string, range?: ListRange, select = "*") {
+  const scope = range ? listScope(range, orderCol) : undefined;
   const { user } = useAuth();
   const userId = user?.id;
   const queryClient = useQueryClient();
@@ -175,7 +185,7 @@ function useList<T>(key: string, table: string, orderCol: string) {
   }, [key, queryClient, table, userId]);
 
   return useQuery({
-    queryKey: [key],
+    queryKey: scope ? [key, "range", scope, select] : [key],
     enabled: Boolean(userId),
     queryFn: async ({ signal }) => {
       if (table === "app_challenges") {
@@ -183,10 +193,9 @@ function useList<T>(key: string, table: string, orderCol: string) {
         if (error) throw error;
       }
       return loadAllPages<T>(async (from, to) => {
-        const { data, error } = await db
-          .from(table)
-          .select("*")
-          .eq("user_id", userId!)
+        let request = db.from(table).select(select).eq("user_id", userId!);
+        request = filterScope(request, scope);
+        const { data, error } = await request
           .order(orderCol, { ascending: false })
           .order("id", { ascending: false })
           .range(from, to)
@@ -201,7 +210,20 @@ function useList<T>(key: string, table: string, orderCol: string) {
   });
 }
 
-export const useDeliveries = () => useList<Delivery>("deliveries", "deliveries", "occurred_at");
+export const useDeliveries = (range?: ListRange) =>
+  useList<Delivery>("deliveries", "deliveries", "occurred_at", range);
+export type DeliveryMetric = Pick<
+  Delivery,
+  "id" | "app_name" | "earnings" | "tip" | "distance_km" | "occurred_at" | "status"
+>;
+export const useDeliveryMetrics = (range: ListRange) =>
+  useList<DeliveryMetric>(
+    "deliveries",
+    "deliveries",
+    "occurred_at",
+    range,
+    "id,app_name,earnings,tip,distance_km,occurred_at,status",
+  );
 export const useFuelings = () => useList<Fueling>("fuelings", "fuelings", "occurred_at");
 export const useMaintenances = () =>
   useList<Maintenance>("maintenances", "maintenances", "performed_at");
@@ -211,8 +233,8 @@ export const useAppChallenges = () =>
 
 export const useGoals = () => useList<Goal>("goals", "goals", "month");
 export const useApps = () => useList<App>("apps", "apps", "name");
-export const useJourneys = () =>
-  useList<WorkJourney>("work_journeys", "work_journeys", "started_at");
+export const useJourneys = (range?: ListRange) =>
+  useList<WorkJourney>("work_journeys", "work_journeys", "started_at", range);
 
 export const useInsertApp = () => useInsert<{ name: string; fee_percent: number }>("apps", "apps");
 
@@ -270,6 +292,8 @@ export function useProfile(enabled = true) {
 export function useInsert<T extends Record<string, unknown>>(table: string, key: string) {
   const qc = useQueryClient();
   return useMutation({
+    // The mutation itself handles offline persistence; do not pause before enqueueing.
+    networkMode: "always",
     mutationFn: async (values: T) => {
       const auth = isOffline()
         ? { user: (await supabase.auth.getSession()).data.session?.user ?? null }
@@ -292,10 +316,7 @@ export function useInsert<T extends Record<string, unknown>>(table: string, key:
     },
     onSuccess: async (created) => {
       if (created["user_id"] !== authStore.getSnapshot().session?.user.id) return;
-      qc.setQueryData([key], (old: unknown) => {
-        const current = (old as Record<string, unknown>[] | undefined) ?? [];
-        return [created, ...current.filter((item) => item["id"] !== created["id"])];
-      });
+      cacheInsertedRow(qc, key, created);
       await qc.invalidateQueries({ queryKey: [key] });
     },
   });
@@ -309,11 +330,7 @@ export function useRemove(table: string, key: string) {
       if (error) throw error;
     },
     onSuccess: async (_data, removedId) => {
-      qc.setQueryData([key], (old: unknown) =>
-        ((old as Record<string, unknown>[] | undefined) ?? []).filter(
-          (item) => item["id"] !== removedId,
-        ),
-      );
+      cacheRemovedRow(qc, key, removedId);
       await qc.invalidateQueries({ queryKey: [key] });
     },
   });
@@ -333,6 +350,98 @@ export function useUpsertProfile() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["profile"] });
+    },
+  });
+}
+
+export function filterScope<
+  T extends {
+    gte: (field: string, value: string) => T;
+    lte: (field: string, value: string) => T;
+    or: (value: string) => T;
+  },
+>(request: T, scope?: ListScope): T {
+  if (!scope) return request;
+  if (scope.mode === "journey-overlap" && scope.from && scope.to)
+    return request.lte("started_at", scope.to).or(`ended_at.gte.${scope.from},ended_at.is.null`);
+  if (scope.mode === "delivery-overlap" && scope.from && scope.to)
+    return request.or(
+      `and(occurred_at.gte.${scope.from},occurred_at.lte.${scope.to}),and(started_at.lte.${scope.to},or(ended_at.gte.${scope.from},status.eq.em_rota)),and(started_at.is.null,occurred_at.lte.${scope.to},or(ended_at.gte.${scope.from},status.eq.em_rota))`,
+    );
+  if (scope.from) request = request.gte(scope.field, scope.from);
+  if (scope.to) request = request.lte(scope.field, scope.to);
+  return request;
+}
+
+export function useDeliveryHistory(range: ListRange) {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const userId = user?.id;
+  const scope = listScope(range);
+  useEffect(() => {
+    if (!userId) return;
+    return subscribeToTable("deliveries", userId, () => {
+      void qc.invalidateQueries({ queryKey: ["deliveries"] });
+    });
+  }, [userId, qc]);
+  return useInfiniteQuery({
+    queryKey: ["deliveries", "history", scope],
+    enabled: Boolean(userId),
+    initialPageParam: 0,
+    queryFn: async ({ pageParam, signal }) => {
+      const request = filterScope(
+        db
+          .from("deliveries")
+          .select("*", pageParam === 0 ? { count: "exact" } : {})
+          .eq("user_id", userId!),
+        scope,
+      );
+      const { data, error, count } = await request
+        .order("occurred_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(pageParam, pageParam + 19)
+        .abortSignal(signal);
+      if (error) throw error;
+      const rows = (data ?? []) as Delivery[];
+      return { rows, total: count, next: rows.length === 20 ? pageParam + 20 : null };
+    },
+    getNextPageParam: (last) => last.next ?? undefined,
+    staleTime: 60_000,
+  });
+}
+
+export function useRecentDeliveryValues(app = "") {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ["deliveries", "recent", { app, status: "concluida" }],
+    enabled: Boolean(user),
+    staleTime: 60_000,
+    queryFn: async ({ signal }) => {
+      let request = db
+        .from("deliveries")
+        .select(
+          "id,app_name,gross_earnings,earnings,fee_percent,payment_method,occurred_at,ended_at,status",
+        )
+        .eq("user_id", user!.id)
+        .eq("status", "concluida");
+      if (app) request = request.eq("app_name", app);
+      const { data, error } = await request
+        .order("occurred_at", { ascending: false })
+        .limit(20)
+        .abortSignal(signal);
+      if (error) throw error;
+      return data as Pick<
+        Delivery,
+        | "id"
+        | "app_name"
+        | "gross_earnings"
+        | "earnings"
+        | "fee_percent"
+        | "payment_method"
+        | "occurred_at"
+        | "ended_at"
+        | "status"
+      >[];
     },
   });
 }

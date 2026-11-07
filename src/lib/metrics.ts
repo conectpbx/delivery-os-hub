@@ -496,7 +496,7 @@ export function currentRevenueTarget(
 }
 
 export function adaptiveDailyRevenueGoal(input: {
-  deliveries: Delivery[];
+  deliveries: Pick<Delivery, "occurred_at" | "earnings" | "tip" | "status">[];
   goals: Goal[];
   profile: Profile | null | undefined;
   date?: Date;

@@ -39,26 +39,30 @@ for (const path of ["/api/public/gps", "/api/public/gps/finish"]) {
 }
 
 const ssr = new URL("../.output/server/_ssr/", import.meta.url);
-const actionFile = (await readdir(ssr)).find((file) => /^ai\.functions-.*\.mjs$/.test(file));
-assert.ok(actionFile, "built server function exists");
-const actionSource = await readFile(new URL(actionFile, ssr), "utf8");
-const actionId = /id: "([a-f0-9]+)"/.exec(actionSource)?.[1];
-assert.ok(actionId);
-const action = `${base}/_serverFn/${actionId}`;
-const crossSite = await fetch(action, {
-  method: "POST",
-  headers: { origin: "https://untrusted.test" },
-  body: "{}",
-});
-assert.equal(crossSite.status, 403, "CSRF protection rejects a foreign origin");
-const anonymous = await fetch(action, { method: "POST", headers: { origin: base }, body: "{}" });
-assert.equal(anonymous.status, 401, "OCR server function requires a session");
-const oversized = await fetch(action, {
-  method: "POST",
-  headers: { origin: base },
-  body: "x".repeat(8_100_001),
-});
-assert.equal(oversized.status, 413, "server functions enforce their upload cap before parsing");
+const actionFiles = (await readdir(ssr)).filter((file) => /^ai\.functions-.*\.mjs$/.test(file));
+const actionIds = new Set();
+for (const file of actionFiles) {
+  const source = await readFile(new URL(file, ssr), "utf8");
+  for (const match of source.matchAll(/id: "([a-f0-9]+)"/g)) actionIds.add(match[1]);
+}
+assert.equal(actionIds.size, 2, "both OCR server functions exist");
+for (const actionId of actionIds) {
+  const action = `${base}/_serverFn/${actionId}`;
+  const crossSite = await fetch(action, {
+    method: "POST",
+    headers: { origin: "https://untrusted.test" },
+    body: "{}",
+  });
+  assert.equal(crossSite.status, 403, "CSRF protection rejects a foreign origin");
+  const anonymous = await fetch(action, { method: "POST", headers: { origin: base }, body: "{}" });
+  assert.equal(anonymous.status, 401, "OCR server function requires a session");
+  const oversized = await fetch(action, {
+    method: "POST",
+    headers: { origin: base },
+    body: "x".repeat(8_100_001),
+  });
+  assert.equal(oversized.status, 413, "server functions enforce their upload cap before parsing");
+}
 
 const assets = new URL("../.output/public/assets/", import.meta.url);
 const asset = (await readdir(assets)).find((file) => file.endsWith(".js.br"));

@@ -91,6 +91,41 @@ try {
   await second.refresh();
   assert.equal(b.active, true, "second device shows Finalizar after first device starts");
   assert.equal(b.journeyId, firstId);
+  a = {
+    ...a,
+    updatedAt: "2026-11-05T10:10:00Z",
+    pauses: [
+      {
+        id: crypto.randomUUID(),
+        reason: "Almoço",
+        started_at: "2026-11-05T10:10:00Z",
+        ended_at: null,
+      },
+    ],
+  };
+  await first.publish(a, "update");
+  await second.refresh();
+  assert.equal(b.pauses[0].ended_at, null, "observer shows Retomar after remote pause");
+  const pausedOffline = structuredClone(a);
+  b = {
+    ...b,
+    updatedAt: "2026-11-05T10:20:00Z",
+    pauses: [{ ...b.pauses[0], ended_at: "2026-11-05T10:20:00Z" }],
+  };
+  await second.publish(b, "update");
+  await first.refresh();
+  assert.equal(
+    a.pauses[0].ended_at,
+    "2026-11-05T10:20:00Z",
+    "observer shows Pausar after remote resume",
+  );
+  a = pausedOffline;
+  await first.publish(a, "update");
+  assert.equal(
+    a.pauses[0].ended_at,
+    "2026-11-05T10:20:00Z",
+    "reconnecting stale device accepts server resume instead of reapplying its pause",
+  );
   const stale = { ...b, distanceKm: 2, updatedAt: "2099-01-01T00:00:00Z" };
   a = {
     ...a,
@@ -182,7 +217,7 @@ try {
   first.stop();
   second.stop();
   console.log(
-    "PostgreSQL + two devices: start/finish propagation, sticky completion, stale writes, concurrent starts, Realtime publication and account isolation passed.",
+    "PostgreSQL + two devices: start/pause/resume/finish propagation, offline recovery, sticky completion, stale writes, concurrent starts, Realtime publication and account isolation passed.",
   );
 } finally {
   await db.close();

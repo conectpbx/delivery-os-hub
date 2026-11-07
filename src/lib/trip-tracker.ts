@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const remoteDb = supabase as unknown as SupabaseClient;
-import { createTripSync, type TripSyncAction } from "./trip-sync";
+import { createTripSync, nextTripUpdateAt, type TripSyncAction } from "./trip-sync";
 export { mergeRemoteTrip } from "./trip-sync";
 const REMOTE_PULL_MS = 5_000;
 
@@ -497,7 +497,7 @@ export function useTripTracker() {
     const next = {
       ...current,
       last: null,
-      updatedAt: new Date().toISOString(),
+      updatedAt: nextTripUpdateAt(current),
       pauses: beginPause(current.pauses ?? [], reason, new Date().toISOString()),
     };
     apply(next);
@@ -510,7 +510,7 @@ export function useTripTracker() {
     const next = {
       ...current,
       last: null,
-      updatedAt: new Date().toISOString(),
+      updatedAt: nextTripUpdateAt(current),
       pauses: endPause(current.pauses ?? [], new Date().toISOString()),
     };
     apply(next);
