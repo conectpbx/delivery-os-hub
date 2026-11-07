@@ -344,3 +344,24 @@ em outro dispositivo. Os testes com dois clientes PostgreSQL cobrem início, pau
 retomada, reconexão com pausa antiga e finalização. A publicação da versão atual e
 a migração de sincronização descrita acima continuam necessárias para uso entre
 aparelhos; esta correção não acrescenta outra migração.
+
+Se o aviso de sincronização aparecer ao abrir Entregas, verifique a mensagem específica:
+ela distingue banco sem função/tabela, sessão expirada, permissões e conexão. A consulta
+inicial também sincroniza o estado dos botões, mesmo sem uma jornada local ativa.
+Jornadas locais antigas recebem identidade e versão antes do envio, mantendo distância,
+pausas e histórico pendente. Rascunhos recuperados são persistidos com a mesma identidade.
+
+O workflow `.github/workflows/deploy.yml` publica o aplicativo, mas **não aplica SQL**.
+Execute `scripts/check-journey-sync.sql` no SQL Editor do projeto Supabase usado pelo
+aplicativo para conferir tabelas, função, publicação e políticas sem alterar dados.
+Se as tabelas já existem e a função está ausente, aplique
+`supabase/migrations/20261106090000_active_journey_sync.sql`. Se alguma tabela estiver
+ausente, confira primeiro as dependências Drizzle `0000`, `0001` e `0004`; não execute
+novamente migrações já aplicadas. Este ambiente não dispõe de uma conexão administrativa
+com o banco de produção; testes locais não comprovam que a migração foi aplicada nele.
+
+Em Nova entrega, **Adicionar ponto adicional** e **Definir ponto final** ficam
+acessíveis nos modos Rápido e Completo. O editor identifica coleta, pontos
+intermediários e destino final. Adicionar uma parada preserva o destino final
+já preenchido; o registro rápido também grava os endereços digitados. A captura
+GPS e o mapa continuam opcionais.

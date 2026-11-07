@@ -130,6 +130,16 @@ with sync_playwright() as p:
     assert all("occurred_at" in query or "or" in query or query.get("limit") == ["20"] for method, path, query in requests if method == "GET" and path.endswith("/deliveries")), "no implicit full-history fetch"
     entry = page.locator("section").filter(has=page.get_by_role("heading", name="Nova entrega", exact=True))
     entry.get_by_role("button", name="iFood", exact=True).click()
+    entry.get_by_role("button", name="Definir ponto final", exact=True).click()
+    entry.get_by_label("Endereço do ponto 1", exact=True).fill("Restaurante Central")
+    entry.get_by_label("Endereço do ponto final", exact=True).fill("Rua Destino, 100")
+    entry.get_by_role("button", name="Adicionar ponto adicional", exact=True).click()
+    entry.get_by_label("Endereço do ponto 2", exact=True).fill("Rua Intermediária, 50")
+    expect(entry.get_by_label("Endereço do ponto final", exact=True)).to_have_value("Rua Destino, 100")
+    entry.get_by_role("button", name="Completo", exact=True).click()
+    expect(entry.get_by_role("button", name="Adicionar ponto adicional", exact=True)).to_be_visible()
+    expect(entry.get_by_label("Endereço do ponto final", exact=True)).to_have_value("Rua Destino, 100")
+    entry.get_by_role("button", name="Rápido", exact=True).click()
     value = entry.get_by_label("Valor bruto (R$)", exact=True)
     value.fill("20,00")
     expect(entry.get_by_text(re.compile(r"Líquido:.*18,00"))).to_be_visible()
@@ -147,7 +157,9 @@ with sync_playwright() as p:
     assert len(created) == 1
     assert created[0]["gross_earnings"] == 20 and created[0]["earnings"] == 18 and created[0]["fee_percent"] == 10
     assert created[0]["payment_method"] == "pix" and created[0]["status"] == "concluida"
-    assert created[0]["stops"] == [] and created[0]["pickup_address"] is None
+    assert [stop["address"] for stop in created[0]["stops"]] == ["Restaurante Central", "Rua Intermediária, 50", "Rua Destino, 100"]
+    assert created[0]["pickup_address"] == "Restaurante Central"
+    assert created[0]["dropoff_address"] == "Rua Destino, 100"
     context.set_offline(True)
     page.wait_for_function("!navigator.onLine")
     value.fill("10,00")
@@ -161,4 +173,4 @@ with sync_playwright() as p:
     page.screenshot(path=os.environ.get("DELIVERY_SCREENSHOT", "/tmp/delivery-fast-ui.png"), full_page=True)
     assert not failures, failures
     browser.close()
-print("Mobile Chromium: date-filtered queries, 20-row history, app/fee chips, isolated typing, usual payment and online/offline quick saves passed.")
+print("Mobile Chromium: date-filtered queries, 20-row history, app/fee chips, isolated typing, usual payment, additional/final stops in both modes and online/offline quick saves passed.")

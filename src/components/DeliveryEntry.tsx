@@ -369,10 +369,9 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
     [route, setForm],
   );
 
-  async function save(finalized: boolean, quick = false, overrideStops?: Stop[]) {
+  async function save(finalized: boolean, overrideStops?: Stop[]) {
     if (submitting.current) return;
-    const selectedStops =
-      overrideStops ?? (quick ? stops.filter((stop) => Boolean(stop.recorded_at)) : stops);
+    const selectedStops = overrideStops ?? stops;
     const filled = selectedStops.filter(
       (s) => s.address.trim() || (s.lat != null && s.lng != null),
     );
@@ -460,15 +459,13 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
         recorded_at: new Date().toISOString(),
       };
       const nextStops = [
-        ...stops.filter((stop) =>
-          mode === "quick" ? Boolean(stop.recorded_at) : stop.address.trim() || stop.lat != null,
-        ),
+        ...stops.filter((stop) => stop.address.trim() || stop.lat != null),
         captured,
       ];
       setStops(nextStops);
       setAccuracy(point.accuracy);
       if (!deliveryStartedAt && !finalize) beginMeasurement();
-      if (finalize) await save(true, false, nextStops);
+      if (finalize) await save(true, nextStops);
       else toast.success("Chegada registrada pelo GPS");
     } catch (error) {
       toast.error(
@@ -571,6 +568,153 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
           </Button>
         </div>
         <DeliveryOcr apply={applyOcr} />
+        <div className="space-y-2 rounded-md border border-border p-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <Label className="text-xs">Rota</Label>
+              <p className="truncate text-xs text-muted-foreground">
+                {filledStops.length
+                  ? filledStops.map((s) => s.address || "ponto GPS").join(" → ")
+                  : "Nenhum ponto informado"}
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant={showRoute ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => setShowRoute((v) => !v)}
+            >
+              <RouteIcon className="mr-1 size-4" />
+              {showRoute ? "Ocultar" : filledStops.length ? "Editar rota" : "Inserir rota"}
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-11"
+              onClick={() => {
+                setStops((current) => {
+                  const next = [...current];
+                  let final = -1;
+                  for (let index = next.length - 1; index >= 0; index--) {
+                    if (next[index]?.kind === "entrega") {
+                      final = index;
+                      break;
+                    }
+                  }
+                  next.splice(final < 0 ? next.length : final, 0, newStop("entrega"));
+                  return next;
+                });
+                setShowRoute(true);
+              }}
+            >
+              <Plus className="mr-1 size-4" />
+              Adicionar ponto adicional
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-11"
+              onClick={() => {
+                setStops((current) =>
+                  current.at(-1)?.kind === "entrega" ? current : [...current, newStop("entrega")],
+                );
+                setShowRoute(true);
+              }}
+            >
+              Definir ponto final
+            </Button>
+          </div>
+          {showRoute ? (
+            <>
+              {stops.map((s, i) => (
+                <div key={s.id} className="space-y-1 rounded-md border border-border p-2">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <GripVertical className="size-3.5" />
+                    <span className="font-medium text-foreground">
+                      {i + 1}.{" "}
+                      {i === stops.length - 1 && s.kind === "entrega"
+                        ? "Ponto final da entrega"
+                        : i === 0 && s.kind === "coleta"
+                          ? "Coleta"
+                          : "Ponto adicional"}
+                    </span>
+                    <select
+                      value={s.kind}
+                      onChange={(e) => patchStop(s.id, { kind: e.target.value as Stop["kind"] })}
+                      className="h-7 rounded border border-input bg-background px-2 text-xs"
+                      aria-label={`Tipo do ponto ${i + 1}`}
+                    >
+                      <option value="coleta">Coleta</option>
+                      <option value="entrega">Entrega</option>
+                    </select>
+                    {stops.length > 2 ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="ml-auto size-7"
+                        aria-label={`Remover ponto ${i + 1}`}
+                        onClick={() => setStops((list2) => list2.filter((x) => x.id !== s.id))}
+                      >
+                        <X className="size-3.5" />
+                      </Button>
+                    ) : null}
+                  </div>
+                  <div className="flex min-w-0 gap-2">
+                    <Input
+                      aria-label={
+                        i === stops.length - 1 && s.kind === "entrega"
+                          ? "Endereço do ponto final"
+                          : `Endereço do ponto ${i + 1}`
+                      }
+                      value={s.address}
+                      onChange={(e) =>
+                        patchStop(s.id, { address: e.target.value, lat: null, lng: null })
+                      }
+                      placeholder={
+                        s.kind === "coleta" ? "Restaurante / loja" : "Endereço do cliente"
+                      }
+                      className="min-w-0 flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      aria-label={`Usar GPS no ponto ${i + 1}`}
+                      onClick={() => captureGps(s.id)}
+                      disabled={geoTarget !== null}
+                    >
+                      <MapPin className="size-4" />
+                    </Button>
+                  </div>
+                  {geoTarget === s.id ? (
+                    <p className="text-xs text-muted-foreground">Buscando localização…</p>
+                  ) : s.lat != null && s.lng != null ? (
+                    <p className="text-xs text-muted-foreground">
+                      {s.lat.toFixed(4)}, {s.lng.toFixed(4)}
+                      {accuracy ? ` · precisão ~${accuracy} m` : ""}
+                    </p>
+                  ) : null}
+                </div>
+              ))}
+              <div className="flex min-w-0 gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="min-w-0 flex-1"
+                  onClick={() => void previewRoute()}
+                  disabled={routing}
+                >
+                  <RouteIcon className="mr-1 size-4" />
+                  {routing ? "Calculando…" : "Ver rota"}
+                </Button>
+              </div>
+            </>
+          ) : null}
+        </div>
         {mode === "quick" ? (
           <DeliveryQuickForm
             apps={apps.data ?? []}
@@ -584,7 +728,7 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
             busy={insert.isPending || geoTarget !== null}
             select={selectApp}
             change={setGross}
-            save={() => void save(true, true)}
+            save={() => void save(true)}
           />
         ) : (
           <form
@@ -784,115 +928,6 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
                 >
                   Salvar {num(feePct)}% como taxa padrão de {selectedApp.name}
                 </Button>
-              ) : null}
-            </div>
-
-            <div className="space-y-2 rounded-md border border-border p-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <Label className="text-xs">Rota</Label>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {filledStops.length
-                      ? filledStops.map((s) => s.address || "ponto GPS").join(" → ")
-                      : "Nenhum ponto informado"}
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant={showRoute ? "secondary" : "outline"}
-                  size="sm"
-                  onClick={() => setShowRoute((v) => !v)}
-                >
-                  <RouteIcon className="mr-1 size-4" />
-                  {showRoute ? "Ocultar" : filledStops.length ? "Editar rota" : "Inserir rota"}
-                </Button>
-              </div>
-              {showRoute ? (
-                <>
-                  {stops.map((s, i) => (
-                    <div key={s.id} className="space-y-1 rounded-md border border-border p-2">
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <GripVertical className="size-3.5" />
-                        <span className="font-medium text-foreground">{i + 1}.</span>
-                        <select
-                          value={s.kind}
-                          onChange={(e) =>
-                            patchStop(s.id, { kind: e.target.value as Stop["kind"] })
-                          }
-                          className="h-7 rounded border border-input bg-background px-2 text-xs"
-                          aria-label={`Tipo do ponto ${i + 1}`}
-                        >
-                          <option value="coleta">Coleta</option>
-                          <option value="entrega">Entrega</option>
-                        </select>
-                        {stops.length > 2 ? (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="ml-auto size-7"
-                            aria-label={`Remover ponto ${i + 1}`}
-                            onClick={() => setStops((list2) => list2.filter((x) => x.id !== s.id))}
-                          >
-                            <X className="size-3.5" />
-                          </Button>
-                        ) : null}
-                      </div>
-                      <div className="flex min-w-0 gap-2">
-                        <Input
-                          value={s.address}
-                          onChange={(e) =>
-                            patchStop(s.id, { address: e.target.value, lat: null, lng: null })
-                          }
-                          placeholder={
-                            s.kind === "coleta" ? "Restaurante / loja" : "Endereço do cliente"
-                          }
-                          className="min-w-0 flex-1"
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          aria-label={`Usar GPS no ponto ${i + 1}`}
-                          onClick={() => captureGps(s.id)}
-                          disabled={geoTarget !== null}
-                        >
-                          <MapPin className="size-4" />
-                        </Button>
-                      </div>
-                      {geoTarget === s.id ? (
-                        <p className="text-xs text-muted-foreground">Buscando localização…</p>
-                      ) : s.lat != null && s.lng != null ? (
-                        <p className="text-xs text-muted-foreground">
-                          {s.lat.toFixed(4)}, {s.lng.toFixed(4)}
-                          {accuracy ? ` · precisão ~${accuracy} m` : ""}
-                        </p>
-                      ) : null}
-                    </div>
-                  ))}
-                  <div className="flex min-w-0 gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="min-w-0 flex-1"
-                      onClick={() => setStops((s) => [...s, newStop("entrega")])}
-                    >
-                      <Plus className="mr-1 size-4" /> Adicionar ponto
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      className="min-w-0 flex-1"
-                      onClick={() => void previewRoute()}
-                      disabled={routing}
-                    >
-                      <RouteIcon className="mr-1 size-4" />
-                      {routing ? "Calculando…" : "Ver rota"}
-                    </Button>
-                  </div>
-                </>
               ) : null}
             </div>
 

@@ -1,3 +1,5 @@
+import { journeySyncError } from "./journey-sync-error";
+import { repairLegacyTrip } from "./legacy-trip";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth, authStore } from "@/hooks/useAuth";
 import { useInsert } from "./data";
@@ -100,7 +102,18 @@ function load(key: string): TripState {
   try {
     const raw = window.localStorage.getItem(key);
     // Coordenadas exatas nunca são restauradas do armazenamento persistente.
-    return raw ? { ...EMPTY, ...(JSON.parse(raw) as TripState), last: null } : EMPTY;
+    if (!raw) return EMPTY;
+    const loaded = { ...EMPTY, ...(JSON.parse(raw) as TripState), last: null };
+    const repaired = repairLegacyTrip(loaded);
+    // Persist the generated identity once, so reopening does not create another journey.
+    if (repaired !== loaded) {
+      try {
+        window.localStorage.setItem(key, JSON.stringify(repaired));
+      } catch {
+        // Keep the recovered journey in memory when storage is full/unavailable.
+      }
+    }
+    return repaired;
   } catch {
     return EMPTY;
   }
@@ -206,12 +219,7 @@ export function useTripTracker() {
       },
       read: () => pullRemote(userId),
       write: (next, action) => pushRemote(userId, next, action),
-      error: (error) =>
-        setSyncError(
-          error
-            ? "Não foi possível sincronizar a jornada. Confira a conexão e tente novamente."
-            : null,
-        ),
+      error: (error) => setSyncError(journeySyncError(error)),
     });
     syncRef.current = sync;
     const refresh = () => {

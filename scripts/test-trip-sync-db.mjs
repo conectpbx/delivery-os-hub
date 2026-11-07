@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
+import { repairLegacyTrip } from "../src/lib/legacy-trip.ts";
 import { createTripSync } from "../src/lib/trip-sync.ts";
 const db = new PGlite();
 const owner = "00000000-0000-0000-0000-000000000001";
@@ -208,6 +209,28 @@ try {
     false,
     "progress alone cannot create a journey",
   );
+  const legacy = {
+    ...start(undefined),
+    distanceKm: 12,
+    pauses: [
+      {
+        id: crypto.randomUUID(),
+        reason: "Almoço",
+        started_at: "2026-11-05T10:01:00Z",
+        ended_at: null,
+      },
+    ],
+  };
+  delete legacy.updatedAt;
+  const restored = repairLegacyTrip(legacy);
+  const recovered = await write(restored, "start", other);
+  assert.equal(
+    recovered.journeyId,
+    restored.journeyId,
+    "legacy journey accepted by the guarded RPC after repair",
+  );
+  assert.equal(recovered.distanceKm, 12);
+  assert.equal(recovered.pauses[0].reason, "Almoço");
   await db.exec(
     `RESET ROLE; UPDATE auth.users SET banned_until=now()+interval '1 day' WHERE id='${owner}'; SET ROLE authenticated; SET request.jwt.claim.sub='${owner}'`,
   );
