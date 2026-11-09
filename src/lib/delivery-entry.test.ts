@@ -5,6 +5,7 @@ import {
   frequentDeliveryValues,
   deliveryGpsSuggestion,
   deliveryActiveMinutes,
+  automaticDeliveryMeasurement,
 } from "./delivery-entry";
 import type { TripState } from "./trip-tracker";
 import { parseDeliveryScan, reviewedDeliveryFee } from "./delivery-scan";
@@ -28,6 +29,27 @@ const trip: TripState = {
   ],
 };
 const now = new Date("2026-11-06T10:20:00Z");
+test("automatic measurement starts at the current distance, not the journey origin", () => {
+  assert.deepEqual(automaticDeliveryMeasurement(trip, null, null, now), {
+    journeyId: "a", distanceKm: 12, at: now.toISOString(),
+  });
+});
+test("automatic measurement preserves an ongoing delivery across rerenders", () => {
+  const baseline = { journeyId: "a", distanceKm: 5, at: "2026-11-06T10:02:00Z" };
+  assert.equal(automaticDeliveryMeasurement(trip, baseline, baseline.at, now), baseline);
+});
+test("a next delivery starts a new segment without including the previous delivery", () => {
+  const baseline = { journeyId: "a", distanceKm: 5, at: "2026-11-06T10:02:00Z" };
+  const next = automaticDeliveryMeasurement(trip, baseline, null, now);
+  assert.deepEqual(next, { journeyId: "a", distanceKm: 12, at: now.toISOString() });
+  assert.deepEqual(deliveryGpsSuggestion({ ...trip, distanceKm: 15, browserGpsAt: "2026-11-06T10:25:00Z" }, next, new Date("2026-11-06T10:25:00Z")), { distanceKm: 3, durationMin: 5 });
+});
+test("automatic measurement replaces another journey's draft and does not start during pauses", () => {
+  const old = { journeyId: "old", distanceKm: 5, at: "2026-11-06T09:00:00Z" };
+  assert.deepEqual(automaticDeliveryMeasurement(trip, old, old.at, now), { journeyId: "a", distanceKm: 12, at: now.toISOString() });
+  assert.equal(automaticDeliveryMeasurement({ ...trip, active: false }, null, null, now), null);
+  assert.equal(automaticDeliveryMeasurement({ ...trip, pauses: [{ id: "p", reason: "Almoço", started_at: now.toISOString(), ended_at: null }] }, null, null, now), null);
+});
 test("quick entry applies fee once and keeps gratuities separate", () => {
   assert.deepEqual(deliveryMoney(20, 15, 2), {
     gross_earnings: 20,
