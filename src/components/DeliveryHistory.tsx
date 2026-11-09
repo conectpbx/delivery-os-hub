@@ -331,7 +331,7 @@ export const DeliveryHistory = memo(function DeliveryHistory() {
                       onClick={() =>
                         setFinishing((current) => {
                           if (current?.id !== d.id)
-                            return { id: d.id, stops: [newStop("entrega"), newStop("entrega")] };
+                            return { id: d.id, stops: [newStop("entrega")] };
                           const stops = [...current.stops];
                           stops.splice(Math.max(0, stops.length - 1), 0, newStop("entrega"));
                           return { ...current, stops };
@@ -340,24 +340,6 @@ export const DeliveryHistory = memo(function DeliveryHistory() {
                     >
                       <Plus className="mr-1 size-4" />
                       Adicionar ponto adicional
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="min-h-11"
-                      disabled={
-                        updateDelivery.isPending || Boolean(finishing && finishing.id !== d.id)
-                      }
-                      onClick={() =>
-                        setFinishing((current) =>
-                          current?.id === d.id
-                            ? current
-                            : { id: d.id, stops: [newStop("entrega")] },
-                        )
-                      }
-                    >
-                      <MapPin className="mr-1 size-4" />
-                      Definir ponto final
                     </Button>
                   </div>
                 )}

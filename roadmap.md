@@ -17,5 +17,6 @@
 - [x] Adicionar pausas por motivo em Entregas e detalhar nos relatórios, com uso offline e telas adaptáveis
 - [ ] Conferir pausa, retomada e relatório na conta do usuário (aguarda login na prévia)
 - [x] Disponibilizar seleção do veículo da conta e refletir nos carregamentos; salvamento e reabertura autenticados e janela móvel verificados
-- [ ] Simplificar ações de pontos da rota e permitir adição somente em entregas iniciadas
-- [ ] Automatizar medição GPS por entrega com jornada ativa, sem misturar trechos
+- [x] Simplificar ações de pontos da rota e permitir adição somente em entregas iniciadas
+- [x] Automatizar medição GPS por entrega com jornada ativa, sem misturar trechos (33 testes aprovados)
+- [ ] Conferir medição automática e pontos de rota na conta (sem sessão disponível; requer login na prévia)
