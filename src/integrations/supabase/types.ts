@@ -737,10 +737,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      sync_active_work_journey: {
-        Args: { _user_id: string; _state: Json; _action: string }
-        Returns: Json
-      }
       admin_list_users: {
         Args: { _limit?: number; _search?: string }
         Returns: {
@@ -878,6 +874,10 @@ export type Database = {
       super_admin_update_module: {
         Args: { _enabled: boolean; _key: string }
         Returns: undefined
+      }
+      sync_active_work_journey: {
+        Args: { _action: string; _state: Json; _user_id: string }
+        Returns: Json
       }
     }
     Enums: {
