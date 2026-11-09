@@ -10,6 +10,25 @@ export function deliveryBaseline(
     ? { journeyId: trip.journeyId, distanceKm: trip.distanceKm, at }
     : null;
 }
+/** Preserve only this delivery's baseline; never infer a start from the whole journey. */
+export function automaticDeliveryMeasurement(
+  trip: TripState,
+  baseline: DeliveryBaseline | null,
+  startedAt: string | null,
+  now = new Date(),
+) {
+  if (!trip.active || !trip.journeyId || !trip.startedAt || trip.pauses?.some((p) => !p.ended_at))
+    return null;
+  if (
+    baseline?.journeyId === trip.journeyId &&
+    startedAt === baseline.at &&
+    Date.parse(baseline.at) >= Date.parse(trip.startedAt) &&
+    Date.parse(baseline.at) <= now.getTime() &&
+    baseline.distanceKm <= trip.distanceKm
+  )
+    return baseline;
+  return deliveryBaseline(trip, now.toISOString());
+}
 export function deliveryGpsSuggestion(
   trip: TripState,
   baseline: DeliveryBaseline | null,
@@ -44,7 +63,7 @@ export function deliveryGpsSuggestion(
     [],
     [
       {
-        id: trip.journeyId!,
+        id: trip.journeyId,
         started_at: trip.startedAt,
         ended_at: null,
         distance_km: trip.distanceKm,
