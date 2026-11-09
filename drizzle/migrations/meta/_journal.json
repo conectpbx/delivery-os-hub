@@ -78,6 +78,13 @@
       "when": 1793925634193,
       "tag": "0010_active_journey_sync",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1794235512262,
+      "tag": "0011_active_journey_sync",
+      "breakpoints": true
     }
   ]
 }
