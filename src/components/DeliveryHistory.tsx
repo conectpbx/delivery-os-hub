@@ -234,7 +234,7 @@ export const DeliveryHistory = memo(function DeliveryHistory() {
                           }
                           onClick={() => void deliverWithGps(d)}
                         >
-                          Entregue (GPS)
+                          Entrega concluída (GPS)
                         </Button>
                         <span className="text-xs text-muted-foreground">
                           Conclui com GPS e mantém os km informados.
@@ -357,7 +357,7 @@ export const DeliveryHistory = memo(function DeliveryHistory() {
                       }
                     >
                       <MapPin className="mr-1 size-4" />
-                      Definir ponto final
+                      Editar paradas
                     </Button>
                   </div>
                 )}
@@ -516,7 +516,7 @@ export const DeliveryHistory = memo(function DeliveryHistory() {
                             }
                           }}
                         >
-                          Finalizar rota
+                          Entrega concluída
                         </Button>
                         <Button
                           type="button"

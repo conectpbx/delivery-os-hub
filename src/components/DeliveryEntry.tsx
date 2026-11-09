@@ -1,3 +1,4 @@
+import { authStore } from "@/hooks/useAuth";
 import {
   deliveryFormDraft,
   deliveryStopsDraft,
@@ -9,7 +10,6 @@ import { DeliveryOcr } from "./DeliveryOcr";
 import type { DeliveryScan } from "@/lib/delivery-scan";
 import { DeliveryQuickForm } from "./DeliveryQuickForm";
 import {
-  deliveryActiveMinutes,
   automaticDeliveryMeasurement,
   deliveryBaseline,
   deliveryGpsSuggestion,
@@ -36,7 +36,7 @@ import {
 } from "@/lib/data";
 import type { PaymentMethod } from "@/lib/data";
 
-import { brl, dateTimeLabel, minutesLabel, num } from "@/lib/format";
+import { brl, minutesLabel, num } from "@/lib/format";
 
 import {
   fetchRouteWithFallback,
@@ -371,14 +371,13 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
     [route, setForm],
   );
 
-  async function save(finalized: boolean, overrideStops?: Stop[]) {
+  async function save() {
     if (submitting.current) return;
-    const selectedStops = overrideStops ?? stops;
-    const filled = selectedStops.filter(
-      (s) => s.address.trim() || (s.lat != null && s.lng != null),
-    );
-    const first = filled.find((stop) => stop.kind === "coleta");
-    const last = finalized ? [...filled].reverse().find((stop) => stop.kind === "entrega") : null;
+    const ownerId = authStore.getSnapshot().session?.user.id;
+    const selectedStops = stops;
+    const filled = selectedStops
+      .filter((s) => s.address.trim() || (s.lat != null && s.lng != null))
+      .map((stop) => ({ ...stop }));
     if (!form.app_name) {
       toast.error("Selecione o aplicativo da corrida");
       return;
@@ -392,24 +391,53 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
       const money = deliveryMoney(gross, feePct, dec(form.tip));
       if (dec(form.distance_km) < 0 || dec(form.duration_min) < 0 || dec(form.idle_min) < 0)
         throw new Error("Confira distância e tempos: não podem ser negativos");
+      const startedAt = new Date().toISOString();
+      {
+        setGeoTarget("start");
+        try {
+          const point = await getCurrentPosition({
+            enableHighAccuracy: true,
+            maximumAge: 0,
+            timeout: 10000,
+          });
+          const pickup = filled.find((stop) => stop.kind === "coleta");
+          if (!pickup || (pickup.lat == null && pickup.lng == null && !pickup.address.trim())) {
+            const captured = {
+              ...newStop("coleta"),
+              address: `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`,
+              lat: point.lat,
+              lng: point.lng,
+              recorded_at: new Date().toISOString(),
+            };
+            if (pickup) Object.assign(pickup, captured);
+            else filled.unshift(captured);
+          }
+        } catch {
+          toast.message(
+            "GPS indisponível. O início será salvo sem localização automática; você pode informar as paradas depois.",
+          );
+        }
+      }
+      if (!ownerId || authStore.getSnapshot().session?.user.id !== ownerId)
+        throw new Error(
+          "A conta mudou durante a captura. Confira a sessão antes de iniciar a entrega.",
+        );
+      const pickup = filled.find((stop) => stop.kind === "coleta");
       await insert.mutateAsync({
         app_name: form.app_name,
         ...money,
         occurred_at: new Date().toISOString(),
         payment_method: form.payment_method ?? "credito",
         distance_km: dec(form.distance_km),
-        duration_min:
-          finalized && deliveryStartedAt
-            ? deliveryActiveMinutes(deliveryStartedAt, new Date().toISOString(), trip.pauses ?? [])
-            : Math.round(dec(form.duration_min)),
+        duration_min: Math.round(dec(form.duration_min)),
         idle_min: Math.round(dec(form.idle_min)),
-        pickup_address: first?.address || null,
-        dropoff_address: finalized ? last?.address || null : null,
-        lat: first?.lat ?? null,
-        lng: first?.lng ?? null,
-        status: finalized ? "concluida" : "em_rota",
-        started_at: deliveryStartedAt ?? (finalized ? null : new Date().toISOString()),
-        ended_at: finalized && deliveryStartedAt ? new Date().toISOString() : null,
+        pickup_address: pickup?.address || null,
+        dropoff_address: null,
+        lat: pickup?.lat ?? null,
+        lng: pickup?.lng ?? null,
+        status: "em_rota",
+        started_at: startedAt,
+        ended_at: null,
         estimated_duration_min: route?.durationMin ?? null,
         stops: recordedStops(
           filled.map((s) => ({
@@ -421,9 +449,7 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
           })),
         ),
       });
-      toast.success(
-        finalized ? "Entrega registrada" : "Entrega salva em rota — defina o ponto final depois",
-      );
+      toast.success("Entrega iniciada — acompanhe e conclua no card Em rota");
       setForm((f) => ({
         ...f,
         earnings: "",
@@ -442,11 +468,12 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Erro ao salvar a entrega");
     } finally {
+      setGeoTarget(null);
       submitting.current = false;
     }
   }
 
-  async function quickStop(kind: "coleta" | "entrega", finalize: boolean) {
+  async function quickStop(kind: "coleta" | "entrega") {
     setGeoTarget("quick");
     try {
       const point = await getCurrentPosition({
@@ -467,9 +494,8 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
       ];
       setStops(nextStops);
       setAccuracy(point.accuracy);
-      if (!deliveryStartedAt && !finalize) beginMeasurement();
-      if (finalize) await save(true, nextStops);
-      else toast.success("Chegada registrada pelo GPS");
+      if (!deliveryStartedAt) beginMeasurement();
+      toast.success("Chegada registrada pelo GPS");
     } catch (error) {
       toast.error(
         isGeolocationError(error)
@@ -532,8 +558,6 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
     [stops],
   );
   const formNav = useMemo(() => navigationUrl(stops), [stops]);
-  const lastStop = filledStops[filledStops.length - 1];
-  const hasFinalPoint = filledStops.length >= 2 && !!lastStop && lastStop.kind === "entrega";
   const mapPoints = useMemo(
     () =>
       route?.points ??
@@ -597,19 +621,6 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
               variant="outline"
               className="min-h-11"
               onClick={() => {
-                setStops((current) =>
-                  current[0]?.kind === "coleta" ? current : [newStop("coleta"), ...current],
-                );
-                setShowRoute(true);
-              }}
-            >
-              Definir ponto inicial
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="min-h-11"
-              onClick={() => {
                 setStops((current) => {
                   const next = [...current];
                   let final = -1;
@@ -627,19 +638,6 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
             >
               <Plus className="mr-1 size-4" />
               Adicionar ponto adicional
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="min-h-11"
-              onClick={() => {
-                setStops((current) =>
-                  current.at(-1)?.kind === "entrega" ? current : [...current, newStop("entrega")],
-                );
-                setShowRoute(true);
-              }}
-            >
-              Definir ponto final
             </Button>
           </div>
           {showRoute ? (
@@ -746,13 +744,13 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
             busy={insert.isPending || geoTarget !== null}
             select={selectApp}
             change={setGross}
-            save={() => void save(true)}
+            save={() => void save()}
           />
         ) : (
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              if (hasFinalPoint) void save(true);
+              void save();
             }}
             className="space-y-3"
           >
@@ -884,37 +882,6 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
                   set("duration_min", v);
                 }}
               />
-              <div className="col-span-2 flex flex-wrap items-center gap-2">
-                {!trip.active && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={!!deliveryStartedAt}
-                    onClick={beginMeasurement}
-                  >
-                    Marcar início do tempo
-                  </Button>
-                )}
-                {deliveryStartedAt ? (
-                  <>
-                    <span className="text-xs text-muted-foreground">
-                      Início: {dateTimeLabel(deliveryStartedAt)}
-                    </span>
-                    {!trip.active && (
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        aria-label="Cancelar captura do tempo da entrega"
-                        onClick={() => setDeliveryStartedAt(null)}
-                      >
-                        <X className="size-4" />
-                      </Button>
-                    )}
-                  </>
-                ) : null}
-              </div>
               <Field
                 label="Tempo parado (min)"
                 value={form.idle_min}
@@ -956,32 +923,16 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
             <Button
               type="submit"
               className="w-full min-h-12"
-              disabled={insert.isPending || !hasFinalPoint}
+              disabled={insert.isPending || geoTarget !== null}
             >
-              {insert.isPending ? "Salvando…" : "Finalizar rota"}
+              {insert.isPending || geoTarget !== null ? "Iniciando…" : "Iniciar entrega"}
             </Button>
             <p className="text-center text-xs text-muted-foreground">
-              {hasFinalPoint
-                ? "Finalizar registra esta entrega como concluída."
-                : "Para sair agora, use Iniciar entrega abaixo. Informe o destino depois no card Em rota."}
+              O início e a posição atual são registrados automaticamente. Continue pelo card Em
+              rota.
             </p>
           </form>
         )}
-        <div className="mt-4 space-y-2 rounded-md border border-border p-3">
-          <Button
-            type="button"
-            className="min-h-12 w-full"
-            variant="outline"
-            disabled={insert.isPending || geoTarget !== null || !form.app_name || gross <= 0}
-            onClick={() => void save(false)}
-          >
-            {insert.isPending ? "Salvando…" : "Iniciar entrega"}
-          </Button>
-          <p className="text-xs text-muted-foreground">
-            Informe aplicativo e valor. Salva o início agora e mantém a entrega Em rota. No
-            histórico, adicione as paradas, defina o ponto final e toque em Finalizar rota.
-          </p>
-        </div>
         <div className="mt-4 space-y-2 border-t pt-3">
           <p className="text-xs text-muted-foreground">
             GPS:{" "}
@@ -1012,17 +963,9 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
               variant="outline"
               className="min-h-11"
               disabled={geoTarget !== null || insert.isPending}
-              onClick={() => void quickStop("coleta", false)}
+              onClick={() => void quickStop("coleta")}
             >
               Cheguei no restaurante
-            </Button>
-            <Button
-              type="button"
-              className="min-h-11"
-              disabled={geoTarget !== null || insert.isPending || !form.app_name || gross <= 0}
-              onClick={() => void quickStop("entrega", true)}
-            >
-              Entregue — salvar com GPS
             </Button>
           </div>
         </div>

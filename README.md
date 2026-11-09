@@ -360,15 +360,14 @@ ausente, confira primeiro as dependências Drizzle `0000`, `0001` e `0004`; não
 novamente migrações já aplicadas. Este ambiente não dispõe de uma conexão administrativa
 com o banco de produção; testes locais não comprovam que a migração foi aplicada nele.
 
-Em Nova entrega, **Adicionar ponto adicional** e **Definir ponto final** ficam
-acessíveis nos modos Rápido e Completo. O editor identifica coleta, pontos
-intermediários e destino final. Adicionar uma parada preserva o destino final
-já preenchido; o registro rápido também grava os endereços digitados. A captura
-GPS e o mapa continuam opcionais.
+Em Nova entrega, **Iniciar entrega** é a ação principal nos modos Rápido e Completo.
+Ela registra horário e tenta capturar o ponto inicial automaticamente pelo GPS,
+preservando a coleta manual já informada. Se a localização estiver indisponível,
+o início é salvo sem coordenadas e aparece um aviso; nenhum ponto é inventado.
+A captura automática exige HTTPS (ou localhost) e permissão de localização do PWA.
 
-Para acompanhar uma entrega em andamento, informe aplicativo e valor e use
-**Iniciar entrega**, disponível nos dois modos. O registro é salvo como **Em rota**
-com horário inicial; no histórico, informe paradas e destino e use **Finalizar rota**.
-Essa ação atualiza o mesmo registro e preserva o horário inicial. **Marcar início
-do tempo** apenas mede um rascunho; **Registrar entrega concluída** continua sendo
-a opção de lançar uma corrida já realizada pelo modo rápido.
+Não há botões de definir ponto inicial/final nem de concluir em Nova entrega.
+O card **Em rota** oferece **Adicionar ponto adicional**, **Editar paradas**,
+**Entrega concluída** e a conclusão com GPS. Salvar pontos mantém a rota em aberto;
+a conclusão atualiza o mesmo registro. Pontos adicionais e o destino continuam
+editáveis. A medição de GPS respeita a jornada e suas pausas.

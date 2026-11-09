@@ -110,7 +110,7 @@ print("UI fixture: launching Chromium", flush=True)
 with sync_playwright() as p:
     browser = p.chromium.launch(executable_path=os.environ.get("CHROMIUM_PATH", "/usr/bin/chromium"), headless=True, args=["--disable-dev-shm-usage"])
     print("UI fixture: browser launched", flush=True)
-    context = browser.new_context(viewport={"width": 390, "height": 844}, timezone_id="America/Sao_Paulo", locale="pt-BR")
+    context = browser.new_context(viewport={"width": 390, "height": 844}, timezone_id="America/Sao_Paulo", locale="pt-BR", permissions=["geolocation"], geolocation={"latitude": -23.55, "longitude": -46.63})
     context.route("**/*", handle)
     context.route_web_socket("**/*", lambda socket: socket.connect_to_server() if urlparse(socket.url).hostname in ("127.0.0.1", "localhost") else None)
     context.add_init_script("localStorage.setItem(" + json.dumps("sb-" + HOST.split(".")[0] + "-auth-token") + "," + json.dumps(json.dumps(SESSION)) + ");")
@@ -135,26 +135,28 @@ with sync_playwright() as p:
     history_requests = [query for method, path, query in requests if method == "GET" and path.endswith("/deliveries") and query.get("limit") == ["20"]]
     assert any(query.get("offset") == ["20"] for query in history_requests), "history fetched only the requested next page"
     assert all("occurred_at" in query or "or" in query or query.get("limit") == ["20"] for method, path, query in requests if method == "GET" and path.endswith("/deliveries")), "no implicit full-history fetch"
-    active_card = page.locator("li").filter(has=page.get_by_role("button", name="Entregue (GPS)", exact=True))
+    active_card = page.locator("li").filter(has=page.get_by_role("button", name="Entrega concluída (GPS)", exact=True))
     expect(active_card.get_by_role("button", name="Adicionar ponto adicional", exact=True)).to_be_visible()
-    expect(active_card.get_by_role("button", name="Definir ponto final", exact=True)).to_be_visible()
+    expect(active_card.get_by_role("button", name="Editar paradas", exact=True)).to_be_visible()
     active_card.get_by_role("button", name="Adicionar ponto adicional", exact=True).click()
     active_card.get_by_label("Endereço adicional 1", exact=True).fill("Parada intermediária em rota")
-    expect(active_card.get_by_role("button", name="Finalizar rota", exact=True)).to_be_disabled()
+    expect(active_card.get_by_role("button", name="Entrega concluída", exact=True)).to_be_disabled()
     active_card.get_by_role("button", name="Salvar pontos", exact=True).click()
     expect(active_card.get_by_text("Parada intermediária em rota", exact=True)).to_be_visible()
     assert updated[-1]["status"] == "em_rota"
-    active_card.get_by_role("button", name="Definir ponto final", exact=True).click()
+    active_card.get_by_role("button", name="Editar paradas", exact=True).click()
     active_card.get_by_label("Endereço final da entrega em rota", exact=True).fill("Destino final em rota")
-    active_card.get_by_role("button", name="Finalizar rota", exact=True).click()
+    active_card.get_by_role("button", name="Entrega concluída", exact=True).click()
     expect(page.get_by_text("Destino final em rota", exact=True)).to_be_visible(timeout=20000)
     assert updated[-1]["status"] == "concluida"
     assert updated[-1]["dropoff_address"] == "Destino final em rota"
     assert [stop["address"] for stop in updated[-1]["stops"]] == ["Parada intermediária em rota", "Destino final em rota"]
     entry = page.locator("section").filter(has=page.get_by_role("heading", name="Nova entrega", exact=True))
+    expect(entry.get_by_role("button", name="Definir ponto inicial", exact=True)).to_have_count(0)
+    expect(entry.get_by_role("button", name="Definir ponto final", exact=True)).to_have_count(0)
+    expect(entry.get_by_role("button", name=re.compile("concluída|Finalizar rota"))).to_have_count(0)
     entry.get_by_role("button", name="iFood", exact=True).click()
-    entry.get_by_role("button", name="Definir ponto inicial", exact=True).click()
-    entry.get_by_role("button", name="Definir ponto final", exact=True).click()
+    entry.get_by_role("button", name="Inserir rota", exact=True).click()
     entry.get_by_label("Endereço do ponto inicial", exact=True).fill("Restaurante Central")
     entry.get_by_label("Endereço do ponto final", exact=True).fill("Rua Destino, 100")
     entry.get_by_role("button", name="Adicionar ponto adicional", exact=True).click()
@@ -173,29 +175,33 @@ with sync_playwright() as p:
     page.wait_for_timeout(700)
     assert not any(path.endswith("/deliveries") for method, path, query in requests[before:]), "typing does not refetch history/summary"
     entry.get_by_role("button", name="Completo", exact=True).click()
+    expect(entry.get_by_role("button", name=re.compile("concluída|Finalizar rota"))).to_have_count(0)
     entry.locator("#payment-method").select_option("pix")
     entry.get_by_role("button", name="Rápido", exact=True).click()
     expect(entry.get_by_text(re.compile(r"Recebimento: Pix"))).to_be_visible()
-    entry.get_by_role("button", name="Registrar entrega concluída").click()
+    entry.get_by_role("button", name="Iniciar entrega", exact=True).click()
     page.wait_for_timeout(500)
     assert len(created) == 1
     assert created[0]["gross_earnings"] == 20 and created[0]["earnings"] == 18 and created[0]["fee_percent"] == 10
-    assert created[0]["payment_method"] == "pix" and created[0]["status"] == "concluida"
+    assert created[0]["payment_method"] == "pix" and created[0]["status"] == "em_rota"
     assert [stop["address"] for stop in created[0]["stops"]] == ["Restaurante Central", "Rua Intermediária, 50", "Rua Destino, 100"]
     assert created[0]["pickup_address"] == "Restaurante Central"
-    assert created[0]["dropoff_address"] == "Rua Destino, 100"
+    assert created[0]["dropoff_address"] is None
+    assert created[0]["started_at"] and created[0]["ended_at"] is None
     context.set_offline(True)
     page.wait_for_function("!navigator.onLine")
     value.fill("10,00")
-    entry.get_by_role("button", name="Registrar entrega concluída").click()
+    entry.get_by_role("button", name="Iniciar entrega", exact=True).click()
     expect(value).to_have_value("")
     assert len(created) == 1, "offline save does not require the backend"
     context.set_offline(False)
     page.wait_for_function("navigator.onLine")
     page.wait_for_timeout(1200)
     assert len(created) == 2 and created[1]["earnings"] == 9, "offline queue syncs the quick entry once"
+    assert created[1]["status"] == "em_rota" and created[1]["lat"] == -23.55 and created[1]["lng"] == -46.63
+    assert created[1]["stops"][0]["kind"] == "coleta"
     value.fill("30,00")
-    entry.get_by_role("button", name="Definir ponto inicial", exact=True).click()
+    entry.get_by_role("button", name="Inserir rota", exact=True).click()
     entry.get_by_label("Endereço do ponto inicial", exact=True).fill("Coleta da entrega iniciada")
     entry.get_by_role("button", name="Iniciar entrega", exact=True).click()
     expect(value).to_have_value("")
@@ -204,16 +210,25 @@ with sync_playwright() as p:
     started_at = created[-1]["started_at"]
     assert started_at and created[-1]["ended_at"] is None
     assert created[-1]["pickup_address"] == "Coleta da entrega iniciada"
-    active_card = page.locator("li").filter(has=page.get_by_role("button", name="Entregue (GPS)", exact=True))
-    active_card.get_by_role("button", name="Definir ponto final", exact=True).click()
+    active_card = page.locator("li").filter(has=page.get_by_role("button", name="Entrega concluída (GPS)", exact=True)).filter(has=page.get_by_text("Coleta da entrega iniciada", exact=True))
+    active_card.get_by_role("button", name="Editar paradas", exact=True).click()
     active_card.get_by_label("Endereço final da entrega em rota", exact=True).fill("Destino da entrega iniciada")
-    active_card.get_by_role("button", name="Finalizar rota", exact=True).click()
+    active_card.get_by_role("button", name="Entrega concluída", exact=True).click()
     expect(page.get_by_text("Destino da entrega iniciada", exact=True)).to_be_visible(timeout=20000)
     assert len(created) == 3, "finishing updates the started delivery instead of inserting another one"
     assert updated[-1]["id"] == started_id and updated[-1]["status"] == "concluida"
     assert updated[-1]["started_at"] == started_at and updated[-1]["ended_at"]
     assert updated[-1]["dropoff_address"] == "Destino da entrega iniciada"
+    page.evaluate("() => { navigator.geolocation.getCurrentPosition = (_success, error) => error({code: 1, message: 'fixture: permission denied'}); }")
+    entry.get_by_role("button", name="Completo", exact=True).click()
+    expect(entry.get_by_role("button", name=re.compile("concluída|Finalizar rota"))).to_have_count(0)
+    value.fill("8,00")
+    entry.get_by_role("button", name="Iniciar entrega", exact=True).click()
+    expect(value).to_have_value("")
+    assert len(created) == 4 and created[-1]["status"] == "em_rota"
+    assert created[-1]["started_at"] and created[-1]["lat"] is None and created[-1]["lng"] is None
+    assert created[-1]["stops"] == [], "GPS denial does not fabricate a pickup or lose the start"
     page.screenshot(path=os.environ.get("DELIVERY_SCREENSHOT", "/tmp/delivery-fast-ui.png"), full_page=True)
     assert not failures, failures
     browser.close()
-print("Mobile Chromium: date-filtered queries, 20-row history, app/fee chips, isolated typing, usual payment, additional/final stops in both modes and online/offline quick saves passed.")
+print("Mobile Chromium: date-filtered queries, 20-row history, app/fee chips, isolated typing, usual payment, automatic start GPS, denied GPS fallback, completion restricted to active deliveries and online/offline starts passed.")

@@ -117,11 +117,11 @@ export const DeliveryQuickForm = memo(function DeliveryQuickForm({
         </p>
       )}
       <Button type="submit" className="min-h-14 w-full text-base" disabled={busy || !app}>
-        {busy ? "Salvando…" : "Registrar entrega concluída"}
+        {busy ? "Iniciando…" : "Iniciar entrega"}
       </Button>
       <p className="text-xs text-muted-foreground">
-        Data e hora atuais. Confira os padrões acima; altere taxas e pagamento no modo Completo. GPS
-        e percurso são opcionais.
+        Data e hora atuais. Confira os padrões acima; altere taxas e pagamento no modo Completo. O
+        início e a posição atual são registrados ao iniciar. A conclusão fica no card Em rota.
       </p>
     </form>
   );
