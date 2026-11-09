@@ -875,6 +875,10 @@ export type Database = {
         Args: { _enabled: boolean; _key: string }
         Returns: undefined
       }
+      sync_active_work_journey: {
+        Args: { _action: string; _state: Json; _user_id: string }
+        Returns: Json
+      }
     }
     Enums: {
       app_role: "super_admin" | "admin" | "user"
