@@ -428,8 +428,9 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
         idle_min: "",
       }));
       setStops([newStop("coleta"), newStop("entrega")]);
-      setDeliveryStartedAt(null);
-      setBaseline(null);
+      const nextMeasurement = automaticDeliveryMeasurement(trip, null, null);
+      setDeliveryStartedAt(nextMeasurement?.at ?? null);
+      setBaseline(nextMeasurement);
       setRoute(null);
       setShowRoute(false);
     } catch (error) {
@@ -687,7 +688,7 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
                 </div>
               ))}
               <div className="flex min-w-0 gap-2">
-                {!trip.active && <Button
+                <Button
                   type="button"
                   variant="secondary"
                   size="sm"
@@ -854,7 +855,7 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
                 }}
               />
               <div className="col-span-2 flex flex-wrap items-center gap-2">
-                <Button
+                {!trip.active && <Button
                   type="button"
                   variant="outline"
                   size="sm"
@@ -876,7 +877,7 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
                       onClick={() => setDeliveryStartedAt(null)}
                     >
                       <X className="size-4" />
-                    </Button>
+                    </Button>}
                   </>
                 ) : null}
               </div>
@@ -914,7 +915,7 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
                   }}
                 >
                   Salvar {num(feePct)}% como taxa padrão de {selectedApp.name}
-                </Button>}
+                </Button>
               ) : null}
             </div>
 
