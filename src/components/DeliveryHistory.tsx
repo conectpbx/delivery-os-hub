@@ -516,7 +516,7 @@ export const DeliveryHistory = memo(function DeliveryHistory() {
                             }
                           }}
                         >
-                          Concluir
+                          Finalizar rota
                         </Button>
                         <Button
                           type="button"

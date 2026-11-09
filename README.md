@@ -365,3 +365,10 @@ acessíveis nos modos Rápido e Completo. O editor identifica coleta, pontos
 intermediários e destino final. Adicionar uma parada preserva o destino final
 já preenchido; o registro rápido também grava os endereços digitados. A captura
 GPS e o mapa continuam opcionais.
+
+Para acompanhar uma entrega em andamento, informe aplicativo e valor e use
+**Iniciar entrega**, disponível nos dois modos. O registro é salvo como **Em rota**
+com horário inicial; no histórico, informe paradas e destino e use **Finalizar rota**.
+Essa ação atualiza o mesmo registro e preserva o horário inicial. **Marcar início
+do tempo** apenas mede um rascunho; **Registrar entrega concluída** continua sendo
+a opção de lançar uma corrida já realizada pelo modo rápido.

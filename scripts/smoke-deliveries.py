@@ -140,13 +140,13 @@ with sync_playwright() as p:
     expect(active_card.get_by_role("button", name="Definir ponto final", exact=True)).to_be_visible()
     active_card.get_by_role("button", name="Adicionar ponto adicional", exact=True).click()
     active_card.get_by_label("Endereço adicional 1", exact=True).fill("Parada intermediária em rota")
-    expect(active_card.get_by_role("button", name="Concluir", exact=True)).to_be_disabled()
+    expect(active_card.get_by_role("button", name="Finalizar rota", exact=True)).to_be_disabled()
     active_card.get_by_role("button", name="Salvar pontos", exact=True).click()
     expect(active_card.get_by_text("Parada intermediária em rota", exact=True)).to_be_visible()
     assert updated[-1]["status"] == "em_rota"
     active_card.get_by_role("button", name="Definir ponto final", exact=True).click()
     active_card.get_by_label("Endereço final da entrega em rota", exact=True).fill("Destino final em rota")
-    active_card.get_by_role("button", name="Concluir", exact=True).click()
+    active_card.get_by_role("button", name="Finalizar rota", exact=True).click()
     expect(page.get_by_text("Destino final em rota", exact=True)).to_be_visible(timeout=20000)
     assert updated[-1]["status"] == "concluida"
     assert updated[-1]["dropoff_address"] == "Destino final em rota"
@@ -194,6 +194,25 @@ with sync_playwright() as p:
     page.wait_for_function("navigator.onLine")
     page.wait_for_timeout(1200)
     assert len(created) == 2 and created[1]["earnings"] == 9, "offline queue syncs the quick entry once"
+    value.fill("30,00")
+    entry.get_by_role("button", name="Definir ponto inicial", exact=True).click()
+    entry.get_by_label("Endereço do ponto inicial", exact=True).fill("Coleta da entrega iniciada")
+    entry.get_by_role("button", name="Iniciar entrega", exact=True).click()
+    expect(value).to_have_value("")
+    assert len(created) == 3 and created[-1]["status"] == "em_rota"
+    started_id = created[-1]["id"]
+    started_at = created[-1]["started_at"]
+    assert started_at and created[-1]["ended_at"] is None
+    assert created[-1]["pickup_address"] == "Coleta da entrega iniciada"
+    active_card = page.locator("li").filter(has=page.get_by_role("button", name="Entregue (GPS)", exact=True))
+    active_card.get_by_role("button", name="Definir ponto final", exact=True).click()
+    active_card.get_by_label("Endereço final da entrega em rota", exact=True).fill("Destino da entrega iniciada")
+    active_card.get_by_role("button", name="Finalizar rota", exact=True).click()
+    expect(page.get_by_text("Destino da entrega iniciada", exact=True)).to_be_visible(timeout=20000)
+    assert len(created) == 3, "finishing updates the started delivery instead of inserting another one"
+    assert updated[-1]["id"] == started_id and updated[-1]["status"] == "concluida"
+    assert updated[-1]["started_at"] == started_at and updated[-1]["ended_at"]
+    assert updated[-1]["dropoff_address"] == "Destino da entrega iniciada"
     page.screenshot(path=os.environ.get("DELIVERY_SCREENSHOT", "/tmp/delivery-fast-ui.png"), full_page=True)
     assert not failures, failures
     browser.close()

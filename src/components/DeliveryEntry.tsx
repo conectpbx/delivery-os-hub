@@ -749,7 +749,7 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              void save(hasFinalPoint);
+              if (hasFinalPoint) void save(true);
             }}
             className="space-y-3"
           >
@@ -889,7 +889,7 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
                   disabled={!!deliveryStartedAt}
                   onClick={beginMeasurement}
                 >
-                  Iniciar entrega
+                  Marcar início do tempo
                 </Button>
                 {deliveryStartedAt ? (
                   <>
@@ -946,16 +946,35 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
               ) : null}
             </div>
 
-            <Button type="submit" className="w-full" disabled={insert.isPending}>
-              {insert.isPending ? "Salvando…" : "Confirmar entrega"}
+            <Button
+              type="submit"
+              className="w-full min-h-12"
+              disabled={insert.isPending || !hasFinalPoint}
+            >
+              {insert.isPending ? "Salvando…" : "Finalizar rota"}
             </Button>
             <p className="text-center text-xs text-muted-foreground">
               {hasFinalPoint
-                ? "Será registrada como concluída."
-                : "Sem ponto final: fica “Em rota” e você define o destino depois."}
+                ? "Finalizar registra esta entrega como concluída."
+                : "Para sair agora, use Iniciar entrega abaixo. Informe o destino depois no card Em rota."}
             </p>
           </form>
         )}
+        <div className="mt-4 space-y-2 rounded-md border border-border p-3">
+          <Button
+            type="button"
+            className="min-h-12 w-full"
+            variant="outline"
+            disabled={insert.isPending || geoTarget !== null || !form.app_name || gross <= 0}
+            onClick={() => void save(false)}
+          >
+            {insert.isPending ? "Salvando…" : "Iniciar entrega"}
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Informe aplicativo e valor. Salva o início agora e mantém a entrega Em rota. No
+            histórico, adicione as paradas, defina o ponto final e toque em Finalizar rota.
+          </p>
+        </div>
         <div className="mt-4 space-y-2 border-t pt-3">
           <p className="text-xs text-muted-foreground">
             GPS opcional:{" "}
