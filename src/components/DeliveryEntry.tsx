@@ -10,6 +10,7 @@ import type { DeliveryScan } from "@/lib/delivery-scan";
 import { DeliveryQuickForm } from "./DeliveryQuickForm";
 import {
   deliveryActiveMinutes,
+  automaticDeliveryMeasurement,
   deliveryBaseline,
   deliveryGpsSuggestion,
   deliveryMoney,
@@ -75,7 +76,7 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
     "quick",
     (value) => deliveryModeDraft.parse(value),
   );
-  const [baseline, setBaseline] = usePersistentState<DeliveryBaseline | null>(
+  const [baseline, setBaseline, , baselineReady] = usePersistentState<DeliveryBaseline | null>(
     "entregas.gps-baseline",
     null,
     (value) => deliveryBaselineDraft.parse(value),
@@ -104,7 +105,7 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
   const [showRoute, setShowRoute] = useState(false);
   const [routing, setRouting] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [deliveryStartedAt, setDeliveryStartedAt] = usePersistentState<string | null>(
+  const [deliveryStartedAt, setDeliveryStartedAt, , startedReady] = usePersistentState<string | null>(
     "entregas.started-at",
     null,
     (value) => deliveryStartedDraft.parse(value),
@@ -131,19 +132,14 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
   useEffect(() => {
     if (trip.active && trip.journeyId) void refetchRecent();
   }, [trip.active, trip.journeyId, refetchRecent]);
-  const initialBaseline =
-    trip.active &&
-    trip.journeyId &&
-    trip.startedAt &&
-    recent.isSuccess &&
-    !recent.isFetching &&
-    recent.dataUpdatedAt >= Date.parse(trip.startedAt) &&
-    !(recent.data ?? []).some(
-      (row) => Date.parse(row.ended_at ?? row.occurred_at) >= Date.parse(trip.startedAt!),
-    )
-      ? { journeyId: trip.journeyId, distanceKm: 0, at: trip.startedAt }
-      : null;
-  const effectiveBaseline = baseline?.journeyId === trip.journeyId ? baseline : initialBaseline;
+  useEffect(() => {
+    if (!baselineReady || !startedReady || submitting.current) return;
+    const next = automaticDeliveryMeasurement(trip, baseline, deliveryStartedAt);
+    if (!next || next === baseline) return;
+    setBaseline(next);
+    setDeliveryStartedAt(next.at);
+  }, [trip, baseline, deliveryStartedAt, baselineReady, startedReady, setBaseline, setDeliveryStartedAt]);
+  const effectiveBaseline = baseline?.journeyId === trip.journeyId ? baseline : null;
   const suggestion = deliveryGpsSuggestion(trip, effectiveBaseline);
   const frequent = useMemo(
     () => frequentDeliveryValues(recent.data ?? [], form.app_name),
@@ -432,8 +428,9 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
         idle_min: "",
       }));
       setStops([newStop("coleta"), newStop("entrega")]);
-      setDeliveryStartedAt(null);
-      setBaseline(deliveryBaseline(trip));
+      const nextMeasurement = automaticDeliveryMeasurement(trip, null, null);
+      setDeliveryStartedAt(nextMeasurement?.at ?? null);
+      setBaseline(nextMeasurement);
       setRoute(null);
       setShowRoute(false);
     } catch (error) {
@@ -588,20 +585,8 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
               {showRoute ? "Ocultar" : filledStops.length ? "Editar rota" : "Inserir rota"}
             </Button>
           </div>
+          {deliveryStartedAt && (!baseline || baseline.journeyId === trip.journeyId) ? (
           <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="min-h-11"
-              onClick={() => {
-                setStops((current) =>
-                  current[0]?.kind === "coleta" ? current : [newStop("coleta"), ...current],
-                );
-                setShowRoute(true);
-              }}
-            >
-              Definir ponto inicial
-            </Button>
             <Button
               type="button"
               variant="outline"
@@ -625,20 +610,8 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
               <Plus className="mr-1 size-4" />
               Adicionar ponto adicional
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="min-h-11"
-              onClick={() => {
-                setStops((current) =>
-                  current.at(-1)?.kind === "entrega" ? current : [...current, newStop("entrega")],
-                );
-                setShowRoute(true);
-              }}
-            >
-              Definir ponto final
-            </Button>
           </div>
+          ) : null}
           {showRoute ? (
             <>
               {stops.map((s, i) => (
@@ -882,7 +855,7 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
                 }}
               />
               <div className="col-span-2 flex flex-wrap items-center gap-2">
-                <Button
+                {!trip.active && <Button
                   type="button"
                   variant="outline"
                   size="sm"
@@ -890,13 +863,13 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
                   onClick={beginMeasurement}
                 >
                   Iniciar entrega
-                </Button>
+                </Button>}
                 {deliveryStartedAt ? (
                   <>
                     <span className="text-xs text-muted-foreground">
                       Início: {dateTimeLabel(deliveryStartedAt)}
                     </span>
-                    <Button
+                    {!trip.active && <Button
                       type="button"
                       size="icon"
                       variant="ghost"
@@ -904,7 +877,7 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
                       onClick={() => setDeliveryStartedAt(null)}
                     >
                       <X className="size-4" />
-                    </Button>
+                    </Button>}
                   </>
                 ) : null}
               </div>
@@ -958,25 +931,20 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
         )}
         <div className="mt-4 space-y-2 border-t pt-3">
           <p className="text-xs text-muted-foreground">
-            GPS opcional:{" "}
+            GPS:{" "}
             {suggestion
               ? `${num(suggestion.distanceKm, 2)} km · ${suggestion.durationMin} min desde a marcação, excluindo pausas`
-              : "Inicie uma medição com a jornada ativa para sugerir km e tempo sem misturar entregas."}
+              : trip.active
+                ? trip.pauses?.some((pause) => !pause.ended_at)
+                  ? "Medição pausada"
+                  : "Medição automática · aguardando localização atualizada"
+                : "Sem jornada ativa"}
           </p>
           <p className="text-xs text-muted-foreground">
             No registro: {form.distance_km || "0"} km · {form.duration_min || "0"} min ·{" "}
             {form.idle_min || "0"} min parados
           </p>
           <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="min-h-11"
-              onClick={beginMeasurement}
-              disabled={!!deliveryStartedAt}
-            >
-              Medir esta entrega
-            </Button>
             <Button
               type="button"
               variant="outline"

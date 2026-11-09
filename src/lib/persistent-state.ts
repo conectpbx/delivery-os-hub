@@ -77,5 +77,5 @@ export function usePersistentState<T>(key: string, initial: T, validate?: (value
       /* Ignore unavailable storage. */
     }
   };
-  return [value, setValue, clear] as const;
+  return [value, setValue, clear, Boolean(storageKey && restoredKey === storageKey)] as const;
 }
