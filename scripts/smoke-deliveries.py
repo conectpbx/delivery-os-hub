@@ -45,6 +45,9 @@ def handle(route):
     parsed = urlparse(request.url)
     if parsed.hostname in ("127.0.0.1", "localhost"):
         return route.continue_()
+    if parsed.hostname == "nominatim.openstreetmap.org":
+        fixture = {"address": {"road": "Rua GPS do teste", "house_number": "42", "city": "São Paulo"}} if parsed.path.endswith("/reverse") else [{"lat": "-23.56", "lon": "-46.64"}]
+        return route.fulfill(status=200, content_type="application/json", headers={"access-control-allow-origin": "*"}, body=json.dumps(fixture))
     if parsed.hostname != HOST:
         return route.abort()
     path, params = parsed.path, parse_qs(parsed.query)
@@ -168,7 +171,7 @@ with sync_playwright() as p:
     entry.get_by_role("button", name="Rápido", exact=True).click()
     value = entry.get_by_label("Valor bruto (R$)", exact=True)
     value.fill("20,00")
-    expect(entry.get_by_text(re.compile(r"Líquido:.*18,00"))).to_be_visible()
+    expect(entry.get_by_text(re.compile(r"Valor da entrega:.*20,00"))).to_be_visible()
     before = len(requests)
     value.fill("25,00")
     value.fill("20,00")
@@ -177,15 +180,17 @@ with sync_playwright() as p:
     entry.get_by_role("button", name="Completo", exact=True).click()
     expect(entry.get_by_role("button", name=re.compile("concluída|Finalizar rota"))).to_have_count(0)
     entry.locator("#payment-method").select_option("pix")
+    entry.get_by_label("Gratificação do cliente (R$)", exact=True).fill("7,00")
     entry.get_by_role("button", name="Rápido", exact=True).click()
     expect(entry.get_by_text(re.compile(r"Recebimento: Pix"))).to_be_visible()
     entry.get_by_role("button", name="Iniciar entrega", exact=True).click()
-    page.wait_for_timeout(500)
+    expect(value).to_have_value("", timeout=20000)
     assert len(created) == 1
-    assert created[0]["gross_earnings"] == 20 and created[0]["earnings"] == 18 and created[0]["fee_percent"] == 10
+    assert created[0]["gross_earnings"] == 20 and created[0]["earnings"] == 20 and created[0]["fee_percent"] == 0 and created[0]["tip"] == 0
     assert created[0]["payment_method"] == "pix" and created[0]["status"] == "em_rota"
     assert [stop["address"] for stop in created[0]["stops"]] == ["Restaurante Central", "Rua Intermediária, 50", "Rua Destino, 100"]
     assert created[0]["pickup_address"] == "Restaurante Central"
+    assert all(stop["lat"] is not None and stop["lng"] is not None for stop in created[0]["stops"])
     assert created[0]["dropoff_address"] is None
     assert created[0]["started_at"] and created[0]["ended_at"] is None
     context.set_offline(True)
@@ -197,9 +202,11 @@ with sync_playwright() as p:
     context.set_offline(False)
     page.wait_for_function("navigator.onLine")
     page.wait_for_timeout(1200)
-    assert len(created) == 2 and created[1]["earnings"] == 9, "offline queue syncs the quick entry once"
+    assert len(created) == 2 and created[1]["earnings"] == 10, "offline queue syncs the quick entry once"
     assert created[1]["status"] == "em_rota" and created[1]["lat"] == -23.55 and created[1]["lng"] == -46.63
     assert created[1]["stops"][0]["kind"] == "coleta"
+    expect(page.get_by_text("Rua GPS do teste, 42, São Paulo", exact=True).first).to_be_visible(timeout=20000)
+    expect(page.get_by_text(re.compile("Pontos do dia encadeados")).first).to_be_visible(timeout=20000)
     value.fill("30,00")
     entry.get_by_role("button", name="Inserir rota", exact=True).click()
     entry.get_by_label("Endereço do ponto inicial", exact=True).fill("Coleta da entrega iniciada")
@@ -231,4 +238,4 @@ with sync_playwright() as p:
     page.screenshot(path=os.environ.get("DELIVERY_SCREENSHOT", "/tmp/delivery-fast-ui.png"), full_page=True)
     assert not failures, failures
     browser.close()
-print("Mobile Chromium: date-filtered queries, 20-row history, app/fee chips, isolated typing, usual payment, automatic start GPS, denied GPS fallback, completion restricted to active deliveries and online/offline starts passed.")
+print("Mobile Chromium: date-filtered queries, 20-row history, app/fee chips, isolated typing, usual payment, automatic start GPS, readable streets, chained points, exact quick amounts without fees/tips, denied GPS fallback and online/offline starts passed.")

@@ -1,3 +1,4 @@
+import { resolveDeliveryLocation } from "@/lib/delivery-location";
 import { authStore } from "@/hooks/useAuth";
 import {
   deliveryFormDraft,
@@ -13,7 +14,7 @@ import {
   automaticDeliveryMeasurement,
   deliveryBaseline,
   deliveryGpsSuggestion,
-  deliveryMoney,
+  deliveryEntryMoney,
   frequentDeliveryValues,
   type DeliveryBaseline,
 } from "@/lib/delivery-entry";
@@ -388,7 +389,7 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
     }
     submitting.current = true;
     try {
-      const money = deliveryMoney(gross, feePct, dec(form.tip));
+      const money = deliveryEntryMoney(gross, feePct, dec(form.tip), mode);
       if (dec(form.distance_km) < 0 || dec(form.duration_min) < 0 || dec(form.idle_min) < 0)
         throw new Error("Confira distância e tempos: não podem ser negativos");
       const startedAt = new Date().toISOString();
@@ -404,7 +405,7 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
           if (!pickup || (pickup.lat == null && pickup.lng == null && !pickup.address.trim())) {
             const captured = {
               ...newStop("coleta"),
-              address: `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`,
+              address: "",
               lat: point.lat,
               lng: point.lng,
               recorded_at: new Date().toISOString(),
@@ -422,7 +423,10 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
         throw new Error(
           "A conta mudou durante a captura. Confira a sessão antes de iniciar a entrega.",
         );
-      const pickup = filled.find((stop) => stop.kind === "coleta");
+      const resolved = await Promise.all(filled.map(resolveDeliveryLocation));
+      if (authStore.getSnapshot().session?.user.id !== ownerId)
+        throw new Error("A conta mudou durante a leitura dos endereços.");
+      const pickup = resolved.find((stop) => stop.kind === "coleta");
       await insert.mutateAsync({
         app_name: form.app_name,
         ...money,
@@ -440,7 +444,7 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
         ended_at: null,
         estimated_duration_min: route?.durationMin ?? null,
         stops: recordedStops(
-          filled.map((s) => ({
+          resolved.map((s) => ({
             kind: s.kind,
             address: s.address,
             lat: s.lat,
@@ -481,13 +485,13 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
         maximumAge: 0,
         timeout: 12000,
       });
-      const captured = {
+      const captured = await resolveDeliveryLocation({
         ...newStop(kind),
-        address: `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`,
+        address: "",
         lat: point.lat,
         lng: point.lng,
         recorded_at: new Date().toISOString(),
-      };
+      });
       const nextStops = [
         ...stops.filter((stop) => stop.address.trim() || stop.lat != null),
         captured,
@@ -736,9 +740,6 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
             apps={apps.data ?? []}
             app={form.app_name}
             value={form.earnings}
-            net={net + dec(form.tip)}
-            fee={feePct}
-            tip={dec(form.tip)}
             payment={form.payment_method}
             frequent={frequent}
             busy={insert.isPending || geoTarget !== null}

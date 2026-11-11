@@ -1,3 +1,4 @@
+import { coordinateAddress } from "./delivery-location";
 import type { Delivery, DeliveryStop } from "./data";
 import { geocodeAddress, fetchRouteWithFallback } from "./geo";
 export type StoredStop = DeliveryStop;
@@ -41,9 +42,9 @@ export function historyStops(delivery: Delivery): StoredStop[] {
 }
 
 export function stopLocation(stop: StoredStop) {
-  if (stop.address?.trim()) return stop.address.trim();
+  if (stop.address?.trim() && !coordinateAddress(stop.address)) return stop.address.trim();
   if (stop.lat != null && stop.lng != null) {
-    return `${Number(stop.lat).toFixed(5)}, ${Number(stop.lng).toFixed(5)}`;
+    return "Localização GPS — endereço indisponível";
   }
   return "Local não informado";
 }

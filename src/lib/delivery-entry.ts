@@ -138,3 +138,12 @@ export function deliveryActiveMinutes(from: string, to: string, pauses: JourneyP
   );
   return Math.max(0, Math.round(time.journeyMin - time.pauseMin));
 }
+
+export function deliveryEntryMoney(
+  gross: number,
+  feePercent: number,
+  tip: number,
+  mode: "quick" | "full",
+) {
+  return deliveryMoney(gross, mode === "quick" ? 0 : feePercent, mode === "quick" ? 0 : tip);
+}

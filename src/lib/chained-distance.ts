@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Delivery } from "@/lib/data";
+import { validCoordinates, coordinateAddress } from "./delivery-location";
+import { geocodeAddress } from "./geo";
 import { fetchRouteWithFallback } from "@/lib/geo";
 
 export type StoredStop = {
@@ -11,51 +13,95 @@ export type StoredStop = {
   recorded_at?: string;
 };
 
-export function pointsOfDelivery(d: Delivery): [number, number][] {
-  const st = ((d as unknown as { stops?: StoredStop[] }).stops ?? []).filter(
-    (s) => s.lat != null && s.lng != null,
-  );
-  if (st.length) return st.map((s) => [s.lat as number, s.lng as number] as [number, number]);
-  if (d.lat != null && d.lng != null) return [[d.lat, d.lng] as [number, number]];
-  return [];
+function stopsOf(d: Delivery): StoredStop[] {
+  const stops = Array.isArray(d.stops)
+    ? d.stops.filter((stop) => stop && typeof stop === "object")
+    : [];
+  const result: StoredStop[] = stops.map((stop) => {
+    const pair = validCoordinates(stop.lat, stop.lng) ?? coordinateAddress(stop.address ?? "");
+    return { ...stop, address: stop.address ?? "", lat: pair?.[0] ?? null, lng: pair?.[1] ?? null };
+  });
+  const initial = validCoordinates(d.lat, d.lng);
+  if (
+    initial &&
+    !result.some(
+      (stop) => stop.lat === initial[0] && stop.lng === initial[1] && stop.kind === "coleta",
+    )
+  )
+    result.unshift({
+      kind: "coleta",
+      address: d.pickup_address ?? "",
+      lat: initial[0],
+      lng: initial[1],
+      recorded_at: d.started_at ?? d.occurred_at,
+    });
+  if (!result.some((stop) => stop.kind === "coleta") && d.pickup_address)
+    result.unshift({ kind: "coleta", address: d.pickup_address, lat: null, lng: null });
+  if (d.dropoff_address && !result.some((stop) => stop.address === d.dropoff_address))
+    result.push({
+      kind: "entrega",
+      address: d.dropoff_address,
+      lat: null,
+      lng: null,
+      recorded_at: d.ended_at ?? d.occurred_at,
+    });
+  return result;
 }
-
+export function pointsOfDelivery(d: Delivery): [number, number][] {
+  return stopsOf(d).flatMap((stop) => {
+    const pair = validCoordinates(stop.lat, stop.lng);
+    return pair ? [pair] : [];
+  });
+}
 type RoutePoint = { coordinates: [number, number]; recordedAt: number; sequence: number };
 
-/** Intercala pontos de entregas simultâneas pela hora em que cada ponto foi salvo. */
+/** Interleave simultaneous deliveries by actual capture time; retain returns to the same place. */
 export function orderedRoutePoints(deliveries: Delivery[]): [number, number][] {
-  const points: RoutePoint[] = deliveries.flatMap((delivery, deliveryIndex) => {
-    const stops = ((delivery as unknown as { stops?: StoredStop[] }).stops ?? []).filter(
-      (stop) => stop.lat != null && stop.lng != null,
-    );
-    const deliveryTime = new Date(delivery.occurred_at).getTime();
-
-    if (!stops.length && delivery.lat != null && delivery.lng != null) {
+  const points: RoutePoint[] = deliveries.flatMap((delivery, deliveryIndex) =>
+    stopsOf(delivery).flatMap((stop, stopIndex) => {
+      const coordinates = validCoordinates(stop.lat, stop.lng);
+      if (!coordinates) return [];
+      const time = Date.parse(stop.recorded_at ?? "");
+      const fallback = Date.parse(delivery.occurred_at);
       return [
         {
-          coordinates: [delivery.lat, delivery.lng],
-          recordedAt: deliveryTime,
-          sequence: deliveryIndex,
+          coordinates,
+          recordedAt: Number.isFinite(time) ? time : Number.isFinite(fallback) ? fallback : 0,
+          sequence: deliveryIndex * 1000 + stopIndex,
         },
       ];
-    }
-
-    return stops.map((stop, stopIndex) => ({
-      coordinates: [stop.lat as number, stop.lng as number] as [number, number],
-      recordedAt: stop.recorded_at ? new Date(stop.recorded_at).getTime() : deliveryTime,
-      sequence: deliveryIndex * 1000 + stopIndex,
-    }));
-  });
-
+    }),
+  );
   points.sort((a, b) => a.recordedAt - b.recordedAt || a.sequence - b.sequence);
-
-  // Remove somente repetições consecutivas. Voltar ao mesmo local mais tarde conta no trajeto.
   return points
     .map((point) => point.coordinates)
     .filter((point, index, all) => {
       const previous = all[index - 1];
       return !previous || point[0] !== previous[0] || point[1] !== previous[1];
     });
+}
+
+/** Recover address-only historical stops without rewriting the user's records. */
+export async function resolveChainedPoints(
+  deliveries: Delivery[],
+  signal?: AbortSignal,
+): Promise<[number, number][]> {
+  const resolved: Delivery[] = [];
+  // Queue one historical lookup at a time so live GPS reverse lookups can interleave.
+  for (const delivery of deliveries) {
+    const stops = [];
+    for (const stop of stopsOf(delivery)) {
+      if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+      const hit =
+        !validCoordinates(stop.lat, stop.lng) && stop.address.trim()
+          ? await geocodeAddress(stop.address)
+          : null;
+      stops.push(hit ? { ...stop, ...hit } : stop);
+    }
+    resolved.push({ ...delivery, stops } as Delivery);
+  }
+  if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+  return orderedRoutePoints(resolved);
 }
 
 function haversine(a: [number, number], b: [number, number]) {
@@ -75,24 +121,27 @@ function haversine(a: [number, number], b: [number, number]) {
  * confirmada/salva até o último ponto informado.
  */
 export function useChainedDistance(deliveries: Delivery[]) {
-  const { chainKey, chainPoints, kmSum } = useMemo(() => {
+  const { chainKey, potentialPoints, kmSum } = useMemo(() => {
     const ordered = [...deliveries].sort(
       (a, b) => new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime(),
     );
-    const points = orderedRoutePoints(ordered);
     return {
       kmSum: ordered.reduce((sum, delivery) => sum + Number(delivery.distance_km), 0),
-      chainPoints: points,
-      chainKey: points.map(([lat, lng]) => `${lat.toFixed(5)},${lng.toFixed(5)}`).join("|"),
+      potentialPoints: ordered.reduce((count, delivery) => count + stopsOf(delivery).length, 0),
+      chainKey: JSON.stringify(
+        ordered.map((delivery) => [delivery.id, delivery.occurred_at, stopsOf(delivery)]),
+      ),
     };
   }, [deliveries]);
   const chained = useQuery({
     queryKey: ["chained-km", chainKey],
-    enabled: chainPoints.length >= 2,
+    enabled: potentialPoints >= 2,
     staleTime: 1000 * 60 * 60 * 24,
     gcTime: 1000 * 60 * 60 * 24 * 7,
     refetchOnWindowFocus: false,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
+      const chainPoints = await resolveChainedPoints(deliveries, signal);
+      if (chainPoints.length < 2) return null;
       const r = await fetchRouteWithFallback(chainPoints);
       if (!r) return null;
       if (!r.legs.length) return r.distanceKm;

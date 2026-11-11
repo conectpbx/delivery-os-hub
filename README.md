@@ -371,3 +371,16 @@ O card **Em rota** oferece **Adicionar ponto adicional**, **Editar paradas**,
 **Entrega concluída** e a conclusão com GPS. Salvar pontos mantém a rota em aberto;
 a conclusão atualiza o mesmo registro. Pontos adicionais e o destino continuam
 editáveis. A medição de GPS respeita a jornada e suas pausas.
+
+No modo **Rápido**, o valor informado é o valor recebido: taxa e gratificação
+preenchidas no modo Completo não são aplicadas. O registro grava taxa e gorjeta
+zeradas nesse modo; o modo Completo mantém seus ajustes explícitos.
+
+Os pontos salvos por endereço passam pela geocodificação para alimentar o trajeto
+encadeado. O cálculo também recupera coordenadas numéricas em texto e pontos antigos
+que só tenham endereço, preservando a coleta inicial e a ordem dos horários.
+Capturas GPS buscam rua, número e cidade; registros antigos que exibiam coordenadas
+são resolvidos na exibição. Sem conexão ou sem resposta do serviço, os pontos GPS
+continuam salvos e a tela informa que o endereço está indisponível. As consultas de
+geocodificação compartilham cache e fila limitada; os testes de interface usam mapas
+simulados e não comprovam a disponibilidade do serviço público em aparelhos reais.

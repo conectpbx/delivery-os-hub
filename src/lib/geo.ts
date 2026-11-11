@@ -173,7 +173,7 @@ export async function reverseGeocodeAddress(lat: number, lng: number) {
         const a = json.address ?? {};
         const road = a["road"] ?? a["pedestrian"] ?? "";
         const city = a["city"] ?? a["town"] ?? a["village"] ?? a["municipality"] ?? "";
-        const short = [json.name || road, a["house_number"], city].filter(Boolean).join(", ");
+        const short = [road || json.name, a["house_number"], city].filter(Boolean).join(", ");
         return { name: json.name ?? "", address: short || json.display_name || "" };
       } catch {
         return null;

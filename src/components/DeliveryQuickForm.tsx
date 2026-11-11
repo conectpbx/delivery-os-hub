@@ -7,10 +7,7 @@ export const DeliveryQuickForm = memo(function DeliveryQuickForm({
   apps,
   app,
   value,
-  net,
-  fee,
   payment,
-  tip,
   frequent,
   busy,
   select,
@@ -20,10 +17,7 @@ export const DeliveryQuickForm = memo(function DeliveryQuickForm({
   apps: App[];
   app: string;
   value: string;
-  net: number;
-  fee: number;
   payment: PaymentMethod;
-  tip: number;
   frequent: number[];
   busy: boolean;
   select: (app: string) => void;
@@ -107,15 +101,10 @@ export const DeliveryQuickForm = memo(function DeliveryQuickForm({
         </div>
       )}
       <p className="text-sm text-muted-foreground">
-        Taxa: {fee}% · Recebimento:{" "}
-        {payment === "pix" ? "Pix" : payment === "dinheiro" ? "Dinheiro" : "Crédito"}
+        Recebimento: {payment === "pix" ? "Pix" : payment === "dinheiro" ? "Dinheiro" : "Crédito"}
       </p>
-      <p className="text-lg font-semibold">Líquido: {brl(net)}</p>
-      {tip > 0 && (
-        <p className="text-xs text-muted-foreground">
-          Inclui {brl(tip)} de gratificação informada.
-        </p>
-      )}
+      <p className="text-lg font-semibold">Valor da entrega: {brl(dec(value))}</p>
+      <p className="text-xs text-muted-foreground">Valor informado sem deduções ou acréscimos.</p>
       <Button type="submit" className="min-h-14 w-full text-base" disabled={busy || !app}>
         {busy ? "Iniciando…" : "Iniciar entrega"}
       </Button>

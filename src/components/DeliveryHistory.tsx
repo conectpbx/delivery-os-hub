@@ -1,3 +1,5 @@
+import { DeliveryStopAddress } from "./DeliveryStopAddress";
+import { resolveDeliveryLocation } from "@/lib/delivery-location";
 import { deliveryFinishingDraft } from "@/lib/delivery-draft";
 import { MapsNavigationLink } from "@/components/MapsNavigationLink";
 
@@ -29,13 +31,7 @@ import { usePersistentState } from "@/lib/persistent-state";
 
 import { useCalendarNow } from "@/hooks/useCalendarNow";
 
-import {
-  recordedStops,
-  historyStops,
-  stopLocation,
-  routeTotals,
-  type StoredStop,
-} from "@/lib/delivery-records";
+import { recordedStops, historyStops, routeTotals, type StoredStop } from "@/lib/delivery-records";
 
 import { useDeliveryHistory } from "@/lib/data";
 import { deliveryPeriod } from "@/lib/delivery-scope";
@@ -71,9 +67,11 @@ export const DeliveryHistory = memo(function DeliveryHistory() {
   /** Grava os pontos já informados na entrega em rota (sem concluir). */
   async function persistFinishStops(id: string, raw: StoredStop[], list2: Stop[]) {
     const filled = recordedStops(
-      list2
-        .filter((s) => s.address.trim() || (s.lat != null && s.lng != null))
-        .map((s) => ({ kind: s.kind, address: s.address.trim(), lat: s.lat, lng: s.lng })),
+      await Promise.all(
+        list2
+          .filter((s) => s.address.trim() || (s.lat != null && s.lng != null))
+          .map((s) => resolveDeliveryLocation(s)),
+      ),
     );
     if (!filled.length) return false;
     await updateDelivery.mutateAsync({
@@ -91,11 +89,11 @@ export const DeliveryHistory = memo(function DeliveryHistory() {
       try {
         const place = await reverseGeocodeAddress(lat, lng);
         patchFinishStop(stopId, {
-          address: place?.address || `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+          address: place?.address || "",
         });
         toast.success(place?.address ? "Endereço preenchido pelo GPS" : "Localização capturada");
       } catch {
-        patchFinishStop(stopId, { address: `${lat.toFixed(5)}, ${lng.toFixed(5)}` });
+        patchFinishStop(stopId, { address: "" });
         toast.message("Localização capturada (endereço indisponível)");
       }
     } catch (err) {
@@ -122,13 +120,13 @@ export const DeliveryHistory = memo(function DeliveryHistory() {
       const started = delivery.started_at ?? delivery.occurred_at;
       if (Date.parse(started) > Date.parse(at))
         throw new Error("Confira o horário do dispositivo antes de concluir");
-      const final = {
+      const final = await resolveDeliveryLocation({
         ...newStop("entrega"),
-        address: `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`,
+        address: "",
         lat: point.lat,
         lng: point.lng,
         recorded_at: at,
-      };
+      });
       setFinishing({ id: delivery.id, stops: [final] });
       await updateDelivery.mutateAsync({
         id: delivery.id,
@@ -306,7 +304,7 @@ export const DeliveryHistory = memo(function DeliveryHistory() {
                               ) : null}
                             </div>
                             <p className="break-words text-xs text-muted-foreground">
-                              {stopLocation(stop)}
+                              {<DeliveryStopAddress stop={stop} />}
                             </p>
                           </div>
                         </li>
