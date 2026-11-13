@@ -94,7 +94,15 @@ export function operationTime(
     if (inPeriod && !covered) outsideIdleMin += Math.max(0, Number(delivery.idle_min) || 0);
     const interval = deliveryInterval(delivery, now);
     if (interval) {
-      routeIntervals.push(...withoutPauses(clip(interval[0], interval[1])));
+      // An unfinished route is not a work shift: its live clock can only
+      // advance inside recorded journeys, including their start/finish bounds.
+      const live = delivery.status === "em_rota" && !delivery.ended_at;
+      const intervals = live
+        ? journeyIntervals.map(([start, end]) =>
+            clip(Math.max(start, interval[0]), Math.min(end, interval[1])),
+          )
+        : [clip(interval[0], interval[1])];
+      routeIntervals.push(...intervals.flatMap(withoutPauses));
     } else if (inPeriod) {
       legacyDeliveryMin += deliveryMinutes(delivery, now);
       if (!covered) outsideLegacyMin += deliveryMinutes(delivery, now);

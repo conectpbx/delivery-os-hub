@@ -175,7 +175,33 @@ test("legacy open delivery uses its creation time rather than route estimate", (
 test("legacy route with recorded finish retains the elapsed interval after completion", () => {
   assert.equal(deliveryMinutes(delivery({ started_at: null, duration_min: 53 }), now), 120);
 });
-test("open legacy route crossing midnight remains delivery time in yesterday and today's report", () => {
+test("open route without a started journey never advances operation time", () => {
+  const open = delivery({ ended_at: null, status: "em_rota" });
+  for (const at of ["2026-10-12T14:00:00Z", "2026-10-12T18:00:00Z"]) {
+    const time = operationTime([open], [], from, to, new Date(at));
+    assert.equal(time.deliveryMin, 0);
+    assert.equal(time.totalMin, 0);
+  }
+});
+test("open route starts counting only at journey start", () => {
+  const open = delivery({ ended_at: null, status: "em_rota" });
+  const time = operationTime([open], [{ ...journey, started_at: "2026-10-12T14:00:00Z", ended_at: null }], from, to, new Date("2026-10-12T15:00:00Z"));
+  assert.equal(time.deliveryMin, 60);
+  assert.equal(time.totalMin, 60);
+});
+test("open route stops counting when its journey finishes and excludes gaps between shifts", () => {
+  const open = delivery({ ended_at: null, status: "em_rota" });
+  const shifts = [
+    { ...journey, ended_at: "2026-10-12T14:00:00Z" },
+    { ...journey, id: "j2", started_at: "2026-10-12T16:00:00Z", ended_at: "2026-10-12T17:00:00Z" },
+  ];
+  for (const at of ["2026-10-12T18:00:00Z", "2026-10-12T22:00:00Z"]) {
+    const time = operationTime([open], shifts, from, to, new Date(at));
+    assert.equal(time.deliveryMin, 120);
+    assert.equal(time.totalMin, 180);
+  }
+});
+test("open legacy route crossing midnight only counts time covered by journeys in each day's report", () => {
   const open = delivery({
     occurred_at: "2026-10-12T23:00:00-03:00",
     started_at: null,
@@ -188,11 +214,11 @@ test("open legacy route crossing midnight remains delivery time in yesterday and
     [],
     [],
     "day",
-    [],
+    [{ ...journey, started_at: "2026-10-12T23:00:00-03:00", ended_at: "2026-10-13T00:30:00-03:00" }],
     new Date("2026-10-13T01:00:00-03:00"),
   );
   assert.equal(rows.find((r) => r.key === "2026-10-12")?.workedMin, 60);
-  assert.equal(rows.find((r) => r.key === "2026-10-13")?.workedMin, 60);
+  assert.equal(rows.find((r) => r.key === "2026-10-13")?.workedMin, 30);
   assert.equal(rows.find((r) => r.key === "2026-10-13")?.unassignedMin, 0);
 });
 test("October 13 records use the recorded finish instead of the 53-minute estimate", () => {

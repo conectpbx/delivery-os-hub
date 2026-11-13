@@ -17,6 +17,7 @@
 - A persistência offline do cache é agrupada antes da gravação no IndexedDB para reduzir trabalho na interface móvel sem perder dados.
 - External GPS ingestion uses per-device opaque bearer tokens stored only as SHA-256 hashes; only newer captured readings replace device state.
 - Persist completed work journeys independently of delivery rows; use shared interval-based operation-time calculations for all time and hourly indicators to avoid overlapping routes or month-boundary double counting.
+- Clip unfinished route clocks to recorded journey intervals; an open delivery alone must not create work time before a shift, after its finish, or between shifts. Preserve completed historical records separately.
 - Store pause intervals with their work journey and use shared pause controls; explicit pauses remain in elapsed journey time but are excluded from delivery and unassigned time to keep every module consistent.
 - Configure the work vehicle through the shared shell using profiles.vehicle, and use that same account field for branded loading icons; one persisted choice keeps all modules and devices consistent.
 - Automatically establish each delivery GPS baseline only after account-scoped drafts are restored; use the current journey distance, preserve the ongoing segment and reset after saving to prevent cross-delivery carryover.
