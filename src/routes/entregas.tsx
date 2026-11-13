@@ -16,7 +16,6 @@ import { Button } from "@/components/ui/button";
 
 import { dateTimeLabel } from "@/lib/format";
 
-import { DeliverySummary } from "@/components/DeliverySummary";
 import { DeliveryEntry } from "@/components/DeliveryEntry";
 import { DeliveryHistory } from "@/components/DeliveryHistory";
 export const Route = createFileRoute("/entregas")({
@@ -54,10 +53,9 @@ function Entregas() {
   }, [externalGps.data, trip.active, pushIntegratedGps]);
 
   return (
-    <AppShell title="Entregas" subtitle="Registro de corridas, rota no mapa e navegação">
-      {" "}
+    <AppShell title="Entregas" subtitle="Inicie, acompanhe e conclua suas rotas">
       <JourneySyncStatus error={tracker.syncError} retry={tracker.retrySync} />
-      <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
+      <div className="surface-card mb-5 flex min-w-0 flex-wrap items-center justify-between gap-3 p-4">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold">Jornada de trabalho</h2>
           <p className="text-xs text-muted-foreground">
@@ -99,12 +97,14 @@ function Entregas() {
               Iniciar jornada
             </Button>
           )}
-          <JourneyPauseControl
-            active={tracker.trip.active}
-            pauses={tracker.trip.pauses}
-            pause={tracker.pause}
-            resume={tracker.resume}
-          />
+          {trip.active && (
+            <JourneyPauseControl
+              active={tracker.trip.active}
+              pauses={tracker.trip.pauses}
+              pause={tracker.pause}
+              resume={tracker.resume}
+            />
+          )}
         </div>
         <GpsTrackingStatus
           trip={tracker.trip}
@@ -112,9 +112,8 @@ function Entregas() {
           onRetry={tracker.retryBrowserGps}
         />
       </div>
-      <DeliverySummary />
-      <DeliveryEntry trip={tracker.trip} />
-      <div className="mt-4">
+      <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(340px,420px)_minmax(0,1fr)] [&>*]:min-w-0">
+        <DeliveryEntry trip={tracker.trip} />
         <DeliveryHistory />
       </div>
     </AppShell>

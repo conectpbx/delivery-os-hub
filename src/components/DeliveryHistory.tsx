@@ -1,4 +1,4 @@
-import { DeliveryStopAddress } from "./DeliveryStopAddress";
+import { DeliveryRouteDetails } from "./DeliveryRouteDetails";
 import { resolveDeliveryLocation } from "@/lib/delivery-location";
 import { deliveryFinishingDraft } from "@/lib/delivery-draft";
 import { MapsNavigationLink } from "@/components/MapsNavigationLink";
@@ -172,6 +172,7 @@ export const DeliveryHistory = memo(function DeliveryHistory() {
             key={k}
             type="button"
             size="sm"
+            className="min-h-11"
             variant={histRange === k ? "default" : "outline"}
             onClick={() => setHistRange(k)}
           >
@@ -190,8 +191,6 @@ export const DeliveryHistory = memo(function DeliveryHistory() {
           {data.slice(0, visible).map((d) => {
             const raw = historyStops(d);
             const status = d.status ?? "concluida";
-            const pickupCount = raw.filter((stop) => stop.kind === "coleta").length;
-            const deliveryCount = raw.filter((stop) => stop.kind === "entrega").length;
             const nav = navigationUrl(
               raw.length
                 ? raw
@@ -204,7 +203,15 @@ export const DeliveryHistory = memo(function DeliveryHistory() {
                   ],
             );
             return (
-              <li key={d.id} className="py-3">
+              <li
+                key={d.id}
+                data-delivery-id={d.id}
+                className={
+                  status === "em_rota"
+                    ? "my-3 rounded-xl border border-primary/20 bg-primary/5 p-3"
+                    : "py-4"
+                }
+              >
                 <div className="flex items-start gap-3">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium">
@@ -257,6 +264,7 @@ export const DeliveryHistory = memo(function DeliveryHistory() {
                   <Button
                     variant="ghost"
                     size="icon"
+                    className="min-h-11 min-w-11"
                     aria-label="Excluir"
                     onClick={() => remove.mutate(d.id)}
                   >
@@ -264,58 +272,7 @@ export const DeliveryHistory = memo(function DeliveryHistory() {
                   </Button>
                 </div>
 
-                <div className="mt-3 rounded-md border border-border bg-muted/20 p-3">
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-xs font-semibold text-foreground">
-                      Percurso completo · {raw.length} ponto{raw.length === 1 ? "" : "s"}
-                    </p>
-                    {raw.length ? (
-                      <p className="text-[11px] text-muted-foreground">
-                        {pickupCount} coleta{pickupCount === 1 ? "" : "s"} · {deliveryCount} entrega
-                        {deliveryCount === 1 ? "" : "s"}
-                      </p>
-                    ) : null}
-                  </div>
-                  {raw.length ? (
-                    <ol className="space-y-0">
-                      {raw.map((stop, index) => (
-                        <li
-                          key={`${d.id}-${index}-${stop.recorded_at ?? stop.address}`}
-                          className="relative flex gap-3 pb-3 last:pb-0"
-                        >
-                          {index < raw.length - 1 ? (
-                            <span
-                              aria-hidden="true"
-                              className="absolute left-[11px] top-6 h-[calc(100%-1.25rem)] w-px bg-border"
-                            />
-                          ) : null}
-                          <span className="relative z-10 flex size-6 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-background text-[10px] font-semibold text-primary">
-                            {index + 1}
-                          </span>
-                          <div className="min-w-0 flex-1 pt-0.5">
-                            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                              <span className="text-xs font-semibold capitalize text-foreground">
-                                {stop.kind === "coleta" ? "Coleta" : "Entrega"}
-                              </span>
-                              {stop.recorded_at ? (
-                                <span className="text-[11px] text-muted-foreground">
-                                  {dateTimeLabel(stop.recorded_at)}
-                                </span>
-                              ) : null}
-                            </div>
-                            <p className="break-words text-xs text-muted-foreground">
-                              {<DeliveryStopAddress stop={stop} />}
-                            </p>
-                          </div>
-                        </li>
-                      ))}
-                    </ol>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">
-                      Os pontos não foram informados neste registro.
-                    </p>
-                  )}
-                </div>
+                {raw.length > 0 && <DeliveryRouteDetails stops={raw} />}
 
                 {status === "em_rota" && (
                   <div className="mt-3 flex flex-wrap gap-2" aria-label="Pontos da entrega em rota">
@@ -381,7 +338,7 @@ export const DeliveryHistory = memo(function DeliveryHistory() {
                                   kind: e.target.value as Stop["kind"],
                                 })
                               }
-                              className="h-7 rounded border border-input bg-background px-2 text-xs"
+                              className="min-h-11 rounded border border-input bg-background px-2 text-xs"
                               aria-label={`Tipo do ponto ${i + 1}`}
                             >
                               <option value="coleta">Coleta</option>
@@ -392,7 +349,7 @@ export const DeliveryHistory = memo(function DeliveryHistory() {
                                 type="button"
                                 variant="ghost"
                                 size="icon"
-                                className="ml-auto size-7"
+                                className="ml-auto size-11 shrink-0"
                                 aria-label={`Remover ponto ${i + 1}`}
                                 onClick={() =>
                                   setFinishing((f) =>

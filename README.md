@@ -384,3 +384,22 @@ são resolvidos na exibição. Sem conexão ou sem resposta do serviço, os pont
 continuam salvos e a tela informa que o endereço está indisponível. As consultas de
 geocodificação compartilham cache e fila limitada; os testes de interface usam mapas
 simulados e não comprovam a disponibilidade do serviço público em aparelhos reais.
+
+### Interface de Entregas
+
+A tela prioriza os controles da jornada, Nova entrega e o histórico. Totais,
+meta diária, inteligência de entregas, pontos encadeados e análises de tempo
+ficam nos módulos de visão geral (Dashboard/Financeiro). Entregas não monta mais
+o resumo duplicado nem consulta metas e a janela de aprendizagem só para exibi-lo.
+
+Em telas largas, formulário e histórico ficam lado a lado; no celular e tablet,
+em uma coluna. Entregas Em rota têm destaque visual e ações sempre visíveis.
+**Ver percurso** só monta os pontos/endereço ao expandir; rotas sem pontos não
+exibem um painel vazio. Leitura por imagem e ajustes GPS ficam em seções opcionais.
+O mapa só é montado no modo Completo, com a rota expandida e pontos disponíveis.
+A paginação de 20 registros e os fluxos de início, paradas e conclusão permanecem.
+
+O smoke test móvel também verifica ausência de consultas duplicadas do resumo e
+larguras de 320, 390, 768 e 1440 pixels, nos modos Rápido e Completo, sem rolagem
+horizontal. São verificações com serviços simulados; não constituem medição de
+bateria, consumo de dados ou desempenho em todos os modelos de aparelhos.

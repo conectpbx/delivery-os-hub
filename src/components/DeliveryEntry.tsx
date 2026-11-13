@@ -572,11 +572,10 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
   );
 
   return (
-    <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-[380px_minmax(0,1fr)] [&>*]:min-w-0">
-      {" "}
+    <div className="grid min-w-0 gap-4 [&>*]:min-w-0">
       <SectionCard
         title="Nova entrega"
-        description="Registro rápido ou completo, com os padrões do seu aplicativo"
+        description="Escolha o aplicativo, informe o valor e inicie"
       >
         <div className="mb-4 flex gap-2" role="group" aria-label="Modo de registro">
           <Button
@@ -598,15 +597,20 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
             Completo
           </Button>
         </div>
-        <DeliveryOcr apply={applyOcr} />
+        <details className="mb-3 rounded-lg border border-border px-3">
+          <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium">
+            Preencher por imagem
+          </summary>
+          <DeliveryOcr apply={applyOcr} />
+        </details>
         <div className="space-y-2 rounded-md border border-border p-3">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <Label className="text-xs">Rota</Label>
+              <Label className="text-xs">Paradas da rota · opcional</Label>
               <p className="truncate text-xs text-muted-foreground">
                 {filledStops.length
                   ? filledStops.map((s) => s.address || "ponto GPS").join(" → ")
-                  : "Nenhum ponto informado"}
+                  : "O GPS registra o início automaticamente"}
               </p>
             </div>
             <Button
@@ -619,31 +623,33 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
               {showRoute ? "Ocultar" : filledStops.length ? "Editar rota" : "Inserir rota"}
             </Button>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="min-h-11"
-              onClick={() => {
-                setStops((current) => {
-                  const next = [...current];
-                  let final = -1;
-                  for (let index = next.length - 1; index >= 0; index--) {
-                    if (next[index]?.kind === "entrega") {
-                      final = index;
-                      break;
+          {showRoute && (
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-11"
+                onClick={() => {
+                  setStops((current) => {
+                    const next = [...current];
+                    let final = -1;
+                    for (let index = next.length - 1; index >= 0; index--) {
+                      if (next[index]?.kind === "entrega") {
+                        final = index;
+                        break;
+                      }
                     }
-                  }
-                  next.splice(final < 0 ? next.length : final, 0, newStop("entrega"));
-                  return next;
-                });
-                setShowRoute(true);
-              }}
-            >
-              <Plus className="mr-1 size-4" />
-              Adicionar ponto adicional
-            </Button>
-          </div>
+                    next.splice(final < 0 ? next.length : final, 0, newStop("entrega"));
+                    return next;
+                  });
+                  setShowRoute(true);
+                }}
+              >
+                <Plus className="mr-1 size-4" />
+                Adicionar ponto adicional
+              </Button>
+            </div>
+          )}
           {showRoute ? (
             <>
               {stops.map((s, i) => (
@@ -661,7 +667,7 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
                     <select
                       value={s.kind}
                       onChange={(e) => patchStop(s.id, { kind: e.target.value as Stop["kind"] })}
-                      className="h-7 rounded border border-input bg-background px-2 text-xs"
+                      className="min-h-11 rounded border border-input bg-background px-2 text-xs"
                       aria-label={`Tipo do ponto ${i + 1}`}
                     >
                       <option value="coleta">Coleta</option>
@@ -672,7 +678,7 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="ml-auto size-7"
+                        className="ml-auto size-11 shrink-0"
                         aria-label={`Remover ponto ${i + 1}`}
                         onClick={() => setStops((list2) => list2.filter((x) => x.id !== s.id))}
                       >
@@ -934,7 +940,10 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
             </p>
           </form>
         )}
-        <div className="mt-4 space-y-2 border-t pt-3">
+        <details className="mt-4 space-y-2 border-t pt-3">
+          <summary className="min-h-11 cursor-pointer text-sm font-medium">
+            GPS e ajustes da entrega
+          </summary>
           <p className="text-xs text-muted-foreground">
             GPS:{" "}
             {suggestion
@@ -969,9 +978,9 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
               Cheguei no restaurante
             </Button>
           </div>
-        </div>
+        </details>
       </SectionCard>
-      {mode === "full" && (
+      {mode === "full" && showRoute && mapPoints.length >= 2 && (
         <DeliveryRoutePreview
           mounted={mounted}
           route={route}

@@ -132,6 +132,9 @@ with sync_playwright() as p:
         print("UI fixture body:", page.locator("body").inner_text()[:2500], flush=True)
         raise
     print("UI fixture: entry visible", flush=True)
+    assert not any(path.endswith("/goals") or (path.endswith("/deliveries") and query.get("limit") == ["500"]) for method, path, query in requests), "delivery screen does not fetch dashboard goals or learning history"
+    expect(page.get_by_text("Total recebido", exact=True)).to_have_count(0)
+
     expect(page.get_by_text("45 corridas no período · 20 exibidas")).to_be_visible()
     page.get_by_role("button", name="Carregar mais 20").click()
     expect(page.get_by_text("45 corridas no período · 40 exibidas")).to_be_visible()
@@ -145,6 +148,7 @@ with sync_playwright() as p:
     active_card.get_by_label("Endereço adicional 1", exact=True).fill("Parada intermediária em rota")
     expect(active_card.get_by_role("button", name="Entrega concluída", exact=True)).to_be_disabled()
     active_card.get_by_role("button", name="Salvar pontos", exact=True).click()
+    active_card.locator("summary").filter(has_text="Ver percurso").click()
     expect(active_card.get_by_text("Parada intermediária em rota", exact=True)).to_be_visible()
     assert updated[-1]["status"] == "em_rota"
     active_card.get_by_role("button", name="Editar paradas", exact=True).click()
@@ -205,8 +209,8 @@ with sync_playwright() as p:
     assert len(created) == 2 and created[1]["earnings"] == 10, "offline queue syncs the quick entry once"
     assert created[1]["status"] == "em_rota" and created[1]["lat"] == -23.55 and created[1]["lng"] == -46.63
     assert created[1]["stops"][0]["kind"] == "coleta"
+    page.locator('[data-delivery-id="' + created[1]["id"] + '"] summary').filter(has_text="Ver percurso").click()
     expect(page.get_by_text("Rua GPS do teste, 42, São Paulo", exact=True).first).to_be_visible(timeout=20000)
-    expect(page.get_by_text(re.compile("Pontos do dia encadeados")).first).to_be_visible(timeout=20000)
     value.fill("30,00")
     entry.get_by_role("button", name="Inserir rota", exact=True).click()
     entry.get_by_label("Endereço do ponto inicial", exact=True).fill("Coleta da entrega iniciada")
@@ -217,7 +221,8 @@ with sync_playwright() as p:
     started_at = created[-1]["started_at"]
     assert started_at and created[-1]["ended_at"] is None
     assert created[-1]["pickup_address"] == "Coleta da entrega iniciada"
-    active_card = page.locator("li").filter(has=page.get_by_role("button", name="Entrega concluída (GPS)", exact=True)).filter(has=page.get_by_text("Coleta da entrega iniciada", exact=True))
+    active_card = page.locator('[data-delivery-id="' + started_id + '"]')
+    active_card.locator("summary").filter(has_text="Ver percurso").click()
     active_card.get_by_role("button", name="Editar paradas", exact=True).click()
     active_card.get_by_label("Endereço final da entrega em rota", exact=True).fill("Destino da entrega iniciada")
     active_card.get_by_role("button", name="Entrega concluída", exact=True).click()
@@ -235,7 +240,25 @@ with sync_playwright() as p:
     assert len(created) == 4 and created[-1]["status"] == "em_rota"
     assert created[-1]["started_at"] and created[-1]["lat"] is None and created[-1]["lng"] is None
     assert created[-1]["stops"] == [], "GPS denial does not fabricate a pickup or lose the start"
+    for width, height in [(320, 740), (390, 844), (768, 1024), (1440, 1000)]:
+        page.set_viewport_size({"width": width, "height": height})
+        for mode in ["Rápido", "Completo"]:
+            entry.get_by_role("button", name=mode, exact=True).click()
+            expect(entry.get_by_role("button", name=mode, exact=True)).to_have_attribute("aria-pressed", "true")
+            if entry.get_by_role("button", name="Inserir rota", exact=True).count():
+                entry.get_by_role("button", name="Inserir rota", exact=True).click()
+            if width == 320 and mode == "Rápido":
+                entry.get_by_role("button", name="Adicionar ponto adicional", exact=True).click()
+
+            expect(entry.get_by_role("button", name="Iniciar entrega", exact=True)).to_be_visible()
+            assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), f"no horizontal overflow at {width}px in {mode}"
+            if mode == "Rápido":
+                page.evaluate("window.scrollTo(0, 0)")
+                page.screenshot(path=f"/tmp/deliveries-clean-quick-{width}.png", full_page=False, animations="disabled")
+        page.evaluate("window.scrollTo(0, 0)")
+        page.screenshot(path=f"/tmp/deliveries-clean-{width}.png", full_page=False)
+    page.set_viewport_size({"width": 390, "height": 844})
     page.screenshot(path=os.environ.get("DELIVERY_SCREENSHOT", "/tmp/delivery-fast-ui.png"), full_page=True)
     assert not failures, failures
     browser.close()
-print("Mobile Chromium: date-filtered queries, 20-row history, app/fee chips, isolated typing, usual payment, automatic start GPS, readable streets, chained points, exact quick amounts without fees/tips, denied GPS fallback and online/offline starts passed.")
+print("Mobile Chromium: date-filtered queries, 20-row history, app/fee chips, isolated typing, usual payment, automatic start GPS, readable streets, no duplicated dashboard queries, layouts 320/390/768/1440px, exact quick amounts without fees/tips, denied GPS fallback and online/offline starts passed.")
