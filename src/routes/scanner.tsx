@@ -1,3 +1,4 @@
+import { fuelReceiptValues } from "@/lib/form-values";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useRef, useState } from "react";
@@ -182,51 +183,67 @@ function Scanner() {
           ) : null}
         </SectionCard>
 
-
         <SectionCard title="Dados extraídos" description="Confira e salve no financeiro">
           {result ? (
             <form
               className="space-y-3"
               onSubmit={async (e) => {
                 e.preventDefault();
-                const liters = Number(form.liters || 0);
-                const price = Number(form.price_per_liter || 0);
-                await addFuel.mutateAsync({
-                  liters,
-                  price_per_liter: price,
-                  total: Number(form.total || liters * price),
-                  station: form.station || null,
-                });
-                toast.success("Abastecimento salvo");
-                setResult(null);
-                setPreview(null);
+                if (addFuel.isPending) return;
+                try {
+                  await addFuel.mutateAsync(fuelReceiptValues(form));
+                  toast.success("Abastecimento salvo");
+                  setResult(null);
+                  setPreview(null);
+                } catch (error) {
+                  toast.error(
+                    error instanceof Error
+                      ? error.message
+                      : "Não foi possível salvar o abastecimento. Tente novamente.",
+                  );
+                }
               }}
             >
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label className="text-xs">Litros</Label>
+                  <Label htmlFor="scan-liters" className="text-xs">
+                    Litros
+                  </Label>
                   <Input
+                    id="scan-liters"
+                    inputMode="decimal"
                     value={form.liters}
                     onChange={(e) => setForm({ ...form, liters: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-xs">R$/litro</Label>
+                  <Label htmlFor="scan-price_per_liter" className="text-xs">
+                    R$/litro
+                  </Label>
                   <Input
+                    id="scan-price_per_liter"
+                    inputMode="decimal"
                     value={form.price_per_liter}
                     onChange={(e) => setForm({ ...form, price_per_liter: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-xs">Total (R$)</Label>
+                  <Label htmlFor="scan-total" className="text-xs">
+                    Total (R$)
+                  </Label>
                   <Input
+                    id="scan-total"
+                    inputMode="decimal"
                     value={form.total}
                     onChange={(e) => setForm({ ...form, total: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-xs">Posto</Label>
+                  <Label htmlFor="scan-station" className="text-xs">
+                    Posto
+                  </Label>
                   <Input
+                    id="scan-station"
                     value={form.station}
                     onChange={(e) => setForm({ ...form, station: e.target.value })}
                   />
@@ -235,7 +252,7 @@ function Scanner() {
               <p className="text-xs text-muted-foreground">
                 Valor identificado: {form.total ? brl(Number(form.total)) : "não detectado"}
               </p>
-              <Button type="submit" className="w-full gap-2">
+              <Button type="submit" className="min-h-11 w-full gap-2" disabled={addFuel.isPending}>
                 <ScanLine className="size-4" /> Salvar abastecimento
               </Button>
             </form>

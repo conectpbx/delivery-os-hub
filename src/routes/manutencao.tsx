@@ -1,3 +1,4 @@
+import { maintenanceValues } from "@/lib/form-values";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { AlertTriangle, CalendarClock, CheckCircle2, Trash2 } from "lucide-react";
@@ -66,6 +67,19 @@ function Manutencao() {
 
   return (
     <AppShell title="Manutenção" subtitle="Histórico e agenda preventiva do veículo">
+      {list.isPending && (
+        <p role="status" className="mb-3 text-sm text-muted-foreground">
+          Carregando manutenções…
+        </p>
+      )}
+      {list.isError && (
+        <p role="alert" className="mb-3 text-sm text-destructive">
+          Não foi possível carregar as manutenções.{" "}
+          <Button variant="outline" onClick={() => void list.refetch()}>
+            Tentar novamente
+          </Button>
+        </p>
+      )}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Investido em manutenção" value={brl(total)} tone="primary" />
         <StatCard
@@ -91,36 +105,45 @@ function Manutencao() {
         <SmartAlerts alerts={maintenanceAlerts} />
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-[380px_1fr]">
+      <div className="mt-4 grid gap-4 xl:grid-cols-[380px_minmax(0,1fr)] [&>*]:min-w-0">
         <SectionCard title="Novo serviço">
           <form
             className="space-y-3"
             onSubmit={async (e) => {
               e.preventDefault();
-              await add.mutateAsync({
-                service_type: form.service_type,
-                cost: Number(form.cost || 0),
-                odometer: form.odometer ? Number(form.odometer) : null,
-                description: form.notes || null,
-                performed_at: form.performed_at || localDateValue(),
-                next_due_date: form.next_due_date || null,
-                next_due_km: form.next_due_km ? Number(form.next_due_km) : null,
-              });
-              setForm({
-                ...form,
-                cost: "",
-                odometer: "",
-                notes: "",
-                performed_at: localDateValue(),
-                next_due_date: "",
-                next_due_km: "",
-              });
-              toast.success("Manutenção registrada");
+              if (add.isPending) return;
+              try {
+                await add.mutateAsync(
+                  maintenanceValues({
+                    ...form,
+                    performed_at: form.performed_at || localDateValue(),
+                  }),
+                );
+                setForm({
+                  ...form,
+                  cost: "",
+                  odometer: "",
+                  notes: "",
+                  performed_at: localDateValue(),
+                  next_due_date: "",
+                  next_due_km: "",
+                });
+                toast.success("Manutenção registrada");
+              } catch (error) {
+                toast.error(
+                  error instanceof Error
+                    ? error.message
+                    : "Não foi possível registrar a manutenção. Tente novamente.",
+                );
+              }
             }}
           >
             <div className="space-y-2">
-              <Label className="text-xs">Serviço</Label>
+              <Label htmlFor="maintenance-service_type" className="text-xs">
+                Serviço
+              </Label>
               <select
+                id="maintenance-service_type"
                 value={form.service_type}
                 onChange={(e) => setForm({ ...form, service_type: e.target.value })}
                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
@@ -132,38 +155,56 @@ function Manutencao() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label className="text-xs">Data do serviço</Label>
+                <Label htmlFor="maintenance-performed_at" className="text-xs">
+                  Data do serviço
+                </Label>
                 <Input
+                  id="maintenance-performed_at"
                   type="date"
                   value={form.performed_at ?? localDateValue()}
                   onChange={(e) => setForm({ ...form, performed_at: e.target.value })}
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-xs">Custo (R$)</Label>
+                <Label htmlFor="maintenance-cost" className="text-xs">
+                  Custo (R$)
+                </Label>
                 <Input
+                  id="maintenance-cost"
+                  inputMode="decimal"
                   value={form.cost}
                   onChange={(e) => setForm({ ...form, cost: e.target.value })}
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-xs">Odômetro atual</Label>
+                <Label htmlFor="maintenance-odometer" className="text-xs">
+                  Odômetro atual
+                </Label>
                 <Input
+                  id="maintenance-odometer"
+                  inputMode="decimal"
                   value={form.odometer}
                   onChange={(e) => setForm({ ...form, odometer: e.target.value })}
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-xs">Próxima data</Label>
+                <Label htmlFor="maintenance-next_due_date" className="text-xs">
+                  Próxima data
+                </Label>
                 <Input
+                  id="maintenance-next_due_date"
                   type="date"
                   value={form.next_due_date}
                   onChange={(e) => setForm({ ...form, next_due_date: e.target.value })}
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-xs">Próximo serviço (km)</Label>
+                <Label htmlFor="maintenance-next_due_km" className="text-xs">
+                  Próximo serviço (km)
+                </Label>
                 <Input
+                  id="maintenance-next_due_km"
+                  inputMode="decimal"
                   value={form.next_due_km}
                   onChange={(e) => setForm({ ...form, next_due_km: e.target.value })}
                 />
@@ -178,13 +219,16 @@ function Manutencao() {
               </p>
             </div>
             <div className="space-y-2">
-              <Label className="text-xs">Observações</Label>
+              <Label htmlFor="maintenance-notes" className="text-xs">
+                Observações
+              </Label>
               <Input
+                id="maintenance-notes"
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
               />
             </div>
-            <Button type="submit" className="w-full">
+            <Button type="submit" className="min-h-11 w-full" disabled={add.isPending}>
               Salvar manutenção
             </Button>
           </form>

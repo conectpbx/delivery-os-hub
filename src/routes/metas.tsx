@@ -1,3 +1,4 @@
+import { decimalInput } from "@/lib/form-values";
 import { AppChallenges } from "@/components/AppChallenges";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -389,14 +390,28 @@ function Metas() {
               className="mt-6 space-y-2 border-t border-border pt-4"
               onSubmit={async (e) => {
                 e.preventDefault();
-                await saveProfile.mutateAsync({ daily_goal: dec(daily) });
-                setDaily("");
-                toast.success("Meta diária atualizada");
+                if (saveProfile.isPending) return;
+                try {
+                  await saveProfile.mutateAsync({
+                    daily_goal: decimalInput(daily, "a meta diária"),
+                  });
+                  setDaily("");
+                  toast.success("Meta diária atualizada");
+                } catch (error) {
+                  toast.error(
+                    error instanceof Error
+                      ? error.message
+                      : "Não foi possível atualizar a meta diária.",
+                  );
+                }
               }}
             >
-              <Label className="text-xs">Meta diária de receita (R$)</Label>
+              <Label htmlFor="daily-revenue-goal" className="text-xs">
+                Meta diária de receita (R$)
+              </Label>
               <div className="flex gap-2">
                 <Input
+                  id="daily-revenue-goal"
                   inputMode="decimal"
                   value={daily}
                   placeholder={String(profile.data?.daily_goal ?? 200)}

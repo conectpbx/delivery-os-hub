@@ -403,3 +403,26 @@ O smoke test móvel também verifica ausência de consultas duplicadas do resumo
 larguras de 320, 390, 768 e 1440 pixels, nos modos Rápido e Completo, sem rolagem
 horizontal. São verificações com serviços simulados; não constituem medição de
 bateria, consumo de dados ou desempenho em todos os modelos de aparelhos.
+
+### Validação transversal dos módulos
+
+A barra de filtros e ações fica no conteúdo, abaixo do cabeçalho, para que títulos,
+menu e configuração do veículo permaneçam visíveis em tablet e celular. Campos
+padrão e filtros de período têm áreas de toque maiores no celular; campos revisados
+de Financeiro, Manutenção, Metas e Scanner têm rótulos associados e teclado adequado.
+
+Manutenção valida números no padrão brasileiro (incluindo odômetro com milhar),
+datas e próximo serviço antes de enviar. Erros de salvamento mantêm os campos para
+nova tentativa. Scanner aceita vírgula decimal na revisão e preserva ponto decimal
+com três casas em litros/preço retornados pelo OCR. A meta diária rejeita valores
+inválidos/negativos e mantém o rascunho se o servidor recusar a atualização.
+O formato de duração arredonda o total antes de separar horas/minutos; não mostra
+mais `1h 60min`. O filtro Tudo inclui registros anteriores a 2020 e as datas
+personalizadas são ajustadas para impedir intervalos invertidos.
+
+Além de `npm test`, `npm run typecheck`, `npm run build` e `npm run test:db`, execute
+`SMOKE_MODULES_ONLY=1 python scripts/smoke-deliveries.py` com o servidor local ativo
+(`SMOKE_BASE_URL` permite outra porta). O teste abre Dashboard, Entregas, Financeiro,
+Manutenção, Metas, Scanner e Relatórios em 320/768/1440 px, verifica filtros e
+simula erro/repetição de salvamento de manutenção. Usa conta, banco e mapas
+simulados; não altera produção nem comprova a disponibilidade de OCR/GPS reais.

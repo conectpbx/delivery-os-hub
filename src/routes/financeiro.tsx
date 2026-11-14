@@ -3,7 +3,7 @@ import { BonusIncome } from "@/components/BonusIncome";
 import { bonusTotal, addBonusIncome } from "@/lib/app-challenges";
 import { useAppChallenges } from "@/lib/data";
 import { createFileRoute, useHydrated } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useId } from "react";
 import { Copy, Link2, LocateFixed, Play, Smartphone, Square, Trash2, Unplug } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
@@ -950,10 +950,18 @@ function Text({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const id = useId();
   return (
     <div className="space-y-2">
-      <Label className="text-xs">{label}</Label>
-      <Input value={value} onChange={(e) => onChange(e.target.value)} />
+      <Label htmlFor={id} className="text-xs">
+        {label}
+      </Label>
+      <Input
+        id={id}
+        inputMode={label === "Descrição" ? "text" : "decimal"}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
     </div>
   );
 }

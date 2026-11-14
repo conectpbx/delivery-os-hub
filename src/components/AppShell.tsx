@@ -135,15 +135,7 @@ export function AppShell({
               ) : null}
             </div>
             <VehicleSettings profile={profile.data} userId={session.user.id} />
-            {allowedActions ? (
-              <div className="hidden shrink-0 sm:block">{allowedActions}</div>
-            ) : null}
           </div>
-          {allowedActions ? (
-            <div className="flex justify-end overflow-x-auto px-4 pb-3 sm:hidden">
-              {allowedActions}
-            </div>
-          ) : null}
 
           {open ? (
             <nav className="grid gap-1 border-t border-border p-3 lg:hidden">
@@ -172,6 +164,9 @@ export function AppShell({
           ) : null}
         </header>
         <main className="mx-auto w-full max-w-6xl px-4 pb-24 pt-5 sm:px-6 lg:pb-10">
+          {allowedActions ? (
+            <div className="no-print mb-4 min-w-0 [&>*]:max-w-full">{allowedActions}</div>
+          ) : null}
           <PwaInstall />
           {moduleDisabled ? (
             <div className="surface-card mx-auto mt-12 max-w-lg p-8 text-center">

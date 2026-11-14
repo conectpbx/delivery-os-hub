@@ -1,12 +1,11 @@
+import { presetDates } from "@/lib/period-dates";
+import { changePeriodDate } from "@/lib/form-values";
 import { useMemo, useState } from "react";
 import { CalendarRange } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PERIODS, periodRange, type Period } from "@/lib/metrics";
+import { PERIODS, type Period } from "@/lib/metrics";
 import { useCalendarNow } from "@/hooks/useCalendarNow";
-
-const iso = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 const parse = (s: string) => {
   const [y, m, d] = s.split("-").map(Number);
@@ -26,13 +25,6 @@ const endOf = (s: string) => {
 };
 
 const prettyDate = (s: string) => parse(s).toLocaleDateString("pt-BR");
-
-function presetDates(p: Period, now = new Date()) {
-  const { from, to } = periodRange(p, now);
-  const isAll = !p.days && p.monthOffset === null;
-  const start = isAll ? new Date(2020, 0, 1) : from;
-  return { from: iso(start), to: iso(to) };
-}
 
 export type PeriodSelection = {
   key: string;
@@ -73,12 +65,12 @@ export function usePeriodSelection(defaultIndex = 0): PeriodSelection {
       setFrom: (v: string) =>
         setState((s) => ({
           key: "custom",
-          customDates: { ...dates, from: v || dates.from },
+          customDates: changePeriodDate(dates, "from", v),
         })),
       setTo: (v: string) =>
         setState((s) => ({
           key: "custom",
-          customDates: { ...dates, to: v || dates.to },
+          customDates: changePeriodDate(dates, "to", v),
         })),
     };
   }, [now, state]);
@@ -93,7 +85,7 @@ export function PeriodFilter({ selection }: { selection: PeriodSelection }) {
             key={p.key}
             size="sm"
             variant={selection.key === p.key ? "default" : "ghost"}
-            className="h-7 px-3 text-xs"
+            className="min-h-11 px-3 text-xs"
             onClick={() => selection.setPreset(p)}
           >
             {p.label}
@@ -102,7 +94,7 @@ export function PeriodFilter({ selection }: { selection: PeriodSelection }) {
         <Button
           size="sm"
           variant={selection.key === "custom" ? "default" : "ghost"}
-          className="h-7 px-3 text-xs"
+          className="min-h-11 px-3 text-xs"
           onClick={() => selection.setFrom(selection.from)}
         >
           Personalizado
@@ -129,25 +121,23 @@ export function PeriodSummary({ selection }: { selection: PeriodSelection }) {
           </p>
         </div>
       </div>
-      <div className="flex flex-wrap items-end gap-2">
-        <label className="text-xs text-muted-foreground">
+      <div className="flex w-full flex-wrap items-end gap-2 sm:w-auto">
+        <label className="min-w-0 flex-1 text-xs text-muted-foreground sm:flex-none">
           Início
           <Input
             type="date"
             value={selection.from}
-            max={selection.to}
             onChange={(e) => selection.setFrom(e.target.value)}
-            className="mt-1 h-8 w-[10.5rem] text-sm"
+            className="mt-1 min-h-11 w-full min-w-0 text-base sm:w-[10.5rem]"
           />
         </label>
-        <label className="text-xs text-muted-foreground">
+        <label className="min-w-0 flex-1 text-xs text-muted-foreground sm:flex-none">
           Fim
           <Input
             type="date"
             value={selection.to}
-            min={selection.from}
             onChange={(e) => selection.setTo(e.target.value)}
-            className="mt-1 h-8 w-[10.5rem] text-sm"
+            className="mt-1 min-h-11 w-full min-w-0 text-base sm:w-[10.5rem]"
           />
         </label>
       </div>

@@ -37,11 +37,11 @@ export function parseDateValue(value: string) {
 
 export const dateLabel = (iso: string) => {
   const date = parseDateValue(iso);
-  return Number.isNaN(date.getTime()) ? "Invalid Date" : shortDateFormatter.format(date);
+  return Number.isNaN(date.getTime()) ? "Data inválida" : shortDateFormatter.format(date);
 };
 export const dateTimeLabel = (iso: string) => {
   const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? "Invalid Date" : dateTimeFormatter.format(date);
+  return Number.isNaN(date.getTime()) ? "Data inválida" : dateTimeFormatter.format(date);
 };
 
 export const monthKey = (d: Date) =>
@@ -53,8 +53,9 @@ export const monthLabel = (key: string) => {
 };
 
 export const minutesLabel = (min: number) => {
-  const h = Math.floor(min / 60);
-  const m = Math.round(min % 60);
+  const rounded = Number.isFinite(min) ? Math.max(0, Math.round(min)) : 0;
+  const h = Math.floor(rounded / 60);
+  const m = rounded % 60;
   return h > 0 ? `${h}h ${m}min` : `${m}min`;
 };
 

@@ -36,11 +36,14 @@ rows[44]["status"] = "em_rota"
 requests = []
 created = []
 updated = []
+maintenance_created = []
+maintenance_failure = True
 
 def timestamp(value):
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 def handle(route):
+    global maintenance_failure
     request = route.request
     parsed = urlparse(request.url)
     if parsed.hostname in ("127.0.0.1", "localhost"):
@@ -67,6 +70,17 @@ def handle(route):
         result = [{"id": USER_ID, "full_name": "Fixture", "vehicle": "moto", "fuel_efficiency": 12, "daily_goal": 200, "monthly_goal": 5000}]
     elif path.endswith("/apps"):
         result = [{"id": "app-a", "user_id": USER_ID, "name": "iFood", "fee_percent": 10, "color": "#ef4444", "created_at": iso(now)}, {"id": "app-b", "user_id": USER_ID, "name": "Uber", "fee_percent": 15, "color": "#111111", "created_at": iso(now)}]
+    elif path.endswith("/maintenances"):
+        if request.method == "POST":
+            if maintenance_failure and os.environ.get("SMOKE_MODULES_ONLY"):
+                maintenance_failure = False
+                return route.fulfill(status=503, content_type="application/json", headers=headers, body=json.dumps({"message": "fixture unavailable"}))
+            payload = request.post_data_json
+            record = {"id": str(uuid.uuid4()), **payload}
+            maintenance_created.append(record)
+            result = [record]
+        else:
+            result = list(maintenance_created)
     elif path.endswith("/deliveries"):
         if request.method == "POST":
             payload = request.post_data_json
@@ -122,6 +136,49 @@ with sync_playwright() as p:
     page = context.new_page()
     failures = []
     page.on("pageerror", lambda error: failures.append(str(error)))
+    if os.environ.get("SMOKE_MODULES_ONLY"):
+        for route_name in os.environ.get("SMOKE_MODULE_NAMES", "dashboard,entregas,financeiro,manutencao,metas,scanner,relatorios").split(","):
+            page.goto(BASE + "/" + route_name, wait_until="domcontentloaded", timeout=30000)
+            expect(page.locator("main")).to_be_visible(timeout=20000)
+            expect(page.get_by_text("This page didn't load", exact=True)).to_have_count(0)
+            for width in [320, 768, 1440]:
+                page.set_viewport_size({"width": width, "height": 900})
+                page.wait_for_timeout(100)
+                if page.evaluate("document.documentElement.scrollWidth > innerWidth"):
+                    print("Overflow:", page.evaluate("Array.from(document.querySelectorAll('main *')).filter(el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.right > innerWidth + 1; }).slice(0,15).map(el => ({tag:el.tagName, cls:el.className, text:el.textContent.slice(0,60), right:el.getBoundingClientRect().right}))"), flush=True)
+                    page.screenshot(path=f"/tmp/review-overflow-{route_name}-{width}.png")
+                    raise AssertionError(f"{route_name}: horizontal overflow at {width}px")
+            page.screenshot(path=f"/tmp/review-{route_name}.png", full_page=False)
+            print(f"Module {route_name}: opened, layouts 320/768/1440 passed", flush=True)
+        page.set_viewport_size({"width": 390, "height": 844})
+        page.goto(BASE + "/financeiro", wait_until="domcontentloaded")
+        expect(page.get_by_role("button", name="Tudo", exact=True)).to_be_visible(timeout=20000)
+        page.get_by_role("button", name="Tudo", exact=True).click()
+        assert page.get_by_label("Início", exact=True).input_value() < "2020-01-01"
+        page.get_by_label("Início", exact=True).fill("2026-12-01")
+        expect(page.get_by_label("Fim", exact=True)).to_have_value("2026-12-01")
+        page.get_by_label("Fim", exact=True).fill("2026-10-01")
+        expect(page.get_by_label("Início", exact=True)).to_have_value("2026-10-01")
+        page.goto(BASE + "/manutencao", wait_until="domcontentloaded")
+        expect(page.get_by_label("Custo (R$)", exact=True)).to_be_visible(timeout=20000)
+        page.get_by_label("Custo (R$)", exact=True).fill("125,50")
+        page.get_by_label("Odômetro atual", exact=True).fill("12.000")
+        page.get_by_label("Próximo serviço (km)", exact=True).fill("11.000")
+        page.get_by_role("button", name="Salvar manutenção", exact=True).click()
+        expect(page.get_by_text("A próxima quilometragem deve ser maior que o odômetro atual.", exact=True)).to_be_visible()
+        assert not maintenance_created
+        page.get_by_label("Próximo serviço (km)", exact=True).fill("15.000")
+        page.get_by_role("button", name="Salvar manutenção", exact=True).click()
+        expect(page.get_by_text("Não foi possível registrar a manutenção. Tente novamente.", exact=True)).to_be_visible()
+        expect(page.get_by_label("Custo (R$)", exact=True)).to_have_value("125,50")
+        page.get_by_role("button", name="Salvar manutenção", exact=True).click()
+        expect(page.get_by_label("Custo (R$)", exact=True)).to_have_value("")
+        assert len(maintenance_created) == 1 and maintenance_created[0]["cost"] == 125.5
+        assert maintenance_created[0]["odometer"] == 12000 and maintenance_created[0]["next_due_km"] == 15000
+        assert not failures, failures
+        browser.close()
+        print("Modules: opening/responsive checks, maintenance decimal validation, failed-save preservation and retry passed.")
+        raise SystemExit(0)
     print("UI fixture: navigating", flush=True)
     page.goto(BASE + "/entregas", wait_until="domcontentloaded", timeout=30000)
     print("UI fixture: document loaded", flush=True)
