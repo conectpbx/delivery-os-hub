@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { calendarWeekRange } from "./calendar-week";
 export type ListRange = { from?: Date; to?: Date; overlap?: boolean };
 export type ListScope = {
   from: string | null;
@@ -18,9 +19,9 @@ export function listScope(range: ListRange, field = "occurred_at"): ListScope {
 }
 export function deliveryPeriod(range: "hoje" | "7d" | "mes" | "tudo", now: Date): ListRange {
   if (range === "tudo") return {};
+  if (range === "7d") return calendarWeekRange(now);
   const from = new Date(now);
   from.setHours(0, 0, 0, 0);
-  if (range === "7d") from.setDate(from.getDate() - 6);
   if (range === "mes") from.setDate(1);
   const to = new Date(now);
   to.setHours(23, 59, 59, 999);

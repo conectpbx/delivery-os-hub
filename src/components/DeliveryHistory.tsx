@@ -177,7 +177,7 @@ export const DeliveryHistory = memo(function DeliveryHistory() {
         {(
           [
             ["hoje", "Hoje"],
-            ["7d", "7 dias"],
+            ["7d", "Semanal"],
             ["mes", "Mês atual"],
             ["tudo", "Tudo"],
           ] as const

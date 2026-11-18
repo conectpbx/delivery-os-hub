@@ -67,7 +67,7 @@ export const Route = createFileRoute("/dashboard")({
 
 const RANGES = [
   { key: "1", label: "Hoje", days: 1, monthOffset: null },
-  { key: "7", label: "7 dias", days: 7, monthOffset: null },
+  { key: "7", label: "Semanal", days: 7, monthOffset: null },
   { key: "month", label: "Mês atual", days: 0, monthOffset: 0 },
   { key: "prev-month", label: "Mês anterior", days: 0, monthOffset: -1 },
 ] as const;
@@ -95,16 +95,7 @@ function Dashboard() {
     () => maintenanceReservePerKm(maintenancesData),
     [maintenancesData],
   );
-  const { from, to } = useMemo(() => {
-    if (range.monthOffset !== null) {
-      const { from: mFrom, to: mTo } = monthRange(range.monthOffset, now);
-      return { from: mFrom, to: range.monthOffset === 0 ? endOfDay(now) : mTo };
-    }
-    return {
-      from: startOfDay(new Date(now.getTime() - (range.days - 1) * 86400000)),
-      to: endOfDay(now),
-    };
-  }, [now, range.days, range.monthOffset]);
+  const { from, to } = useMemo(() => periodRange(range, now), [now, range]);
   const time = useOperationTime(from, to);
   const todayTime = useOperationTime(startOfDay(now), endOfDay(now));
 

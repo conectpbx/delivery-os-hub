@@ -18,13 +18,22 @@ test("delivery periods use civil days and preserve the goal's 56 days before mon
   const month = deliveryPeriod("mes", now);
   assert.equal(today.from?.getHours(), 0);
   assert.equal(today.to?.getHours(), 23);
-  assert.equal(week.from?.getDate(), 31);
-  assert.equal(week.from?.getMonth(), 9);
+  assert.equal(week.from?.getTime(), new Date(2026, 10, 2).getTime());
+  assert.equal(week.to?.getTime(), new Date(2026, 10, 8, 23, 59, 59, 999).getTime());
   assert.equal(month.from?.getDate(), 1);
   assert.deepEqual(deliveryPeriod("tudo", now), {});
   const expected = new Date(2026, 10, 1);
   expected.setDate(expected.getDate() - 56);
   assert.equal(deliveryLearningPeriod(now).from?.getTime(), expected.getTime());
+});
+
+test("weekly delivery scopes exclude the preceding Sunday and following Monday", () => {
+  const scope = listScope(deliveryPeriod("7d", new Date(2026, 10, 18, 12)));
+  const records = [15, 16, 18, 22, 23].map((day) => ({
+    day,
+    occurred_at: new Date(2026, 10, day, 12).toISOString(),
+  }));
+  assert.deepEqual(records.filter((row) => matchesScope(row, scope)).map((row) => row.day), [16, 18, 22]);
 });
 
 test("database date filters preserve cross-midnight delivery and journey intervals", () => {
