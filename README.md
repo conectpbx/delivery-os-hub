@@ -426,3 +426,49 @@ Além de `npm test`, `npm run typecheck`, `npm run build` e `npm run test:db`, e
 Manutenção, Metas, Scanner e Relatórios em 320/768/1440 px, verifica filtros e
 simula erro/repetição de salvamento de manutenção. Usa conta, banco e mapas
 simulados; não altera produção nem comprova a disponibilidade de OCR/GPS reais.
+
+### Quilometragem e pontos encadeados
+
+Quilômetros registrados são a base comum dos indicadores financeiros (receita/km,
+combustível, reserva e lucro). No Dashboard, **Quilometragem** mostra essa mesma base;
+o encadeamento é exibido separadamente como estimativa, com aviso de aproximação ou
+cobertura parcial. Ele não substitui a soma registrada nem altera entregas antigas.
+
+O encadeamento usa horário dos pontos e data civil de São Paulo. Remove somente
+repetições consecutivas, conserva retornos posteriores ao mesmo lugar e não inventa
+um deslocamento entre entregas de dias distintos. Uma única entrega atravessando a
+meia-noite mantém seus pontos conectados. Paradas sem localização interrompem a
+sequência; não se calcula um atalho passando por cima delas. O total retornado pelo
+serviço de ruas é usado sem limitar artificialmente trechos ou somar pernas já
+arredondadas. Sem serviço de ruas, a aproximação é identificada na tela.
+
+Na conclusão manual ou por GPS, quilômetros positivos já informados são preservados.
+Quando não há distância, os pontos completos podem gerar uma estimativa; sem pontos
+suficientes, não se inventa quilometragem. Capturas GPS mantêm seu horário mesmo se
+a geocodificação demorar e continuam válidas quando o nome da rua não está disponível.
+O preço médio de combustível considera litros e total pago; sem volumes válidos,
+usa os preços legados disponíveis ou o padrão existente. Odômetro ausente não é
+interpretado como zero para fabricar um intervalo de manutenção.
+
+`npm test` inclui cenários de múltiplos dias, UTC/meia-noite, retornos, paradas
+incompletas, trechos longos por ruas, trajetos curtos e coerência das métricas.
+`SMOKE_MODULES_ONLY=1 SMOKE_CHAIN_METRICS=1 python scripts/smoke-deliveries.py`
+verifica no navegador a separação entre quilômetros registrados e mapa estimado,
+além da abertura responsiva dos módulos. Os mapas são simulados; isso não valida
+a precisão de um rastreador físico nem a disponibilidade do provedor público.
+
+### Separação dos modos de entrada
+
+**Rápido** monta apenas aplicativo, valor e seus atalhos. Scanner, editor de paradas,
+campos financeiros detalhados, ajustes GPS e mapa ficam no modo **Completo**.
+Alternar para Rápido recolhe o editor; os dados completos permanecem no rascunho ao
+alternar de volta, mas não são enviados por uma entrega rápida. Nesse modo, o início
+GPS é capturado automaticamente e os campos de distância/tempo ocultos não são usados.
+A forma de recebimento usual continua sendo aplicada.
+
+A preferência só é exibida após restaurar o rascunho da conta. Navegar para outro
+módulo grava a escolha pendente sem esperar o debounce; alterações comuns dos campos
+continuam agrupadas para evitar gravações a cada tecla. O OCR não muda o modo sozinho,
+e o scanner é desmontado ao sair de Completo para descartar respostas atrasadas.
+`SMOKE_INITIAL_MODE=full` permite testar a restauração de Completo no smoke test,
+além da alternância, preservação do rascunho e retorno à tela no modo escolhido.

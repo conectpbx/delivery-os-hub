@@ -1,3 +1,4 @@
+import { recordedDistanceKm } from "./distance-values";
 import type { Delivery, Expense, Fueling, Goal, Maintenance, Profile } from "./data";
 import { monthKey, parseDateValue } from "./format";
 import {
@@ -36,13 +37,30 @@ function operationalDate(value: string) {
 }
 
 export function avgFuelPrice(fuelings: Fueling[]) {
-  const valid = fuelings.filter((f) => Number(f.price_per_liter) > 0);
-  if (!valid.length) return 6.1;
-  return valid.reduce((s, f) => s + Number(f.price_per_liter), 0) / valid.length;
+  let liters = 0,
+    paid = 0;
+  const legacyPrices: number[] = [];
+  for (const fueling of fuelings) {
+    const volume = Number(fueling.liters),
+      price = Number(fueling.price_per_liter),
+      total = Number(fueling.total);
+    const validPrice = Number.isFinite(price) && price > 0;
+    if (validPrice) legacyPrices.push(price);
+    if (!Number.isFinite(volume) || volume <= 0) continue;
+    const cost = Number.isFinite(total) && total > 0 ? total : validPrice ? volume * price : 0;
+    if (!Number.isFinite(cost) || cost <= 0) continue;
+    liters += volume;
+    paid += cost;
+  }
+  if (liters > 0) return paid / liters;
+  return legacyPrices.length
+    ? legacyPrices.reduce((sum, price) => sum + price, 0) / legacyPrices.length
+    : 6.1;
 }
 
 export function costPerKm(fuelings: Fueling[], profile: Profile | null | undefined) {
-  const eff = Number(profile?.fuel_efficiency) > 0 ? Number(profile?.fuel_efficiency) : 12;
+  const efficiency = Number(profile?.fuel_efficiency);
+  const eff = Number.isFinite(efficiency) && efficiency > 0 ? efficiency : 12;
   return avgFuelPrice(fuelings) / eff;
 }
 
@@ -92,7 +110,12 @@ export function maintenanceReservePerKm(maintenances: Maintenance[]): Maintenanc
       incomplete.push(maintenance);
       continue;
     }
-    if (Number.isFinite(intervalKm) && intervalKm > 0) {
+    if (
+      maintenance.odometer != null &&
+      maintenance.next_due_km != null &&
+      Number.isFinite(intervalKm) &&
+      intervalKm > 0
+    ) {
       items.push({
         maintenance,
         intervalKm,
@@ -327,7 +350,7 @@ export function reportBreakdown(
       continue;
     const row = bucket(delivery.occurred_at);
     row.revenue += Number(delivery.earnings) + Number(delivery.tip);
-    row.distance += Number(delivery.distance_km);
+    row.distance += recordedDistanceKm(delivery.distance_km);
     row.workedMin += deliveryMinutes(delivery, now);
     row.idleMin += Number(delivery.idle_min);
     row.count += 1;
@@ -402,7 +425,7 @@ export function summarize(
   cpk: number,
 ): Summary {
   const revenue = deliveries.reduce((s, d) => s + Number(d.earnings) + Number(d.tip), 0);
-  const distance = deliveries.reduce((s, d) => s + Number(d.distance_km), 0);
+  const distance = deliveries.reduce((s, d) => s + recordedDistanceKm(d.distance_km), 0);
   const workedMin = deliveries.reduce((s, d) => s + deliveryMinutes(d), 0);
   const idleMin = deliveries.reduce((s, d) => s + Number(d.idle_min), 0);
   const fuelCost = distance * cpk;
@@ -691,7 +714,7 @@ export function byApp(deliveries: Delivery[], cpk: number) {
   for (const d of deliveries) {
     const cur = map.get(d.app_name) ?? { app: d.app_name, revenue: 0, km: 0, count: 0 };
     cur.revenue += Number(d.earnings) + Number(d.tip);
-    cur.km += Number(d.distance_km);
+    cur.km += recordedDistanceKm(d.distance_km);
     cur.count += 1;
     map.set(d.app_name, cur);
   }
@@ -713,7 +736,7 @@ export function byMonth(deliveries: Delivery[], expenses: Expense[], cpk: number
   for (const d of deliveries) {
     const cur = ensure(monthKey(new Date(d.occurred_at)));
     cur.revenue += Number(d.earnings) + Number(d.tip);
-    cur.km += Number(d.distance_km);
+    cur.km += recordedDistanceKm(d.distance_km);
     cur.count += 1;
   }
 
@@ -756,7 +779,7 @@ export function byMonthRecordedCosts(
   for (const delivery of deliveries) {
     const current = ensure(monthKey(new Date(delivery.occurred_at)));
     current.revenue += Number(delivery.earnings) + Number(delivery.tip);
-    current.km += Number(delivery.distance_km);
+    current.km += recordedDistanceKm(delivery.distance_km);
     current.count += 1;
   }
   for (const expense of expenses) {

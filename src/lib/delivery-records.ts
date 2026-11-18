@@ -63,10 +63,12 @@ export async function routeTotals(
       resolved.push(s);
       continue;
     }
-    if (!s.address.trim()) continue;
+    if (!s.address.trim()) return null;
     const hit = await geocodeAddress(s.address);
     resolved.push(hit ? { ...s, ...hit } : s);
   }
+  // Skipping an unresolved middle stop would invent a direct A→C route.
+  if (resolved.some((stop) => stop.lat == null || stop.lng == null)) return null;
   const coords = resolved
     .filter((s) => s.lat != null && s.lng != null)
     .map((s) => [s.lat!, s.lng!] as [number, number]);

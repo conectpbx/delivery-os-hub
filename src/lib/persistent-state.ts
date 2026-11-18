@@ -8,6 +8,7 @@ export function usePersistentState<T>(key: string, initial: T, validate?: (value
   const { user, loading } = useAuth();
   const storageKey = user ? `${PREFIX}${user.id}:${key}` : null;
   const initialValue = useRef(initial);
+  const restoredOwner = useRef<string | null>(null);
   const validator = useRef(validate);
   validator.current = validate;
   const [state, setState] = useState<{ owner: string | null; value: T }>({
@@ -31,7 +32,9 @@ export function usePersistentState<T>(key: string, initial: T, validate?: (value
     } catch {
       /* Invalid or unavailable storage must not break the form. */
     }
+    latest.current = { owner: storageKey, value: restored };
     setState({ owner: storageKey, value: restored });
+    restoredOwner.current = storageKey;
     setRestoredKey(storageKey);
   }, [loading, storageKey]);
 
@@ -57,6 +60,24 @@ export function usePersistentState<T>(key: string, initial: T, validate?: (value
       window.removeEventListener("pagehide", save);
     };
   }, [restoredKey, storageKey, value]);
+
+  // Flush on navigation without turning the debounced keystroke writes into synchronous writes.
+  useEffect(
+    () => () => {
+      if (
+        !storageKey ||
+        restoredOwner.current !== storageKey ||
+        latest.current.owner !== storageKey
+      )
+        return;
+      try {
+        window.localStorage.setItem(storageKey, JSON.stringify(latest.current.value));
+      } catch {
+        /* Storage may be unavailable. */
+      }
+    },
+    [storageKey],
+  );
 
   const setValue = useCallback(
     (next: SetStateAction<T>) => {

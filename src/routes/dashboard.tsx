@@ -142,7 +142,11 @@ function Dashboard() {
   const cash = addBonusIncome(cashBase, bonusIncome);
   const s = addBonusIncome(summaryBase, bonusIncome);
   const operationalCpk = cpk + maintenanceReserve.costPerKm;
-  const { chainKm, km: periodKm } = useChainedDistance(periodDeliveries);
+  const {
+    chainKm,
+    approximate: chainApproximate,
+    partial: chainPartial,
+  } = useChainedDistance(periodDeliveries);
   const { grid, max } = useMemo(() => heatmap(periodDeliveries), [periodDeliveries]);
 
   const series = useMemo(() => {
@@ -264,13 +268,12 @@ function Dashboard() {
         />
         <StatCard
           label="Quilometragem"
-          value={`${num(periodKm)} km`}
+          value={`${num(s.distance)} km`}
           hint={
-            (chainKm != null ? "Pontos do período encadeados" : "Soma das entregas do período") +
-            (periodDeliveries.length
-              ? ` · ${num(s.distance)} km registrados em ${periodDeliveries.length} entrega${periodDeliveries.length === 1 ? "" : "s"}`
-              : "") +
-            ` · ${brl(s.perKm)} por km rodado`
+            `${brl(s.perKm)} por km registrado` +
+            (chainKm != null
+              ? ` · Pontos encadeados: ${num(chainKm)} km (${chainApproximate ? "aproximação" : "rota estimada"}${chainPartial ? ", parcial" : ""})`
+              : " · Encadeamento sem pontos suficientes")
           }
           tone="primary"
           icon={<Gauge className="size-4" />}

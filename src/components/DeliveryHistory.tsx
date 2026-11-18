@@ -1,3 +1,4 @@
+import { completionDistanceKm } from "@/lib/distance-values";
 import { DeliveryRouteDetails } from "./DeliveryRouteDetails";
 import { resolveDeliveryLocation } from "@/lib/delivery-location";
 import { deliveryFinishingDraft } from "@/lib/delivery-draft";
@@ -85,7 +86,7 @@ export const DeliveryHistory = memo(function DeliveryHistory() {
     setFinishGeo(stopId);
     try {
       const { lat, lng } = await getCurrentPosition();
-      patchFinishStop(stopId, { lat, lng });
+      patchFinishStop(stopId, { lat, lng, recorded_at: new Date().toISOString() });
       try {
         const place = await reverseGeocodeAddress(lat, lng);
         patchFinishStop(stopId, {
@@ -128,6 +129,8 @@ export const DeliveryHistory = memo(function DeliveryHistory() {
         recorded_at: at,
       });
       setFinishing({ id: delivery.id, stops: [final] });
+      const allStops = recordedStops([...historyStops(delivery), final]);
+      const totals = await routeTotals(allStops);
       await updateDelivery.mutateAsync({
         id: delivery.id,
         values: {
@@ -136,11 +139,21 @@ export const DeliveryHistory = memo(function DeliveryHistory() {
           ended_at: at,
           duration_min: Math.max(0, Math.round((Date.parse(at) - Date.parse(started)) / 60000)),
           dropoff_address: final.address,
-          stops: recordedStops([...historyStops(delivery), final]),
+          stops: totals?.pts ?? allStops,
+          distance_km: completionDistanceKm(delivery.distance_km, totals?.distanceKm),
         },
       });
       setFinishing(null);
-      toast.success("Entrega concluída com o ponto GPS. Quilometragem informada preservada.");
+      if (Number(delivery.distance_km) > 0)
+        toast.success("Entrega concluída com o ponto GPS. Quilometragem informada preservada.");
+      else if (totals)
+        toast.success(
+          `Entrega concluída · ${num(totals.distanceKm)} km estimados pelos pontos${totals.approximate ? " (aproximação)" : ""}`,
+        );
+      else
+        toast.message(
+          "Entrega concluída. Sem pontos suficientes para estimar a distância; revise os quilômetros da entrega.",
+        );
     } catch (error) {
       toast.error(
         isGeolocationError(error)
@@ -242,7 +255,7 @@ export const DeliveryHistory = memo(function DeliveryHistory() {
                           Entrega concluída (GPS)
                         </Button>
                         <span className="text-xs text-muted-foreground">
-                          Conclui com GPS e mantém os km informados.
+                          Preserva km informados; estima pelos pontos quando não há km.
                         </span>
                       </div>
                     )}
@@ -374,6 +387,7 @@ export const DeliveryHistory = memo(function DeliveryHistory() {
                                   address: e.target.value,
                                   lat: null,
                                   lng: null,
+                                  recorded_at: undefined,
                                 })
                               }
                               placeholder={
@@ -416,12 +430,13 @@ export const DeliveryHistory = memo(function DeliveryHistory() {
                           onClick={async () => {
                             const filled = recordedStops(
                               finishing.stops
-                                .filter((s) => s.address.trim())
+                                .filter((s) => s.address.trim() || (s.lat != null && s.lng != null))
                                 .map((s) => ({
                                   kind: s.kind,
                                   address: s.address.trim(),
                                   lat: s.lat,
                                   lng: s.lng,
+                                  ...(s.recorded_at ? { recorded_at: s.recorded_at } : {}),
                                 })),
                             );
                             const last = filled[filled.length - 1];
@@ -435,7 +450,10 @@ export const DeliveryHistory = memo(function DeliveryHistory() {
                               const totals = await routeTotals(allPts);
                               if (totals) {
                                 routed = totals.pts as typeof allPts;
-                                extra.distance_km = totals.distanceKm;
+                                extra.distance_km = completionDistanceKm(
+                                  d.distance_km,
+                                  totals.distanceKm,
+                                );
                                 extra.duration_min = d.started_at
                                   ? Math.round((Date.now() - Date.parse(d.started_at)) / 60000)
                                   : totals.durationMin;
@@ -459,7 +477,7 @@ export const DeliveryHistory = memo(function DeliveryHistory() {
                               });
 
                               setFinishing(null);
-                              if (totals?.approximate) {
+                              if (totals?.approximate && !(Number(d.distance_km) > 0)) {
                                 toast.message(
                                   `Rota concluída — distância aproximada (linha reta), o serviço de rota por ruas estava indisponível. ${num(totals.distanceKm)} km`,
                                 );

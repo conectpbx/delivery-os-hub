@@ -72,7 +72,7 @@ function dec(v: string | number | null | undefined): number {
 export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripState }) {
   const apps = useApps();
   const recent = useRecentDeliveryValues();
-  const [mode, setMode] = usePersistentState<"quick" | "full">(
+  const [mode, setMode, , modeReady] = usePersistentState<"quick" | "full">(
     "entregas.entry-mode",
     "quick",
     (value) => deliveryModeDraft.parse(value),
@@ -375,7 +375,7 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
   async function save() {
     if (submitting.current) return;
     const ownerId = authStore.getSnapshot().session?.user.id;
-    const selectedStops = stops;
+    const selectedStops = mode === "quick" ? [] : stops;
     const filled = selectedStops
       .filter((s) => s.address.trim() || (s.lat != null && s.lng != null))
       .map((stop) => ({ ...stop }));
@@ -390,7 +390,10 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
     submitting.current = true;
     try {
       const money = deliveryEntryMoney(gross, feePct, dec(form.tip), mode);
-      if (dec(form.distance_km) < 0 || dec(form.duration_min) < 0 || dec(form.idle_min) < 0)
+      if (
+        mode === "full" &&
+        (dec(form.distance_km) < 0 || dec(form.duration_min) < 0 || dec(form.idle_min) < 0)
+      )
         throw new Error("Confira distância e tempos: não podem ser negativos");
       const startedAt = new Date().toISOString();
       {
@@ -432,9 +435,9 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
         ...money,
         occurred_at: new Date().toISOString(),
         payment_method: form.payment_method ?? "credito",
-        distance_km: dec(form.distance_km),
-        duration_min: Math.round(dec(form.duration_min)),
-        idle_min: Math.round(dec(form.idle_min)),
+        distance_km: mode === "quick" ? 0 : dec(form.distance_km),
+        duration_min: mode === "quick" ? 0 : Math.round(dec(form.duration_min)),
+        idle_min: mode === "quick" ? 0 : Math.round(dec(form.idle_min)),
         pickup_address: pickup?.address || null,
         dropoff_address: null,
         lat: pickup?.lat ?? null,
@@ -552,7 +555,6 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
         }
         return next;
       });
-    setMode("full");
     setShowRoute(Boolean(result.pickupAddress || result.dropoffAddress));
     toast.success("Dados preenchidos. Confira antes de confirmar a entrega.");
   }
@@ -571,6 +573,17 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
     [route, stops],
   );
 
+  if (!modeReady)
+    return (
+      <div
+        className="surface-card p-4 text-sm text-muted-foreground"
+        role="status"
+        aria-busy="true"
+      >
+        Preparando nova entrega…
+      </div>
+    );
+
   return (
     <div className="grid min-w-0 gap-4 [&>*]:min-w-0">
       <SectionCard
@@ -583,7 +596,11 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
             variant={mode === "quick" ? "default" : "outline"}
             className="min-h-11 flex-1"
             aria-pressed={mode === "quick"}
-            onClick={() => setMode("quick")}
+            disabled={insert.isPending || geoTarget !== null}
+            onClick={() => {
+              setMode("quick");
+              setShowRoute(false);
+            }}
           >
             Rápido
           </Button>
@@ -592,155 +609,162 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
             variant={mode === "full" ? "default" : "outline"}
             className="min-h-11 flex-1"
             aria-pressed={mode === "full"}
+            disabled={insert.isPending || geoTarget !== null}
             onClick={() => setMode("full")}
           >
             Completo
           </Button>
         </div>
-        <details className="mb-3 rounded-lg border border-border px-3">
-          <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium">
-            Preencher por imagem
-          </summary>
-          <DeliveryOcr apply={applyOcr} />
-        </details>
-        <div className="space-y-2 rounded-md border border-border p-3">
-          <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <Label className="text-xs">Paradas da rota · opcional</Label>
-              <p className="truncate text-xs text-muted-foreground">
-                {filledStops.length
-                  ? filledStops.map((s) => s.address || "ponto GPS").join(" → ")
-                  : "O GPS registra o início automaticamente"}
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant={showRoute ? "secondary" : "outline"}
-              size="sm"
-              onClick={() => setShowRoute((v) => !v)}
-            >
-              <RouteIcon className="mr-1 size-4" />
-              {showRoute ? "Ocultar" : filledStops.length ? "Editar rota" : "Inserir rota"}
-            </Button>
-          </div>
-          {showRoute && (
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="min-h-11"
-                onClick={() => {
-                  setStops((current) => {
-                    const next = [...current];
-                    let final = -1;
-                    for (let index = next.length - 1; index >= 0; index--) {
-                      if (next[index]?.kind === "entrega") {
-                        final = index;
-                        break;
-                      }
-                    }
-                    next.splice(final < 0 ? next.length : final, 0, newStop("entrega"));
-                    return next;
-                  });
-                  setShowRoute(true);
-                }}
-              >
-                <Plus className="mr-1 size-4" />
-                Adicionar ponto adicional
-              </Button>
-            </div>
-          )}
-          {showRoute ? (
-            <>
-              {stops.map((s, i) => (
-                <div key={s.id} className="space-y-1 rounded-md border border-border p-2">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <GripVertical className="size-3.5" />
-                    <span className="font-medium text-foreground">
-                      {i + 1}.{" "}
-                      {i === stops.length - 1 && s.kind === "entrega"
-                        ? "Ponto final da entrega"
-                        : i === 0 && s.kind === "coleta"
-                          ? "Ponto inicial / coleta"
-                          : "Ponto adicional"}
-                    </span>
-                    <select
-                      value={s.kind}
-                      onChange={(e) => patchStop(s.id, { kind: e.target.value as Stop["kind"] })}
-                      className="min-h-11 rounded border border-input bg-background px-2 text-xs"
-                      aria-label={`Tipo do ponto ${i + 1}`}
-                    >
-                      <option value="coleta">Coleta</option>
-                      <option value="entrega">Entrega</option>
-                    </select>
-                    {stops.length > 2 ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="ml-auto size-11 shrink-0"
-                        aria-label={`Remover ponto ${i + 1}`}
-                        onClick={() => setStops((list2) => list2.filter((x) => x.id !== s.id))}
-                      >
-                        <X className="size-3.5" />
-                      </Button>
-                    ) : null}
-                  </div>
-                  <div className="flex min-w-0 gap-2">
-                    <Input
-                      aria-label={
-                        i === stops.length - 1 && s.kind === "entrega"
-                          ? "Endereço do ponto final"
-                          : i === 0 && s.kind === "coleta"
-                            ? "Endereço do ponto inicial"
-                            : `Endereço do ponto ${i + 1}`
-                      }
-                      value={s.address}
-                      onChange={(e) =>
-                        patchStop(s.id, { address: e.target.value, lat: null, lng: null })
-                      }
-                      placeholder={
-                        s.kind === "coleta" ? "Restaurante / loja" : "Endereço do cliente"
-                      }
-                      className="min-w-0 flex-1"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      aria-label={`Usar GPS no ponto ${i + 1}`}
-                      onClick={() => captureGps(s.id)}
-                      disabled={geoTarget !== null}
-                    >
-                      <MapPin className="size-4" />
-                    </Button>
-                  </div>
-                  {geoTarget === s.id ? (
-                    <p className="text-xs text-muted-foreground">Buscando localização…</p>
-                  ) : s.lat != null && s.lng != null ? (
-                    <p className="text-xs text-muted-foreground">
-                      {s.lat.toFixed(4)}, {s.lng.toFixed(4)}
-                      {accuracy ? ` · precisão ~${accuracy} m` : ""}
-                    </p>
-                  ) : null}
+        {mode === "full" && (
+          <>
+            <details className="mb-3 rounded-lg border border-border px-3">
+              <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium">
+                Preencher por imagem
+              </summary>
+              <DeliveryOcr apply={applyOcr} />
+            </details>
+            <div className="space-y-2 rounded-md border border-border p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <Label className="text-xs">Paradas da rota · opcional</Label>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {filledStops.length
+                      ? filledStops.map((s) => s.address || "ponto GPS").join(" → ")
+                      : "O GPS registra o início automaticamente"}
+                  </p>
                 </div>
-              ))}
-              <div className="flex min-w-0 gap-2">
                 <Button
                   type="button"
-                  variant="secondary"
+                  variant={showRoute ? "secondary" : "outline"}
                   size="sm"
-                  className="min-w-0 flex-1"
-                  onClick={() => void previewRoute()}
-                  disabled={routing}
+                  onClick={() => setShowRoute((v) => !v)}
                 >
                   <RouteIcon className="mr-1 size-4" />
-                  {routing ? "Calculando…" : "Ver rota"}
+                  {showRoute ? "Ocultar" : filledStops.length ? "Editar rota" : "Inserir rota"}
                 </Button>
               </div>
-            </>
-          ) : null}
-        </div>
+              {showRoute && (
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="min-h-11"
+                    onClick={() => {
+                      setStops((current) => {
+                        const next = [...current];
+                        let final = -1;
+                        for (let index = next.length - 1; index >= 0; index--) {
+                          if (next[index]?.kind === "entrega") {
+                            final = index;
+                            break;
+                          }
+                        }
+                        next.splice(final < 0 ? next.length : final, 0, newStop("entrega"));
+                        return next;
+                      });
+                      setShowRoute(true);
+                    }}
+                  >
+                    <Plus className="mr-1 size-4" />
+                    Adicionar ponto adicional
+                  </Button>
+                </div>
+              )}
+              {showRoute ? (
+                <>
+                  {stops.map((s, i) => (
+                    <div key={s.id} className="space-y-1 rounded-md border border-border p-2">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <GripVertical className="size-3.5" />
+                        <span className="font-medium text-foreground">
+                          {i + 1}.{" "}
+                          {i === stops.length - 1 && s.kind === "entrega"
+                            ? "Ponto final da entrega"
+                            : i === 0 && s.kind === "coleta"
+                              ? "Ponto inicial / coleta"
+                              : "Ponto adicional"}
+                        </span>
+                        <select
+                          value={s.kind}
+                          onChange={(e) =>
+                            patchStop(s.id, { kind: e.target.value as Stop["kind"] })
+                          }
+                          className="min-h-11 rounded border border-input bg-background px-2 text-xs"
+                          aria-label={`Tipo do ponto ${i + 1}`}
+                        >
+                          <option value="coleta">Coleta</option>
+                          <option value="entrega">Entrega</option>
+                        </select>
+                        {stops.length > 2 ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="ml-auto size-11 shrink-0"
+                            aria-label={`Remover ponto ${i + 1}`}
+                            onClick={() => setStops((list2) => list2.filter((x) => x.id !== s.id))}
+                          >
+                            <X className="size-3.5" />
+                          </Button>
+                        ) : null}
+                      </div>
+                      <div className="flex min-w-0 gap-2">
+                        <Input
+                          aria-label={
+                            i === stops.length - 1 && s.kind === "entrega"
+                              ? "Endereço do ponto final"
+                              : i === 0 && s.kind === "coleta"
+                                ? "Endereço do ponto inicial"
+                                : `Endereço do ponto ${i + 1}`
+                          }
+                          value={s.address}
+                          onChange={(e) =>
+                            patchStop(s.id, { address: e.target.value, lat: null, lng: null })
+                          }
+                          placeholder={
+                            s.kind === "coleta" ? "Restaurante / loja" : "Endereço do cliente"
+                          }
+                          className="min-w-0 flex-1"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          aria-label={`Usar GPS no ponto ${i + 1}`}
+                          onClick={() => captureGps(s.id)}
+                          disabled={geoTarget !== null}
+                        >
+                          <MapPin className="size-4" />
+                        </Button>
+                      </div>
+                      {geoTarget === s.id ? (
+                        <p className="text-xs text-muted-foreground">Buscando localização…</p>
+                      ) : s.lat != null && s.lng != null ? (
+                        <p className="text-xs text-muted-foreground">
+                          {s.lat.toFixed(4)}, {s.lng.toFixed(4)}
+                          {accuracy ? ` · precisão ~${accuracy} m` : ""}
+                        </p>
+                      ) : null}
+                    </div>
+                  ))}
+                  <div className="flex min-w-0 gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="min-w-0 flex-1"
+                      onClick={() => void previewRoute()}
+                      disabled={routing}
+                    >
+                      <RouteIcon className="mr-1 size-4" />
+                      {routing ? "Calculando…" : "Ver rota"}
+                    </Button>
+                  </div>
+                </>
+              ) : null}
+            </div>
+          </>
+        )}
         {mode === "quick" ? (
           <DeliveryQuickForm
             apps={apps.data ?? []}
@@ -940,45 +964,47 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
             </p>
           </form>
         )}
-        <details className="mt-4 space-y-2 border-t pt-3">
-          <summary className="min-h-11 cursor-pointer text-sm font-medium">
-            GPS e ajustes da entrega
-          </summary>
-          <p className="text-xs text-muted-foreground">
-            GPS:{" "}
-            {suggestion
-              ? `${num(suggestion.distanceKm, 2)} km · ${suggestion.durationMin} min desde a marcação, excluindo pausas`
-              : trip.active
-                ? trip.pauses?.some((pause) => !pause.ended_at)
-                  ? "Medição pausada"
-                  : "Medição automática · aguardando localização atualizada"
-                : "Sem jornada ativa"}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            No registro: {form.distance_km || "0"} km · {form.duration_min || "0"} min ·{" "}
-            {form.idle_min || "0"} min parados
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="min-h-11"
-              disabled={!suggestion}
-              onClick={applyGpsSuggestion}
-            >
-              Usar sugestão GPS
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="min-h-11"
-              disabled={geoTarget !== null || insert.isPending}
-              onClick={() => void quickStop("coleta")}
-            >
-              Cheguei no restaurante
-            </Button>
-          </div>
-        </details>
+        {mode === "full" && (
+          <details className="mt-4 space-y-2 border-t pt-3">
+            <summary className="min-h-11 cursor-pointer text-sm font-medium">
+              GPS e ajustes da entrega
+            </summary>
+            <p className="text-xs text-muted-foreground">
+              GPS:{" "}
+              {suggestion
+                ? `${num(suggestion.distanceKm, 2)} km · ${suggestion.durationMin} min desde a marcação, excluindo pausas`
+                : trip.active
+                  ? trip.pauses?.some((pause) => !pause.ended_at)
+                    ? "Medição pausada"
+                    : "Medição automática · aguardando localização atualizada"
+                  : "Sem jornada ativa"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              No registro: {form.distance_km || "0"} km · {form.duration_min || "0"} min ·{" "}
+              {form.idle_min || "0"} min parados
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-11"
+                disabled={!suggestion}
+                onClick={applyGpsSuggestion}
+              >
+                Usar sugestão GPS
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-11"
+                disabled={geoTarget !== null || insert.isPending}
+                onClick={() => void quickStop("coleta")}
+              >
+                Cheguei no restaurante
+              </Button>
+            </div>
+          </details>
+        )}
       </SectionCard>
       {mode === "full" && showRoute && mapPoints.length >= 2 && (
         <DeliveryRoutePreview

@@ -33,6 +33,13 @@ for index in range(45 + 800):
     at = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(minutes=index + 1) if index < 45 else now - timedelta(days=400, minutes=index)
     rows.append({"id": str(uuid.uuid4()), "user_id": USER_ID, "app_name": "iFood", "gross_earnings": 20, "fee_percent": 10, "earnings": 18, "tip": 0, "payment_method": "credito", "distance_km": 1, "duration_min": 10, "idle_min": 0, "occurred_at": iso(at), "status": "concluida", "started_at": None, "ended_at": None, "pickup_address": None, "dropoff_address": None, "lat": None, "lng": None, "stops": []})
 rows[44]["status"] = "em_rota"
+if os.environ.get("SMOKE_CHAIN_METRICS"):
+    rows[0]["lat"], rows[0]["lng"] = -23.55, -46.63
+    rows[0]["stops"] = [
+        {"kind": "coleta", "address": "Rua A", "lat": -23.55, "lng": -46.63, "recorded_at": rows[0]["occurred_at"]},
+        {"kind": "entrega", "address": "Rua B", "lat": -23.56, "lng": -46.64, "recorded_at": rows[1]["occurred_at"]},
+    ]
+
 requests = []
 created = []
 updated = []
@@ -133,6 +140,8 @@ with sync_playwright() as p:
     context.add_init_script("localStorage.setItem(" + json.dumps("sb-" + HOST.split(".")[0] + "-auth-token") + "," + json.dumps(json.dumps(SESSION)) + ");")
     if os.environ.get("SMOKE_INVALID_DRAFT"):
         context.add_init_script("localStorage.setItem(" + json.dumps("delivery-os-draft:" + USER_ID + ":entregas.stops") + ", 'null');")
+    if os.environ.get("SMOKE_INITIAL_MODE") == "full":
+        context.add_init_script("localStorage.setItem(" + json.dumps("delivery-os-draft:" + USER_ID + ":entregas.entry-mode") + ", '\"full\"');")
     page = context.new_page()
     failures = []
     page.on("pageerror", lambda error: failures.append(str(error)))
@@ -141,6 +150,12 @@ with sync_playwright() as p:
             page.goto(BASE + "/" + route_name, wait_until="domcontentloaded", timeout=30000)
             expect(page.locator("main")).to_be_visible(timeout=20000)
             expect(page.get_by_text("This page didn't load", exact=True)).to_have_count(0)
+            if route_name == "dashboard" and os.environ.get("SMOKE_CHAIN_METRICS"):
+                km_card = page.get_by_text("Quilometragem", exact=True).first.locator("..").locator("..")
+                expect(km_card.get_by_text("45,0 km", exact=True)).to_be_visible()
+                expect(km_card.get_by_text(re.compile("18,00.*por km registrado"))).to_be_visible()
+                expect(km_card.get_by_text(re.compile("Pontos encadeados:.*aproximação, parcial"))).to_be_visible(timeout=20000)
+
             for width in [320, 768, 1440]:
                 page.set_viewport_size({"width": width, "height": 900})
                 page.wait_for_timeout(100)
@@ -214,12 +229,17 @@ with sync_playwright() as p:
     expect(page.get_by_text("Destino final em rota", exact=True)).to_be_visible(timeout=20000)
     assert updated[-1]["status"] == "concluida"
     assert updated[-1]["dropoff_address"] == "Destino final em rota"
+    assert updated[-1]["distance_km"] == 1, "manual completion preserves previously recorded km"
     assert [stop["address"] for stop in updated[-1]["stops"]] == ["Parada intermediária em rota", "Destino final em rota"]
     entry = page.locator("section").filter(has=page.get_by_role("heading", name="Nova entrega", exact=True))
     expect(entry.get_by_role("button", name="Definir ponto inicial", exact=True)).to_have_count(0)
     expect(entry.get_by_role("button", name="Definir ponto final", exact=True)).to_have_count(0)
     expect(entry.get_by_role("button", name=re.compile("concluída|Finalizar rota"))).to_have_count(0)
+    if os.environ.get("SMOKE_INITIAL_MODE") == "full":
+        expect(entry.get_by_role("button", name="Completo", exact=True)).to_have_attribute("aria-pressed", "true")
+    entry.get_by_role("button", name="Rápido", exact=True).click()
     entry.get_by_role("button", name="iFood", exact=True).click()
+    entry.get_by_role("button", name="Completo", exact=True).click()
     entry.get_by_role("button", name="Inserir rota", exact=True).click()
     entry.get_by_label("Endereço do ponto inicial", exact=True).fill("Restaurante Central")
     entry.get_by_label("Endereço do ponto final", exact=True).fill("Rua Destino, 100")
@@ -240,6 +260,9 @@ with sync_playwright() as p:
     assert not any(path.endswith("/deliveries") for method, path, query in requests[before:]), "typing does not refetch history/summary"
     entry.get_by_role("button", name="Completo", exact=True).click()
     expect(entry.get_by_role("button", name=re.compile("concluída|Finalizar rota"))).to_have_count(0)
+    entry.get_by_role("button", name="Editar rota", exact=True).click()
+    expect(entry.get_by_label("Endereço do ponto final", exact=True)).to_have_value("Rua Destino, 100")
+    entry.get_by_role("button", name="Ocultar", exact=True).click()
     entry.locator("#payment-method").select_option("pix")
     entry.get_by_label("Gratificação do cliente (R$)", exact=True).fill("7,00")
     entry.get_by_role("button", name="Rápido", exact=True).click()
@@ -249,8 +272,8 @@ with sync_playwright() as p:
     assert len(created) == 1
     assert created[0]["gross_earnings"] == 20 and created[0]["earnings"] == 20 and created[0]["fee_percent"] == 0 and created[0]["tip"] == 0
     assert created[0]["payment_method"] == "pix" and created[0]["status"] == "em_rota"
-    assert [stop["address"] for stop in created[0]["stops"]] == ["Restaurante Central", "Rua Intermediária, 50", "Rua Destino, 100"]
-    assert created[0]["pickup_address"] == "Restaurante Central"
+    assert len(created[0]["stops"]) == 1, "quick mode ignores hidden complete-mode stops"
+    assert created[0]["pickup_address"] == "Rua GPS do teste, 42, São Paulo"
     assert all(stop["lat"] is not None and stop["lng"] is not None for stop in created[0]["stops"])
     assert created[0]["dropoff_address"] is None
     assert created[0]["started_at"] and created[0]["ended_at"] is None
@@ -269,6 +292,7 @@ with sync_playwright() as p:
     page.locator('[data-delivery-id="' + created[1]["id"] + '"] summary').filter(has_text="Ver percurso").click()
     expect(page.get_by_text("Rua GPS do teste, 42, São Paulo", exact=True).first).to_be_visible(timeout=20000)
     value.fill("30,00")
+    entry.get_by_role("button", name="Completo", exact=True).click()
     entry.get_by_role("button", name="Inserir rota", exact=True).click()
     entry.get_by_label("Endereço do ponto inicial", exact=True).fill("Coleta da entrega iniciada")
     entry.get_by_role("button", name="Iniciar entrega", exact=True).click()
@@ -288,7 +312,7 @@ with sync_playwright() as p:
     assert updated[-1]["id"] == started_id and updated[-1]["status"] == "concluida"
     assert updated[-1]["started_at"] == started_at and updated[-1]["ended_at"]
     assert updated[-1]["dropoff_address"] == "Destino da entrega iniciada"
-    page.evaluate("() => { navigator.geolocation.getCurrentPosition = (_success, error) => error({code: 1, message: 'fixture: permission denied'}); }")
+    page.evaluate("() => { window.fixtureOriginalGeo = navigator.geolocation.getCurrentPosition.bind(navigator.geolocation); navigator.geolocation.getCurrentPosition = (_success, error) => error({code: 1, message: 'fixture: permission denied'}); }")
     entry.get_by_role("button", name="Completo", exact=True).click()
     expect(entry.get_by_role("button", name=re.compile("concluída|Finalizar rota"))).to_have_count(0)
     value.fill("8,00")
@@ -297,14 +321,29 @@ with sync_playwright() as p:
     assert len(created) == 4 and created[-1]["status"] == "em_rota"
     assert created[-1]["started_at"] and created[-1]["lat"] is None and created[-1]["lng"] is None
     assert created[-1]["stops"] == [], "GPS denial does not fabricate a pickup or lose the start"
+    page.evaluate("() => { navigator.geolocation.getCurrentPosition = window.fixtureOriginalGeo; }")
+    context.set_geolocation({"latitude": -23.57, "longitude": -46.65})
+    gps_card = page.locator('[data-delivery-id="' + created[1]["id"] + '"]')
+    gps_card.get_by_role("button", name="Entrega concluída (GPS)", exact=True).click()
+    expect(gps_card.get_by_role("button", name="Entrega concluída (GPS)", exact=True)).to_have_count(0, timeout=20000)
+    assert len(created) == 4 and updated[-1]["id"] == created[1]["id"]
+    assert updated[-1]["distance_km"] > 0, "GPS completion fills zero distance from the full route"
+    assert updated[-1]["status"] == "concluida"
     for width, height in [(320, 740), (390, 844), (768, 1024), (1440, 1000)]:
         page.set_viewport_size({"width": width, "height": height})
         for mode in ["Rápido", "Completo"]:
             entry.get_by_role("button", name=mode, exact=True).click()
             expect(entry.get_by_role("button", name=mode, exact=True)).to_have_attribute("aria-pressed", "true")
+            if mode == "Rápido":
+                expect(entry.get_by_label("Taxa do app (%)", exact=True)).to_have_count(0)
+                expect(entry.get_by_label("Gratificação do cliente (R$)", exact=True)).to_have_count(0)
+                expect(entry.get_by_label("Endereço do ponto final", exact=True)).to_have_count(0)
+                expect(entry.get_by_text("GPS e ajustes da entrega", exact=True)).to_have_count(0)
+                expect(entry.locator("form")).to_have_count(1)
+
             if entry.get_by_role("button", name="Inserir rota", exact=True).count():
                 entry.get_by_role("button", name="Inserir rota", exact=True).click()
-            if width == 320 and mode == "Rápido":
+            if width == 320 and mode == "Completo":
                 entry.get_by_role("button", name="Adicionar ponto adicional", exact=True).click()
 
             expect(entry.get_by_role("button", name="Iniciar entrega", exact=True)).to_be_visible()
@@ -316,6 +355,15 @@ with sync_playwright() as p:
         page.screenshot(path=f"/tmp/deliveries-clean-{width}.png", full_page=False)
     page.set_viewport_size({"width": 390, "height": 844})
     page.screenshot(path=os.environ.get("DELIVERY_SCREENSHOT", "/tmp/delivery-fast-ui.png"), full_page=True)
+    entry.get_by_role("button", name="Completo", exact=True).click()
+    page.wait_for_timeout(400)
+    entry.get_by_role("button", name="Rápido", exact=True).click()
+    page.get_by_role("link", name="Financeiro", exact=True).click()
+    expect(page.get_by_role("heading", name="Financeiro", exact=True)).to_be_visible()
+    assert page.evaluate("JSON.parse(localStorage.getItem(" + json.dumps("delivery-os-draft:" + USER_ID + ":entregas.entry-mode") + "))") == "quick"
+    page.get_by_role("link", name="Entregas", exact=True).click()
+    expect(page.get_by_role("button", name="Rápido", exact=True)).to_have_attribute("aria-pressed", "true")
+    expect(page.get_by_label("Taxa do app (%)", exact=True)).to_have_count(0)
     assert not failures, failures
     browser.close()
-print("Mobile Chromium: date-filtered queries, 20-row history, app/fee chips, isolated typing, usual payment, automatic start GPS, readable streets, no duplicated dashboard queries, layouts 320/390/768/1440px, exact quick amounts without fees/tips, denied GPS fallback and online/offline starts passed.")
+print("Mobile Chromium: date-filtered queries, 20-row history, app/fee chips, isolated typing, usual payment, automatic start GPS, readable streets, no duplicated dashboard queries, layouts 320/390/768/1440px, exact quick amounts, isolated entry modes, persisted mode after navigation, denied GPS fallback and online/offline starts passed.")
