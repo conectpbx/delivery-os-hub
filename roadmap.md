@@ -20,3 +20,4 @@
 - [x] Simplificar ações de pontos da rota e permitir adição somente em entregas iniciadas
 - [x] Automatizar medição GPS por entrega com jornada ativa, sem misturar trechos (33 testes aprovados)
 - [ ] Conferir medição automática e pontos de rota na conta (sem sessão disponível; requer login na prévia)
+- [x] Preservar km no modo Rápido e conferir correção autenticada no histórico (22 testes; estimativa de 4,2 km salva e reaberta; celular sem sobreposição)

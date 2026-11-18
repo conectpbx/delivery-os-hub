@@ -8,3 +8,12 @@ export function completionDistanceKm(recorded: unknown, estimated?: number | nul
   const saved = recordedDistanceKm(recorded);
   return saved > 0 ? saved : recordedDistanceKm(estimated);
 }
+
+/** Entry modes change visible fields, never discard a reviewed distance. */
+export function deliveryEntryDistance(value: string): number {
+  const normalized = value.trim().replace(",", ".");
+  const distance = normalized === "" ? 0 : Number(normalized);
+  if (!Number.isFinite(distance) || distance < 0)
+    throw new Error("Informe uma distância válida, em quilômetros.");
+  return distance;
+}

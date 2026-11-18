@@ -1,4 +1,5 @@
 import { completionDistanceKm } from "@/lib/distance-values";
+import { DeliveryDistanceEditor } from "./DeliveryDistanceEditor";
 import { DeliveryRouteDetails } from "./DeliveryRouteDetails";
 import { resolveDeliveryLocation } from "@/lib/delivery-location";
 import { deliveryFinishingDraft } from "@/lib/delivery-draft";
@@ -274,6 +275,7 @@ export const DeliveryHistory = memo(function DeliveryHistory() {
                       </MapsNavigationLink>
                     </Button>
                   ) : null}
+                  <DeliveryDistanceEditor delivery={d} />
                   <Button
                     variant="ghost"
                     size="icon"
