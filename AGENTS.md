@@ -21,3 +21,5 @@
 - Store pause intervals with their work journey and use shared pause controls; explicit pauses remain in elapsed journey time but are excluded from delivery and unassigned time to keep every module consistent.
 - Configure the work vehicle through the shared shell using profiles.vehicle, and use that same account field for branded loading icons; one persisted choice keeps all modules and devices consistent.
 - Automatically establish each delivery GPS baseline only after account-scoped drafts are restored; use the current journey distance, preserve the ongoing segment and reset after saving to prevent cross-delivery carryover.
+- Preserve reviewed delivery kilometres in every entry mode; historical corrections update the stored distance only after confirmation so all metrics use the same value.
+- Use the shared calendar-week range helper in preset and delivery-history filters so all weekly consumers apply identical boundaries.

@@ -1,4 +1,5 @@
 import { resolveDeliveryLocation } from "@/lib/delivery-location";
+import { deliveryEntryDistance } from "@/lib/distance-values";
 import { authStore } from "@/hooks/useAuth";
 import {
   deliveryFormDraft,
@@ -390,6 +391,7 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
     submitting.current = true;
     try {
       const money = deliveryEntryMoney(gross, feePct, dec(form.tip), mode);
+      const distanceKm = deliveryEntryDistance(form.distance_km);
       if (
         mode === "full" &&
         (dec(form.distance_km) < 0 || dec(form.duration_min) < 0 || dec(form.idle_min) < 0)
@@ -435,7 +437,7 @@ export const DeliveryEntry = memo(function DeliveryEntry({ trip }: { trip: TripS
         ...money,
         occurred_at: new Date().toISOString(),
         payment_method: form.payment_method ?? "credito",
-        distance_km: mode === "quick" ? 0 : dec(form.distance_km),
+        distance_km: distanceKm,
         duration_min: mode === "quick" ? 0 : Math.round(dec(form.duration_min)),
         idle_min: mode === "quick" ? 0 : Math.round(dec(form.idle_min)),
         pickup_address: pickup?.address || null,

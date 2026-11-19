@@ -1,4 +1,5 @@
 import { recordedDistanceKm } from "./distance-values";
+import { calendarWeekRange } from "./calendar-week";
 import type { Delivery, Expense, Fueling, Goal, Maintenance, Profile } from "./data";
 import { monthKey, parseDateValue } from "./format";
 import {
@@ -826,6 +827,7 @@ export function monthRange(offset = 0, now = new Date()) {
 }
 
 export function periodRange(period: Period, now = new Date()) {
+  if (period.key === "7") return calendarWeekRange(now);
   if (period.monthOffset !== null) {
     const { from, to } = monthRange(period.monthOffset, now);
     // Mês atual não deve projetar datas futuras no filtro.
