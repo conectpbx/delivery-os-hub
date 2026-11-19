@@ -472,3 +472,30 @@ continuam agrupadas para evitar gravações a cada tecla. O OCR não muda o modo
 e o scanner é desmontado ao sair de Completo para descartar respostas atrasadas.
 `SMOKE_INITIAL_MODE=full` permite testar a restauração de Completo no smoke test,
 além da alternância, preservação do rascunho e retorno à tela no modo escolhido.
+
+### Layout de Metas
+
+Metas organiza o conteúdo em **Resumo**, **Planejamento** e **Desafios**. O resumo
+abre primeiro, com progresso das metas cadastradas, análise e objetivo diário em
+destaque. A explicação da meta diária pode ser expandida. Planejamento reúne o
+formulário mensal e uma seção separada para a referência diária; Desafios mantém
+as bonificações dos aplicativos. Abas inativas ficam ocultas sem desmontar seus
+formulários e acompanhamento, preservando rascunhos e reconciliação de bonificações.
+
+Editar uma meta seleciona Planejamento e posiciona o foco na receita. Campos têm
+rótulos associados, controles maiores para toque e a navegação por abas funciona
+com teclado. A rolagem de edição respeita a preferência por movimento reduzido.
+Nenhuma regra de cálculo, sugestão ou gravação automática foi alterada.
+`SMOKE_MODULES_ONLY=1 SMOKE_MODULE_NAMES=metas SMOKE_GOALS_LAYOUT=1 python scripts/smoke-deliveries.py`
+valida metas simuladas atuais/encerradas, alternância, rascunho, foco, teclado e
+larguras de 320/390/768/1440 px, sem salvar ou excluir metas durante a navegação.
+
+Metas e desafios priorizam itens em andamento. **Finalizadas/Finalizados** permite
+consultar os alcançados, recebidos ou vencidos sem apagar registros nem excluir
+créditos dos relatórios. Uma meta mensal só é alcançada quando todos os objetivos
+positivos configurados (receita, lucro e entregas) foram cumpridos; meses passados
+ficam no histórico e planos futuros permanecem ativos. Desafios conquistados sem
+recebimento mostram um aviso de bonificação pendente com acesso direto à lista,
+que conserva confirmação, validação automática e estorno conforme as regras existentes.
+A classificação é visual e reversível: correções nos registros atualizam o filtro;
+nenhuma coluna de arquivamento ou migração de dados foi acrescentada.

@@ -59,9 +59,10 @@ test("recebimento de novembro não aparece na composição de outubro", () => {
   assert.ok(!html.includes("Desafio recebido"));
 });
 
-test("desafio recebido permite estorno e bloqueia edição e exclusão direta", () => {
+test("desafio recebido fica nos finalizados sem expor ações no filtro inicial", () => {
   const html = render([c], <AppChallenges />);
-  assert.ok(html.includes("Estornar recebimento"));
+  assert.ok(!html.includes("Estornar recebimento"));
+  assert.ok(html.includes("Finalizados"));
   assert.ok(!html.includes(">Editar<"));
   assert.ok(!html.includes(">Excluir<"));
   assert.ok(!html.includes("Confirmar recebimento"));
@@ -71,6 +72,6 @@ test("automação explica crédito na receita e oferece controle acessível", ()
   const html = render([{ ...c, auto_receive: true }], <AppChallenges />);
   assert.ok(html.includes("Creditar automaticamente ao atingir a meta"));
   assert.ok(html.includes('type="checkbox"'));
-  assert.ok(html.includes("Crédito automático ativado"));
+  assert.ok(html.includes("Finalizados"));
   assert.ok(html.includes("não confirma um pagamento realizado pelo aplicativo"));
 });

@@ -1,3 +1,4 @@
+import { challengeIsFinished } from "@/lib/goals-visibility";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useAppChallenges, useApps, useDeliveries, type Delivery } from "@/lib/data";
@@ -36,6 +37,7 @@ export function AppChallenges() {
   const calendarNow = useCalendarNow();
   const now = new Date(Math.max(calendarNow.getTime(), Date.now()));
   const [form, setForm] = useState(initialForm);
+  const [showFinished, setShowFinished] = useState(false);
   const [editing, setEditing] = useState<string | undefined>();
   const [receipt, setReceipt] = useState(() => localDateTime(new Date()));
   const appNames = useMemo(
@@ -60,6 +62,23 @@ export function AppChallenges() {
     }
     return groups;
   }, [deliveries.data]);
+  const progressRows = (challenges.data ?? []).map((challenge) => {
+    const progress = challengeProgress(
+      challenge,
+      deliveriesByApp.get(normalizedApp(challenge.app_name)) ?? [],
+      now,
+    );
+    return {
+      challenge,
+      progress,
+      finished: challengeIsFinished(challenge, progress.achieved, now),
+    };
+  });
+  const finishedCount = progressRows.filter((row) => row.finished).length;
+  const pendingReceipts = progressRows.filter(
+    ({ challenge, progress }) => progress.achieved && !challenge.received_at,
+  ).length;
+  const visibleRows = progressRows.filter((row) => row.finished === showFinished);
   const change = (key: keyof typeof form, value: string) =>
     setForm((f) => ({ ...f, [key]: value }));
   const reset = () => {
@@ -235,18 +254,54 @@ export function AppChallenges() {
             data da validação pelo servidor, após sincronizar as entregas. Ele não confirma um
             pagamento realizado pelo aplicativo. Desmarque a automação para confirmar manualmente.
           </p>
+          <div
+            role="group"
+            aria-label="Visibilidade dos desafios"
+            className="my-3 flex flex-wrap gap-2"
+          >
+            <Button
+              type="button"
+              className="min-h-11"
+              variant={!showFinished ? "default" : "outline"}
+              aria-pressed={!showFinished}
+              onClick={() => setShowFinished(false)}
+            >
+              Em andamento ({progressRows.length - finishedCount})
+            </Button>
+            <Button
+              type="button"
+              className="min-h-11"
+              variant={showFinished ? "default" : "outline"}
+              aria-pressed={showFinished}
+              onClick={() => setShowFinished(true)}
+            >
+              Finalizados ({finishedCount})
+            </Button>
+          </div>
+          {pendingReceipts > 0 && !showFinished && (
+            <p role="status" className="mb-3 text-sm text-muted-foreground">
+              {pendingReceipts} bonificação(ões) conquistada(s) aguardando confirmação ou validação.{" "}
+              <Button
+                type="button"
+                variant="link"
+                className="min-h-11"
+                onClick={() => setShowFinished(true)}
+              >
+                Ver bonificações pendentes
+              </Button>
+            </p>
+          )}
           {challenges.isPending ? (
             <p role="status">Carregando desafios…</p>
-          ) : !(challenges.data ?? []).length ? (
-            <EmptyState>Nenhum desafio cadastrado.</EmptyState>
+          ) : !visibleRows.length ? (
+            <EmptyState>
+              {showFinished
+                ? "Nenhum desafio finalizado."
+                : "Nenhum desafio em andamento. Consulte os finalizados ou cadastre um novo."}
+            </EmptyState>
           ) : (
             <div className="grid gap-3 lg:grid-cols-2">
-              {(challenges.data ?? []).map((c) => {
-                const progress = challengeProgress(
-                  c,
-                  deliveriesByApp.get(normalizedApp(c.app_name)) ?? [],
-                  now,
-                );
+              {visibleRows.map(({ challenge: c, progress }) => {
                 return (
                   <article key={c.id} className="rounded-lg border border-border p-4">
                     <div className="flex justify-between gap-3">

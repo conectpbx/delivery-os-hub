@@ -75,6 +75,14 @@ def handle(route):
         result = []
     elif path.endswith("/profiles"):
         result = [{"id": USER_ID, "full_name": "Fixture", "vehicle": "moto", "fuel_efficiency": 12, "daily_goal": 200, "monthly_goal": 5000}]
+    elif path.endswith("/app_challenges") and os.environ.get("SMOKE_GOALS_LAYOUT"):
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        base = {"user_id": USER_ID, "app_name": "iFood", "metric": "deliveries", "target": 99999, "reward": 50, "auto_receive": False, "starts_at": iso(start), "ends_at": iso(start + timedelta(days=1)), "received_at": None}
+        result = [{**base, "id": "challenge-active", "title": "Desafio em andamento"}, {**base, "id": "challenge-won", "title": "Desafio conquistado", "target": 1}, {**base, "id": "challenge-expired", "title": "Desafio vencido", "starts_at": iso(start - timedelta(days=2)), "ends_at": iso(start - timedelta(days=1))}, {**base, "id": "challenge-paid", "title": "Desafio recebido", "received_at": iso(now)}]
+    elif path.endswith("/goals") and os.environ.get("SMOKE_GOALS_LAYOUT"):
+        current_month = now.strftime("%Y-%m") + "-01"
+        previous_month = (now.replace(day=1) - timedelta(days=1)).strftime("%Y-%m") + "-01"
+        result = [{"id": "goal-current", "user_id": USER_ID, "month": current_month, "revenue_target": 2000, "profit_target": 1200, "deliveries_target": 100}, {"id": "goal-previous", "user_id": USER_ID, "month": previous_month, "revenue_target": 1800, "profit_target": 1000, "deliveries_target": 90}]
     elif path.endswith("/apps"):
         result = [{"id": "app-a", "user_id": USER_ID, "name": "iFood", "fee_percent": 10, "color": "#ef4444", "created_at": iso(now)}, {"id": "app-b", "user_id": USER_ID, "name": "Uber", "fee_percent": 15, "color": "#111111", "created_at": iso(now)}]
     elif path.endswith("/maintenances"):
@@ -156,6 +164,51 @@ with sync_playwright() as p:
                 expect(km_card.get_by_text(re.compile("18,00.*por km registrado"))).to_be_visible()
                 expect(km_card.get_by_text(re.compile("Pontos encadeados:.*aproximação, parcial"))).to_be_visible(timeout=20000)
 
+            if route_name == "metas" and os.environ.get("SMOKE_GOALS_LAYOUT"):
+                expect(page.get_by_role("tab", name="Resumo", exact=True)).to_have_attribute("aria-selected", "true")
+                expect(page.get_by_label("Meta de receita (R$)", exact=True)).to_be_hidden()
+                goal_filters = page.get_by_role("group", name="Visibilidade das metas", exact=True)
+                expect(goal_filters.get_by_role("button", name="Ativas (1)", exact=True)).to_have_attribute("aria-pressed", "true")
+                goal_filters.get_by_role("button", name="Finalizadas (1)", exact=True).click()
+                expect(page.get_by_text("Encerrada", exact=True)).to_be_visible()
+                goal_filters.get_by_role("button", name="Ativas (1)", exact=True).click()
+                expect(page.get_by_text("Encerrada", exact=True)).to_have_count(0)
+
+                page.get_by_role("tab", name="Planejamento", exact=True).click()
+                expect(page.get_by_label("Meta de receita (R$)", exact=True)).to_be_visible()
+                page.get_by_label("Meta de receita (R$)", exact=True).fill("3.500")
+                page.get_by_role("tab", name="Resumo", exact=True).click()
+                page.get_by_role("tab", name="Planejamento", exact=True).click()
+                expect(page.get_by_label("Meta de receita (R$)", exact=True)).to_have_value("3.500")
+                page.get_by_role("tab", name="Desafios", exact=True).click()
+                expect(page.get_by_role("heading", name="Desafios e bonificações por aplicativo", exact=True)).to_be_visible()
+                expect(page.get_by_role("heading", name="Desafio em andamento", exact=True)).to_be_visible()
+                expect(page.get_by_role("heading", name="Desafio conquistado", exact=True)).to_have_count(0)
+                page.get_by_role("button", name="Ver bonificações pendentes", exact=True).click()
+                expect(page.get_by_role("heading", name="Desafio conquistado", exact=True)).to_be_visible()
+                expect(page.get_by_role("heading", name="Desafio vencido", exact=True)).to_be_visible()
+                expect(page.get_by_role("button", name="Estornar recebimento", exact=True)).to_be_visible()
+                expect(page.get_by_role("button", name="Confirmar recebimento", exact=True)).to_be_visible()
+
+                page.get_by_role("tab", name="Resumo", exact=True).click()
+                page.get_by_role("button", name="Editar", exact=True).first.click()
+                expect(page.get_by_role("tab", name="Planejamento", exact=True)).to_have_attribute("aria-selected", "true")
+                expect(page.get_by_label("Meta de receita (R$)", exact=True)).to_be_focused()
+                for width in [320, 390, 768, 1440]:
+                    page.set_viewport_size({"width": width, "height": 900})
+                    for tab in ["Resumo", "Planejamento", "Desafios"]:
+                        page.get_by_role("tab", name=tab, exact=True).click()
+                        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), f"Metas/{tab}: overflow at {width}px"
+                        expect(page.get_by_role("tab", name=tab, exact=True)).to_have_attribute("aria-selected", "true")
+                        page.screenshot(path=f"/tmp/goals-{tab}-{width}.png", full_page=False, animations="disabled")
+                assert not any(method in ("PATCH", "DELETE") and path.endswith("/app_challenges") for method, path, query in requests), "filtering never changes bonuses"
+                assert not any(method in ("POST", "PATCH", "DELETE") and path.endswith("/goals") for method, path, query in requests), "layout navigation never saves or deletes a goal"
+                page.get_by_role("tab", name="Resumo", exact=True).click()
+                page.get_by_role("tab", name="Resumo", exact=True).focus()
+                page.keyboard.press("ArrowRight")
+                expect(page.get_by_role("tab", name="Planejamento", exact=True)).to_have_attribute("aria-selected", "true")
+                page.get_by_role("tab", name="Resumo", exact=True).click()
+                print("Goals: tabs, draft preservation, edit focus, keyboard navigation and responsive layouts passed", flush=True)
             for width in [320, 768, 1440]:
                 page.set_viewport_size({"width": width, "height": 900})
                 page.wait_for_timeout(100)

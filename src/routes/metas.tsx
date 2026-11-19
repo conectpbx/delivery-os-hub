@@ -1,3 +1,5 @@
+import { monthlyGoalIsFinished } from "@/lib/goals-visibility";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { decimalInput } from "@/lib/form-values";
 import { AppChallenges } from "@/components/AppChallenges";
 import { createFileRoute } from "@tanstack/react-router";
@@ -117,6 +119,17 @@ function Metas() {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const previousCurrent = useRef(current);
   const formRef = useRef<HTMLDivElement>(null);
+  const [view, setView] = useState("overview");
+  const [showFinishedGoals, setShowFinishedGoals] = useState(false);
+  const finishedGoals = sortedGoals.filter((goal) =>
+    monthlyGoalIsFinished(
+      goal,
+      current,
+      months.find((month) => month.month === goal.month.slice(0, 7)),
+    ),
+  );
+  const finishedIds = new Set(finishedGoals.map((goal) => goal.id));
+  const visibleGoals = sortedGoals.filter((goal) => finishedIds.has(goal.id) === showFinishedGoals);
 
   useEffect(() => {
     const previous = previousCurrent.current;
@@ -184,6 +197,7 @@ function Metas() {
   }
 
   function editGoal(goal: (typeof sortedGoals)[number]) {
+    setView("plan");
     setFormDirty(false);
     setForm({
       month: goal.month.slice(0, 7),
@@ -191,9 +205,13 @@ function Metas() {
       profit_target: String(Number(goal.profit_target)),
       deliveries_target: String(Number(goal.deliveries_target)),
     });
-    requestAnimationFrame(() =>
-      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
-    );
+    requestAnimationFrame(() => {
+      formRef.current?.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        block: "start",
+      });
+      document.getElementById("goal-revenue")?.focus({ preventScroll: true });
+    });
   }
 
   useGoalCelebrations(
@@ -226,411 +244,517 @@ function Metas() {
   return (
     <AppShell title="Metas" subtitle="Planejamento mensal e acompanhamento diário">
       <p className="mb-3 text-xs text-muted-foreground">
-        Metas pessoais consideram a receita das entregas. Desafios e bonificações dos aplicativos
-        são acompanhados separadamente nesta tela.
+        Acompanhe o mês, planeje seus objetivos e veja os desafios dos aplicativos.
       </p>
-      <div className="grid gap-3 sm:grid-cols-3">
-        <StatCard label="Receita do mês" value={brl(currentSummary?.revenue ?? 0)} tone="primary" />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div className="col-span-2 sm:col-span-1">
+          <StatCard
+            label="Receita do mês"
+            value={brl(currentSummary?.revenue ?? 0)}
+            tone="primary"
+          />
+        </div>
         <StatCard label="Lucro do mês" value={brl(currentSummary?.profit ?? 0)} tone="success" />
         <StatCard label="Entregas no mês" value={String(currentSummary?.count ?? 0)} />
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-[400px_1fr]">
-        <div ref={formRef}>
-          <SectionCard
-            title={existingGoal ? `Editar meta de ${monthLabel(form.month)}` : "Nova meta mensal"}
-            description="Escolha o mês, defina a receita e o restante é sugerido automaticamente."
-          >
-            <form
-              className="space-y-4"
-              onSubmit={async (e) => {
-                e.preventDefault();
-                if (!canSubmit) return;
-                const values = {
-                  revenue_target: revenueValue,
-                  profit_target: profitValue,
-                  deliveries_target: Math.round(deliveriesValue),
-                };
-                try {
-                  if (existingGoal) {
-                    await update.mutateAsync({ id: existingGoal.id, values });
-                    toast.success(`Meta de ${monthLabel(form.month)} atualizada`);
-                  } else {
-                    await add.mutateAsync({ month: `${form.month}-01`, ...values });
-                    toast.success(`Meta de ${monthLabel(form.month)} criada`);
-                  }
-                  setFormDirty(false);
-                } catch {
-                  toast.error("Não foi possível salvar a meta");
-                }
-              }}
-            >
-              <div className="space-y-2">
-                <Label className="text-xs">Mês</Label>
-                <Input
-                  type="month"
-                  value={form.month}
-                  onChange={(e) => {
-                    setFormDirty(false);
-                    setForm({
-                      month: e.target.value,
-                      revenue_target: "",
-                      profit_target: "",
-                      deliveries_target: "",
-                    });
-                  }}
-                />
-                {existingGoal ? (
-                  <p className="flex items-center gap-1 text-xs text-primary">
-                    <CheckCircle2 className="size-3.5" /> Já existe meta neste mês — salvar irá
-                    atualizá-la.
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-xs">Meta de receita (R$)</Label>
-                <Input
-                  inputMode="decimal"
-                  placeholder="Ex.: 6.000"
-                  value={form.revenue_target}
-                  onChange={(e) => {
-                    setFormDirty(true);
-                    setForm({ ...form, revenue_target: e.target.value });
-                  }}
-                />
-                <div className="flex flex-wrap gap-1.5">
-                  {REVENUE_PRESETS.map((v) => (
-                    <Button
-                      key={v}
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      className="h-7 px-2 text-xs"
-                      onClick={() => applyRevenue(v)}
-                    >
-                      {brl(v)}
-                    </Button>
-                  ))}
-                  {performance.suggestedRevenueTarget > 0 ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-7 gap-1 px-2 text-xs"
-                      onClick={() => applyRevenue(performance.suggestedRevenueTarget)}
-                    >
-                      <TrendingUp className="size-3" /> Usar sugestão:{" "}
-                      {brl(performance.suggestedRevenueTarget)}
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label className="text-xs">Meta de lucro (R$)</Label>
-                  <Input
-                    inputMode="decimal"
-                    placeholder="Ex.: 4.200"
-                    value={form.profit_target}
-                    onChange={(e) => {
-                      setFormDirty(true);
-                      setForm({ ...form, profit_target: e.target.value });
-                    }}
-                  />
-                  {invalidProfit ? (
-                    <p className="text-xs text-destructive">O lucro não pode superar a receita.</p>
-                  ) : null}
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs">Meta de entregas</Label>
-                  <Input
-                    inputMode="numeric"
-                    placeholder="Ex.: 420"
-                    value={form.deliveries_target}
-                    onChange={(e) => {
-                      setFormDirty(true);
-                      setForm({ ...form, deliveries_target: e.target.value });
-                    }}
-                  />
-                </div>
-              </div>
-
-              {revenueValue > 0 ? (
-                <div className="rounded-xl border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
-                  <p className="flex items-center gap-1 font-semibold text-foreground">
-                    <Target className="size-3.5" /> Como fica o seu dia
-                  </p>
-                  <p className="mt-1">
-                    {brl(perDay)} por dia em {daysInMonth} dias
-                    {perDayDeliveries > 0 ? ` · ${num(perDayDeliveries, 1)} entregas/dia` : ""}
-                  </p>
-                </div>
-              ) : null}
-
-              <p className="text-xs text-muted-foreground">
-                Sugestões preenchem o formulário. A meta cadastrada só muda ao salvar.
-              </p>
-              {goals.isError ? (
-                <p className="text-xs text-destructive">
-                  Não foi possível carregar suas metas. Aguarde a conexão antes de salvar.
-                </p>
-              ) : null}
-              <Button type="submit" className="w-full" disabled={!canSubmit}>
-                {add.isPending || update.isPending
-                  ? "Salvando..."
-                  : existingGoal
-                    ? "Atualizar meta"
-                    : "Salvar meta"}
-              </Button>
-            </form>
-
-            <form
-              className="mt-6 space-y-2 border-t border-border pt-4"
-              onSubmit={async (e) => {
-                e.preventDefault();
-                if (saveProfile.isPending) return;
-                try {
-                  await saveProfile.mutateAsync({
-                    daily_goal: decimalInput(daily, "a meta diária"),
-                  });
-                  setDaily("");
-                  toast.success("Meta diária atualizada");
-                } catch (error) {
-                  toast.error(
-                    error instanceof Error
-                      ? error.message
-                      : "Não foi possível atualizar a meta diária.",
-                  );
-                }
-              }}
-            >
-              <Label htmlFor="daily-revenue-goal" className="text-xs">
-                Meta diária de receita (R$)
-              </Label>
-              <div className="flex gap-2">
-                <Input
-                  id="daily-revenue-goal"
-                  inputMode="decimal"
-                  value={daily}
-                  placeholder={String(profile.data?.daily_goal ?? 200)}
-                  onChange={(e) => setDaily(e.target.value)}
-                />
-                <Button type="submit" variant="secondary" disabled={saveProfile.isPending}>
-                  Salvar
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Atual: {brl(Number(profile.data?.daily_goal ?? 0))}
-              </p>
-            </form>
-
-            {goals.isSuccess && dailyGoalPlan.monthTarget > 0 ? (
-              <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm">
-                <p className="flex items-center gap-1 font-semibold text-foreground">
-                  <CalendarClock className="size-4" /> Meta diária inteligente
-                </p>
-                <p className="mt-1 text-muted-foreground">
-                  {referenceGoal && referenceGoal.month.slice(0, 7) !== current
-                    ? `Referência: meta de ${monthLabel(referenceGoal.month.slice(0, 7))}, mantida até você cadastrar a deste mês. `
-                    : ""}
-                  Para compensar dias abaixo da meta e ainda bater {brl(dailyGoalPlan.monthTarget)}{" "}
-                  no mês, mire em
-                  <span className="font-semibold text-foreground">
-                    {" "}
-                    {brl(dailyGoalPlan.target)}
-                  </span>{" "}
-                  por dia nos próximos
-                  <span className="font-semibold text-foreground">
-                    {" "}
-                    {dailyGoalPlan.remainingDaysIncludingToday}
-                  </span>{" "}
-                  {dailyGoalPlan.usesWorkPattern ? " dias de trabalho." : " dias."}
-                </p>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  O cálculo considera {brl(dailyGoalPlan.revenueBeforeToday)} já feitos antes de
-                  hoje e redistribui o faltante automaticamente
-                  {dailyGoalPlan.usesWorkPattern
-                    ? " conforme os dias em que você costuma trabalhar."
-                    : "."}
-                </p>
-              </div>
-            ) : null}
-          </SectionCard>
+      {goals.isSuccess &&
+      dailyGoalPlan.monthTarget > 0 &&
+      (!referenceGoal || !monthlyGoalIsFinished(referenceGoal, current, currentSummary)) ? (
+        <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm">
+          <p className="flex items-center gap-1 font-semibold text-foreground">
+            <CalendarClock className="size-4" /> Meta diária inteligente
+          </p>
+          <p className="mt-2 text-2xl font-semibold tabular-nums text-primary">
+            {brl(dailyGoalPlan.target)}{" "}
+            <span className="text-sm font-normal text-muted-foreground">por dia</span>
+          </p>
+          <details className="mt-2">
+            <summary className="min-h-11 cursor-pointer py-2 text-sm font-medium">
+              Entenda o cálculo
+            </summary>
+            <p className="mt-1 text-muted-foreground">
+              {referenceGoal && referenceGoal.month.slice(0, 7) !== current
+                ? `Referência: meta de ${monthLabel(referenceGoal.month.slice(0, 7))}, mantida até você cadastrar a deste mês. `
+                : ""}
+              Para compensar dias abaixo da meta e ainda bater {brl(dailyGoalPlan.monthTarget)} no
+              mês, mire em
+              <span className="font-semibold text-foreground">
+                {" "}
+                {brl(dailyGoalPlan.target)}
+              </span>{" "}
+              por dia nos próximos
+              <span className="font-semibold text-foreground">
+                {" "}
+                {dailyGoalPlan.remainingDaysIncludingToday}
+              </span>{" "}
+              {dailyGoalPlan.usesWorkPattern ? " dias de trabalho." : " dias."}
+            </p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              O cálculo considera {brl(dailyGoalPlan.revenueBeforeToday)} já feitos antes de hoje e
+              redistribui o faltante automaticamente
+              {dailyGoalPlan.usesWorkPattern
+                ? " conforme os dias em que você costuma trabalhar."
+                : "."}
+            </p>
+          </details>
         </div>
+      ) : null}
 
-        <div className="space-y-4">
-          <SectionCard
-            title="Análise de desempenho"
-            description="Projeção baseada nos registros disponíveis, sem misturar meses."
+      <Tabs value={view} onValueChange={setView} className="mt-5 min-w-0">
+        <TabsList aria-label="Áreas de metas" className="grid h-auto w-full grid-cols-3 gap-1">
+          <TabsTrigger
+            value="overview"
+            className="min-h-11 px-2 text-xs transition-none sm:text-sm"
           >
-            {performance.currentRevenue > 0 || performance.completedMonths > 0 ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-lg border border-border p-3">
-                  <p className="text-xs text-muted-foreground">Projeção deste mês</p>
-                  <p className="mt-1 text-lg font-semibold text-primary">
-                    {brl(performance.projectedRevenue)}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Mantendo o ritmo atual até o fim do mês.
-                  </p>
-                </div>
-                <div className="rounded-lg border border-border p-3">
-                  <p className="text-xs text-muted-foreground">Comparação histórica</p>
-                  <p className="mt-1 text-lg font-semibold">
-                    {performance.changeVsPreviousPercent === null
-                      ? "Histórico em formação"
-                      : `${performance.changeVsPreviousPercent >= 0 ? "+" : ""}${num(performance.changeVsPreviousPercent, 0)}%`}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Média dos últimos {performance.completedMonths} meses:{" "}
-                    {brl(performance.previousAverageRevenue)}.
-                  </p>
-                </div>
-                <div className="rounded-lg border border-border p-3 sm:col-span-2">
-                  <p className="flex items-center gap-1 text-xs font-semibold text-foreground">
-                    <Sparkles className="size-3.5 text-primary" /> Sugestão para melhorar
-                  </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {performance.suggestedRevenueTarget > 0
-                      ? `Meta possível sugerida: ${brl(performance.suggestedRevenueTarget)}. ${performance.suggestionBasis === "combined" ? "Combina o ritmo deste mês com os últimos meses concluídos." : performance.suggestionBasis === "current" ? `Baseada em ${performance.currentActiveDays} dias com entregas neste mês.` : `Baseada nos últimos ${performance.completedMonths} meses concluídos, ajustados ao tamanho do mês.`} É uma estimativa; não altera sua meta cadastrada.`
-                      : "Registre pelo menos oito dias com entregas neste mês, ou um mês concluído, para receber uma sugestão baseada no seu histórico."}
-                    {performance.bestWeekday
-                      ? ` Seu melhor dia histórico é ${performance.bestWeekday}, com média de ${brl(performance.bestWeekdayAverage)}.`
-                      : ""}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <EmptyState>
-                Registre entregas para receber projeções e sugestões personalizadas.
-              </EmptyState>
-            )}
-          </SectionCard>
-
-          <SectionCard
-            title="Metas cadastradas"
-            description={`${sortedGoals.length} ${sortedGoals.length === 1 ? "meta cadastrada" : "metas cadastradas"}`}
+            Resumo
+          </TabsTrigger>
+          <TabsTrigger value="plan" className="min-h-11 px-2 text-xs transition-none sm:text-sm">
+            Planejamento
+          </TabsTrigger>
+          <TabsTrigger
+            value="challenges"
+            className="min-h-11 px-2 text-xs transition-none sm:text-sm"
           >
-            {sortedGoals.length ? (
-              <ul className="space-y-5">
-                {sortedGoals.map((g) => {
-                  const key = g.month.slice(0, 7);
-                  const m = months.find((x) => x.month === key);
-                  const rows = [
-                    {
-                      label: "Receita",
-                      value: m?.revenue ?? 0,
-                      target: Number(g.revenue_target),
-                      money: true,
-                    },
-                    {
-                      label: "Lucro",
-                      value: m?.profit ?? 0,
-                      target: Number(g.profit_target),
-                      money: true,
-                    },
-                    {
-                      label: "Entregas",
-                      value: m?.count ?? 0,
-                      target: Number(g.deliveries_target),
-                      money: false,
-                    },
-                  ];
-                  return (
-                    <li
-                      key={g.id}
-                      className={`rounded-lg border p-4 ${form.month === key ? "border-primary bg-primary/5" : "border-border"}`}
-                    >
-                      <div className="mb-3 flex items-center justify-between gap-2">
-                        <p className="text-sm font-semibold">
-                          {monthLabel(key)}
-                          {key === current ? (
-                            <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium uppercase text-primary">
-                              Mês atual
-                            </span>
-                          ) : null}
-                          {key < current ? (
-                            <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
-                              Encerrada
-                            </span>
-                          ) : null}
-                          {key > current ? (
-                            <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
-                              Planejada
-                            </span>
-                          ) : null}
-                        </p>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="gap-1"
-                            onClick={() => editGoal(g)}
-                          >
-                            <Pencil className="size-3.5" /> Editar
-                          </Button>
-                          {confirmDelete === g.id ? (
-                            <>
-                              <Button
-                                variant="destructive"
-                                size="sm"
-                                onClick={() => {
-                                  del.mutate(g.id);
-                                  setConfirmDelete(null);
-                                }}
-                              >
-                                Confirmar
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setConfirmDelete(null)}
-                              >
-                                Cancelar
-                              </Button>
-                            </>
-                          ) : (
+            Desafios
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="overview" forceMount className="mt-4 data-[state=inactive]:hidden">
+          <div className="grid min-w-0 items-start gap-4 xl:grid-cols-2 [&>*]:min-w-0">
+            <SectionCard
+              title="Metas cadastradas"
+              description={`${visibleGoals.length} ${showFinishedGoals ? "finalizadas" : "ativas ou planejadas"}`}
+              actions={
+                <div
+                  role="group"
+                  aria-label="Visibilidade das metas"
+                  className="flex flex-wrap gap-2"
+                >
+                  <Button
+                    type="button"
+                    className="min-h-11"
+                    variant={!showFinishedGoals ? "default" : "outline"}
+                    aria-pressed={!showFinishedGoals}
+                    onClick={() => setShowFinishedGoals(false)}
+                  >
+                    Ativas ({sortedGoals.length - finishedGoals.length})
+                  </Button>
+                  <Button
+                    type="button"
+                    className="min-h-11"
+                    variant={showFinishedGoals ? "default" : "outline"}
+                    aria-pressed={showFinishedGoals}
+                    onClick={() => setShowFinishedGoals(true)}
+                  >
+                    Finalizadas ({finishedGoals.length})
+                  </Button>
+                </div>
+              }
+            >
+              {visibleGoals.length ? (
+                <ul className="space-y-5">
+                  {visibleGoals.map((g) => {
+                    const key = g.month.slice(0, 7);
+                    const m = months.find((x) => x.month === key);
+                    const rows = [
+                      {
+                        label: "Receita",
+                        value: m?.revenue ?? 0,
+                        target: Number(g.revenue_target),
+                        money: true,
+                      },
+                      {
+                        label: "Lucro",
+                        value: m?.profit ?? 0,
+                        target: Number(g.profit_target),
+                        money: true,
+                      },
+                      {
+                        label: "Entregas",
+                        value: m?.count ?? 0,
+                        target: Number(g.deliveries_target),
+                        money: false,
+                      },
+                    ];
+                    return (
+                      <li
+                        key={g.id}
+                        className={`rounded-lg border p-4 ${form.month === key ? "border-primary bg-primary/5" : "border-border"}`}
+                      >
+                        <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                          <p className="text-sm font-semibold">
+                            {monthLabel(key)}
+                            {key === current ? (
+                              <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium uppercase text-primary">
+                                Mês atual
+                              </span>
+                            ) : null}
+                            {key < current ? (
+                              <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
+                                Encerrada
+                              </span>
+                            ) : null}
+                            {key > current ? (
+                              <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
+                                Planejada
+                              </span>
+                            ) : null}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-1">
                             <Button
                               variant="ghost"
                               size="sm"
-                              aria-label="Remover meta"
-                              onClick={() => setConfirmDelete(g.id)}
+                              className="min-h-11 gap-1"
+                              onClick={() => editGoal(g)}
                             >
-                              <Trash2 className="size-4" />
+                              <Pencil className="size-3.5" /> Editar
                             </Button>
-                          )}
+                            {confirmDelete === g.id ? (
+                              <>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => {
+                                    del.mutate(g.id);
+                                    setConfirmDelete(null);
+                                  }}
+                                >
+                                  Confirmar
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setConfirmDelete(null)}
+                                >
+                                  Cancelar
+                                </Button>
+                              </>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="min-h-11 min-w-11"
+                                aria-label={`Remover meta de ${monthLabel(key)}`}
+                                onClick={() => setConfirmDelete(g.id)}
+                              >
+                                <Trash2 className="size-4" />
+                              </Button>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                      <div className="space-y-3">
-                        {rows.map((r) => {
-                          const pct = r.target ? Math.min(100, (r.value / r.target) * 100) : 0;
-                          return (
-                            <div key={r.label}>
-                              <div className="flex justify-between text-xs text-muted-foreground">
-                                <span>{r.label}</span>
-                                <span>
-                                  {r.money ? brl(r.value) : num(r.value, 0)} /{" "}
-                                  {r.money ? brl(r.target) : num(r.target, 0)} · {num(pct, 0)}%
-                                </span>
+                        <div className="space-y-3">
+                          {rows.map((r) => {
+                            const pct = r.target ? Math.min(100, (r.value / r.target) * 100) : 0;
+                            return (
+                              <div key={r.label}>
+                                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                                  <span>{r.label}</span>
+                                  <span>
+                                    {r.money ? brl(r.value) : num(r.value, 0)} /{" "}
+                                    {r.money ? brl(r.target) : num(r.target, 0)} · {num(pct, 0)}%
+                                  </span>
+                                </div>
+                                <Progress value={pct} className="mt-1 h-2" />
                               </div>
-                              <Progress value={pct} className="mt-1 h-2" />
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <EmptyState>Nenhuma meta cadastrada.</EmptyState>
-            )}
-          </SectionCard>
-        </div>
-      </div>
-      <AppChallenges />
+                            );
+                          })}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <div>
+                  <EmptyState>
+                    {showFinishedGoals
+                      ? "Nenhuma meta finalizada."
+                      : sortedGoals.length
+                        ? "Nenhuma meta ativa. Consulte as finalizadas ou planeje o próximo mês."
+                        : "Crie sua primeira meta para acompanhar o progresso do mês."}
+                  </EmptyState>
+                  <Button
+                    type="button"
+                    className="mt-3 min-h-11 w-full"
+                    onClick={() => setView("plan")}
+                  >
+                    {sortedGoals.length ? "Planejar meta" : "Definir primeira meta"}
+                  </Button>
+                </div>
+              )}
+            </SectionCard>
+
+            <SectionCard
+              title="Análise de desempenho"
+              description="Projeção baseada nos registros disponíveis, sem misturar meses."
+            >
+              {performance.currentRevenue > 0 || performance.completedMonths > 0 ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-lg border border-border p-3">
+                    <p className="text-xs text-muted-foreground">Projeção deste mês</p>
+                    <p className="mt-1 text-lg font-semibold text-primary">
+                      {brl(performance.projectedRevenue)}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Mantendo o ritmo atual até o fim do mês.
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-border p-3">
+                    <p className="text-xs text-muted-foreground">Comparação histórica</p>
+                    <p className="mt-1 text-lg font-semibold">
+                      {performance.changeVsPreviousPercent === null
+                        ? "Histórico em formação"
+                        : `${performance.changeVsPreviousPercent >= 0 ? "+" : ""}${num(performance.changeVsPreviousPercent, 0)}%`}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Média dos últimos {performance.completedMonths} meses:{" "}
+                      {brl(performance.previousAverageRevenue)}.
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-border p-3 sm:col-span-2">
+                    <p className="flex items-center gap-1 text-xs font-semibold text-foreground">
+                      <Sparkles className="size-3.5 text-primary" /> Sugestão para melhorar
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {performance.suggestedRevenueTarget > 0
+                        ? `Meta possível sugerida: ${brl(performance.suggestedRevenueTarget)}. ${performance.suggestionBasis === "combined" ? "Combina o ritmo deste mês com os últimos meses concluídos." : performance.suggestionBasis === "current" ? `Baseada em ${performance.currentActiveDays} dias com entregas neste mês.` : `Baseada nos últimos ${performance.completedMonths} meses concluídos, ajustados ao tamanho do mês.`} É uma estimativa; não altera sua meta cadastrada.`
+                        : "Registre pelo menos oito dias com entregas neste mês, ou um mês concluído, para receber uma sugestão baseada no seu histórico."}
+                      {performance.bestWeekday
+                        ? ` Seu melhor dia histórico é ${performance.bestWeekday}, com média de ${brl(performance.bestWeekdayAverage)}.`
+                        : ""}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <EmptyState>
+                  Registre entregas para receber projeções e sugestões personalizadas.
+                </EmptyState>
+              )}
+            </SectionCard>
+          </div>
+        </TabsContent>
+        <TabsContent value="plan" forceMount className="mt-4 data-[state=inactive]:hidden">
+          <div className="mx-auto grid max-w-3xl gap-4">
+            <div ref={formRef} className="scroll-mt-24">
+              <SectionCard
+                title={
+                  existingGoal ? `Editar meta de ${monthLabel(form.month)}` : "Nova meta mensal"
+                }
+                description="Escolha o mês, defina a receita e o restante é sugerido automaticamente."
+              >
+                <form
+                  className="space-y-4"
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!canSubmit) return;
+                    const values = {
+                      revenue_target: revenueValue,
+                      profit_target: profitValue,
+                      deliveries_target: Math.round(deliveriesValue),
+                    };
+                    try {
+                      if (existingGoal) {
+                        await update.mutateAsync({ id: existingGoal.id, values });
+                        toast.success(`Meta de ${monthLabel(form.month)} atualizada`);
+                      } else {
+                        await add.mutateAsync({ month: `${form.month}-01`, ...values });
+                        toast.success(`Meta de ${monthLabel(form.month)} criada`);
+                      }
+                      setFormDirty(false);
+                    } catch {
+                      toast.error("Não foi possível salvar a meta");
+                    }
+                  }}
+                >
+                  <div className="space-y-2">
+                    <Label htmlFor="goal-month" className="text-xs">
+                      Mês
+                    </Label>
+                    <Input
+                      id="goal-month"
+                      required
+                      type="month"
+                      value={form.month}
+                      onChange={(e) => {
+                        setFormDirty(false);
+                        setForm({
+                          month: e.target.value,
+                          revenue_target: "",
+                          profit_target: "",
+                          deliveries_target: "",
+                        });
+                      }}
+                    />
+                    {existingGoal ? (
+                      <p className="flex items-center gap-1 text-xs text-primary">
+                        <CheckCircle2 className="size-3.5" /> Já existe meta neste mês — salvar irá
+                        atualizá-la.
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="goal-revenue" className="text-xs">
+                      Meta de receita (R$)
+                    </Label>
+                    <Input
+                      id="goal-revenue"
+                      inputMode="decimal"
+                      placeholder="Ex.: 6.000"
+                      value={form.revenue_target}
+                      onChange={(e) => {
+                        setFormDirty(true);
+                        setForm({ ...form, revenue_target: e.target.value });
+                      }}
+                    />
+                    <div className="flex flex-wrap gap-1.5">
+                      {REVENUE_PRESETS.map((v) => (
+                        <Button
+                          key={v}
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          className="min-h-11 px-3 text-xs"
+                          onClick={() => applyRevenue(v)}
+                        >
+                          {brl(v)}
+                        </Button>
+                      ))}
+                      {performance.suggestedRevenueTarget > 0 ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="min-h-11 gap-1 px-3 text-xs"
+                          onClick={() => applyRevenue(performance.suggestedRevenueTarget)}
+                        >
+                          <TrendingUp className="size-3" /> Usar sugestão:{" "}
+                          {brl(performance.suggestedRevenueTarget)}
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="goal-profit" className="text-xs">
+                        Meta de lucro (R$)
+                      </Label>
+                      <Input
+                        id="goal-profit"
+                        aria-invalid={invalidProfit}
+                        aria-describedby={invalidProfit ? "goal-profit-error" : undefined}
+                        inputMode="decimal"
+                        placeholder="Ex.: 4.200"
+                        value={form.profit_target}
+                        onChange={(e) => {
+                          setFormDirty(true);
+                          setForm({ ...form, profit_target: e.target.value });
+                        }}
+                      />
+                      {invalidProfit ? (
+                        <p id="goal-profit-error" role="alert" className="text-xs text-destructive">
+                          O lucro não pode superar a receita.
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="goal-deliveries" className="text-xs">
+                        Meta de entregas
+                      </Label>
+                      <Input
+                        id="goal-deliveries"
+                        inputMode="numeric"
+                        placeholder="Ex.: 420"
+                        value={form.deliveries_target}
+                        onChange={(e) => {
+                          setFormDirty(true);
+                          setForm({ ...form, deliveries_target: e.target.value });
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {revenueValue > 0 ? (
+                    <div className="rounded-xl border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+                      <p className="flex items-center gap-1 font-semibold text-foreground">
+                        <Target className="size-3.5" /> Como fica o seu dia
+                      </p>
+                      <p className="mt-1">
+                        {brl(perDay)} por dia em {daysInMonth} dias
+                        {perDayDeliveries > 0 ? ` · ${num(perDayDeliveries, 1)} entregas/dia` : ""}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  <p className="text-xs text-muted-foreground">
+                    Sugestões preenchem o formulário. A meta cadastrada só muda ao salvar.
+                  </p>
+                  {goals.isError ? (
+                    <p className="text-xs text-destructive">
+                      Não foi possível carregar suas metas. Aguarde a conexão antes de salvar.
+                    </p>
+                  ) : null}
+                  <Button type="submit" className="min-h-12 w-full" disabled={!canSubmit}>
+                    {add.isPending || update.isPending
+                      ? "Salvando..."
+                      : existingGoal
+                        ? "Atualizar meta"
+                        : "Salvar meta"}
+                  </Button>
+                </form>
+              </SectionCard>
+            </div>
+
+            <SectionCard
+              title="Meta diária de referência"
+              description="Referência usada quando não há um planejamento mensal em vigor."
+            >
+              <form
+                className="space-y-3"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (saveProfile.isPending) return;
+                  try {
+                    await saveProfile.mutateAsync({
+                      daily_goal: decimalInput(daily, "a meta diária"),
+                    });
+                    setDaily("");
+                    toast.success("Meta diária atualizada");
+                  } catch (error) {
+                    toast.error(
+                      error instanceof Error
+                        ? error.message
+                        : "Não foi possível atualizar a meta diária.",
+                    );
+                  }
+                }}
+              >
+                <Label htmlFor="daily-revenue-goal" className="text-xs">
+                  Meta diária de receita (R$)
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="daily-revenue-goal"
+                    inputMode="decimal"
+                    value={daily}
+                    placeholder={String(profile.data?.daily_goal ?? 200)}
+                    onChange={(e) => setDaily(e.target.value)}
+                  />
+                  <Button type="submit" variant="secondary" disabled={saveProfile.isPending}>
+                    Salvar
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Atual: {brl(Number(profile.data?.daily_goal ?? 0))}
+                </p>
+              </form>
+            </SectionCard>
+          </div>
+        </TabsContent>
+        <TabsContent value="challenges" forceMount className="mt-4 data-[state=inactive]:hidden">
+          <AppChallenges />
+        </TabsContent>
+      </Tabs>
     </AppShell>
   );
 }
