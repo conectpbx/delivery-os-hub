@@ -25,12 +25,14 @@ export function StatCard({
   return (
     <div className="surface-card min-w-0 p-4">
       <div className="flex items-center justify-between gap-2">
-        <p className="min-w-0 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <p className="min-w-0 break-words text-xs font-medium uppercase tracking-wide text-muted-foreground">
           {label}
         </p>
         {icon ? <span className="shrink-0 text-muted-foreground">{icon}</span> : null}
       </div>
-      <p className={cn("mt-2 truncate text-xl font-semibold tabular-nums sm:text-2xl", toneClass)}>
+      <p
+        className={cn("mt-2 break-words text-lg font-semibold tabular-nums sm:text-2xl", toneClass)}
+      >
         {value}
       </p>
       {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}

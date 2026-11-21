@@ -499,3 +499,29 @@ recebimento mostram um aviso de bonificação pendente com acesso direto à list
 que conserva confirmação, validação automática e estorno conforme as regras existentes.
 A classificação é visual e reversível: correções nos registros atualizam o filtro;
 nenhuma coluna de arquivamento ou migração de dados foi acrescentada.
+
+### Dashboard: custos e tempo fora das entregas
+
+Custos registrados somam abastecimentos, despesas e manutenções do período selecionado.
+Carregamento e falha são mostrados explicitamente, com **Atualizar dados**, evitando
+confundir consulta incompleta com custo zero. Os cards permitem quebra de texto e os
+filtros se reorganizam em celulares estreitos para não cortar títulos/valores.
+
+O cálculo de tempo combina histórico, rascunho da própria conta e leitura passiva
+da jornada compartilhada. Assim, um Dashboard sem jornada no armazenamento local
+consegue acompanhar o início em outro aparelho, descontando entregas e pausas sem
+iniciar GPS nesse observador. Realtime e recuperação periódica revalidam o snapshot;
+a consulta histórica não depende da jornada ativa atual. Uma rota ainda aberta
+pode legitimamente ocupar a jornada inteira e deixar o tempo fora das entregas em
+zero. Sem jornada, só se considera a espera informada nas entregas.
+
+O Dashboard limita a consulta de entregas ao período e à janela necessária da meta
+inteligente (56 dias antes do mês), incluindo intervalos de rotas em andamento.
+O bloco de estatísticas reutiliza o cálculo existente em vez de montar um terceiro
+observador. Relógios deixam de atualizar a tela enquanto ela estiver oculta e
+revalidam ao retornar. Custos históricos usados por médias/reservas são preservados.
+
+`SMOKE_MODULES_ONLY=1 SMOKE_MODULE_NAMES=dashboard SMOKE_DASHBOARD_CARDS=1 python scripts/smoke-deliveries.py`
+valida R$ 151,75 de custos e 1h50 fora das entregas com jornada remota e pausa de
+10 minutos, sem rascunho local. `SMOKE_COSTS_ERROR=1` simula falha nos custos para
+verificar o aviso e a atualização. Os dados são simulados, sem alterações em produção.

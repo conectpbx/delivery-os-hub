@@ -445,3 +445,35 @@ export function useRecentDeliveryValues(app = "") {
     },
   });
 }
+
+/** Read-only observer: dashboards must not start GPS capture merely to read another device's journey. */
+export function useActiveWorkJourney(enabled = true) {
+  const { user } = useAuth();
+  const userId = user?.id;
+  const qc = useQueryClient();
+  const queryKey = ["active-work-journey", userId];
+  useEffect(() => {
+    if (!userId || !enabled) return;
+    return subscribeToTable("active_work_journeys", userId, () => {
+      void qc.invalidateQueries({ queryKey: ["active-work-journey", userId] });
+    });
+  }, [userId, enabled, qc]);
+  return useQuery({
+    queryKey,
+    enabled: Boolean(userId) && enabled,
+    queryFn: async ({ signal }) => {
+      const { data, error } = await db
+        .from("active_work_journeys")
+        .select("state")
+        .eq("user_id", userId!)
+        .abortSignal(signal)
+        .maybeSingle();
+      if (error) throw error;
+      return (data?.state as import("./trip-tracker").TripState | null) ?? null;
+    },
+    staleTime: 5000,
+    refetchInterval: 5000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+  });
+}

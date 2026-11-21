@@ -45,6 +45,12 @@ created = []
 updated = []
 maintenance_created = []
 maintenance_failure = True
+if os.environ.get("SMOKE_DASHBOARD_CARDS"):
+    for index, record in enumerate(rows[:45]):
+        record["status"] = "concluida"
+        record["occurred_at"] = iso(now - timedelta(hours=4, minutes=index))
+    maintenance_created.append({"id": "maintenance-cost", "user_id": USER_ID, "service_type": "Óleo", "cost": 20, "odometer": 10000, "next_due_km": 12000, "performed_at": now.strftime("%Y-%m-%d"), "next_due_date": None, "description": None})
+
 
 def timestamp(value):
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
@@ -73,6 +79,14 @@ def handle(route):
         result = False
     elif "/rpc/" in path:
         result = []
+    elif path.endswith("/active_work_journeys") and os.environ.get("SMOKE_DASHBOARD_CARDS"):
+        result = [{"state": {"active": True, "synced": True, "journeyId": "remote-journey", "source": "external", "startedAt": iso(now - timedelta(hours=2)), "endedAt": None, "distanceKm": 10, "points": 10, "last": None, "updatedAt": iso(now), "pauses": [{"id": "pause", "reason": "Almoço", "started_at": iso(now - timedelta(hours=1)), "ended_at": iso(now - timedelta(minutes=50))}]}}]
+    elif path.endswith("/fuelings") and os.environ.get("SMOKE_DASHBOARD_CARDS"):
+        if os.environ.get("SMOKE_COSTS_ERROR"):
+            return route.fulfill(status=503, content_type="application/json", headers=headers, body=json.dumps({"message": "fixture cost failure"}))
+        result = [{"id": "fuel-cost", "user_id": USER_ID, "liters": 15, "price_per_liter": 6.75, "total": 101.25, "occurred_at": iso(now), "odometer": 10000, "station": "Posto teste"}]
+    elif path.endswith("/expenses") and os.environ.get("SMOKE_DASHBOARD_CARDS"):
+        result = [{"id": "expense-cost", "user_id": USER_ID, "category": "Alimentação", "amount": 30.5, "occurred_at": iso(now), "description": "Despesa teste", "allocation_method": "immediate"}]
     elif path.endswith("/profiles"):
         result = [{"id": USER_ID, "full_name": "Fixture", "vehicle": "moto", "fuel_efficiency": 12, "daily_goal": 200, "monthly_goal": 5000}]
     elif path.endswith("/app_challenges") and os.environ.get("SMOKE_GOALS_LAYOUT"):
@@ -158,6 +172,15 @@ with sync_playwright() as p:
             page.goto(BASE + "/" + route_name, wait_until="domcontentloaded", timeout=30000)
             expect(page.locator("main")).to_be_visible(timeout=20000)
             expect(page.get_by_text("This page didn't load", exact=True)).to_have_count(0)
+            if route_name == "dashboard" and os.environ.get("SMOKE_DASHBOARD_CARDS"):
+                cost_card = page.get_by_text("Custos registrados", exact=True).first.locator("..").locator("..")
+                expect(cost_card.get_by_text("Indisponível" if os.environ.get("SMOKE_COSTS_ERROR") else re.compile(r"R\$\s*151,75"), exact=True)).to_be_visible(timeout=20000)
+                time_card = page.get_by_text("Tempo fora das entregas", exact=True).first.locator("..").locator("..")
+                expect(time_card.get_by_text("1h 50min", exact=True)).to_be_visible(timeout=20000)
+                if os.environ.get("SMOKE_COSTS_ERROR"):
+                    expect(page.get_by_role("button", name="Atualizar dados", exact=True)).to_be_visible()
+                assert any(path.endswith("/active_work_journeys") for method,path,query in requests), "reads the active journey without requiring a local tracker"
+                assert all("or" in query or "occurred_at" in query or query.get("limit") == ["20"] for method,path,query in requests if path.endswith("/deliveries") and method == "GET"), "dashboard uses bounded delivery queries"
             if route_name == "dashboard" and os.environ.get("SMOKE_CHAIN_METRICS"):
                 km_card = page.get_by_text("Quilometragem", exact=True).first.locator("..").locator("..")
                 expect(km_card.get_by_text("45,0 km", exact=True)).to_be_visible()
@@ -218,6 +241,11 @@ with sync_playwright() as p:
                     raise AssertionError(f"{route_name}: horizontal overflow at {width}px")
             page.screenshot(path=f"/tmp/review-{route_name}.png", full_page=False)
             print(f"Module {route_name}: opened, layouts 320/768/1440 passed", flush=True)
+        if os.environ.get("SMOKE_DASHBOARD_CARDS"):
+            assert not failures, failures
+            browser.close()
+            print("Dashboard cards: registered costs, remote journey unassigned time, responsive layout and bounded queries passed.")
+            raise SystemExit(0)
         page.set_viewport_size({"width": 390, "height": 844})
         page.goto(BASE + "/financeiro", wait_until="domcontentloaded")
         expect(page.get_by_role("button", name="Tudo", exact=True)).to_be_visible(timeout=20000)

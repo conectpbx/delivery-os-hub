@@ -1,3 +1,4 @@
+import { deliveryLearningPeriod } from "@/lib/delivery-scope";
 import { BonusIncome } from "@/components/BonusIncome";
 import { bonusTotal, addBonusIncome } from "@/lib/app-challenges";
 import { useAppChallenges } from "@/lib/data";
@@ -78,7 +79,16 @@ function Dashboard() {
   const now = useCalendarNow();
   const [range, setRange] = useState<(typeof RANGES)[number]>(RANGES[2]);
   const challenges = useAppChallenges();
-  const deliveries = useDeliveries();
+  const { from, to } = useMemo(() => periodRange(range, now), [now, range]);
+  const deliveryWindow = useMemo(() => {
+    const learning = deliveryLearningPeriod(now);
+    return {
+      from: new Date(Math.min(from.getTime(), learning.from!.getTime())),
+      to: new Date(Math.max(to.getTime(), learning.to!.getTime())),
+      overlap: true,
+    };
+  }, [from, to, now]);
+  const deliveries = useDeliveries(deliveryWindow);
   const fuelings = useFuelings();
   const expenses = useExpenses();
   const maintenances = useMaintenances();
@@ -95,7 +105,6 @@ function Dashboard() {
     () => maintenanceReservePerKm(maintenancesData),
     [maintenancesData],
   );
-  const { from, to } = useMemo(() => periodRange(range, now), [now, range]);
   const time = useOperationTime(from, to);
   const todayTime = useOperationTime(startOfDay(now), endOfDay(now));
 
@@ -215,18 +224,20 @@ function Dashboard() {
     operationTime: todayTime,
   });
 
+  const costsLoading = fuelings.isPending || expenses.isPending || maintenances.isPending;
+  const costsUnavailable = fuelings.isError || expenses.isError || maintenances.isError;
   return (
     <AppShell
       title="Dashboard"
       subtitle={`Custo estimado de ${brl(cpk)}/km · meta diária ${brl(dailyGoal)}${dailyGoalPlan.isAdjusted ? " (ajustada)" : ""}`}
       actions={
-        <div className="flex gap-1 rounded-lg bg-muted p-1">
+        <div className="flex flex-wrap gap-1 rounded-lg bg-muted p-1">
           {RANGES.map((r) => (
             <Button
               key={r.key}
               size="sm"
               variant={range.key === r.key ? "default" : "ghost"}
-              className="h-7 px-3 text-xs"
+              className="min-h-11 px-3 text-xs"
               onClick={() => setRange(r)}
             >
               {r.label}
@@ -235,6 +246,23 @@ function Dashboard() {
         </div>
       }
     >
+      {(fuelings.isError || expenses.isError || maintenances.isError || time.isError) && (
+        <div role="alert" className="mb-4 rounded-lg border border-destructive/30 p-3 text-sm">
+          Alguns dados de custos ou jornada não puderam ser carregados.{" "}
+          <Button
+            variant="outline"
+            className="min-h-11"
+            onClick={() => {
+              void fuelings.refetch();
+              void expenses.refetch();
+              void maintenances.refetch();
+              time.retry();
+            }}
+          >
+            Atualizar dados
+          </Button>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <StatCard
           label="Receita do período"
@@ -252,8 +280,20 @@ function Dashboard() {
         />
         <StatCard
           label="Custos registrados"
-          value={brl(cash.fuelCost + cash.otherCost + cash.maintenanceCost)}
-          hint={`${range.label}: abastecimentos ${brl(cash.fuelCost)} · despesas e manutenção ${brl(cash.otherCost + cash.maintenanceCost)}`}
+          value={
+            costsLoading
+              ? "Carregando…"
+              : costsUnavailable
+                ? "Indisponível"
+                : brl(cash.fuelCost + cash.otherCost + cash.maintenanceCost)
+          }
+          hint={
+            costsLoading
+              ? "Buscando abastecimentos, despesas e manutenções…"
+              : costsUnavailable
+                ? "Total indisponível. Use Atualizar dados para tentar novamente."
+                : `${range.label}: abastecimentos ${brl(cash.fuelCost)} · despesas e manutenção ${brl(cash.otherCost + cash.maintenanceCost)}`
+          }
           tone="destructive"
           icon={<Fuel className="size-4" />}
         />
@@ -274,14 +314,30 @@ function Dashboard() {
       <div className="mt-3 grid grid-cols-2 gap-3 xl:grid-cols-4">
         <StatCard
           label="Tempo fora das entregas"
-          value={minutesLabel(time.unassignedMin)}
-          hint={`Entregas/rotas ${minutesLabel(time.deliveryMin)} · Pausas ${minutesLabel(time.pauseMin)}`}
+          value={
+            time.isPending
+              ? "Carregando…"
+              : time.isError
+                ? "Indisponível"
+                : minutesLabel(time.unassignedMin)
+          }
+          hint={
+            time.isPending
+              ? "Buscando entregas e jornadas…"
+              : time.isError
+                ? "Não foi possível consultar a jornada."
+                : time.hasJourney
+                  ? `Entregas/rotas ${minutesLabel(time.deliveryMin)} · Pausas ${minutesLabel(time.pauseMin)}`
+                  : "Sem jornada registrada no período; considera somente esperas informadas."
+          }
           tone="warning"
           icon={<Timer className="size-4" />}
         />
         <StatCard
           label="Lucro por caixa"
-          value={brl(cash.profit)}
+          value={
+            costsLoading ? "Carregando…" : costsUnavailable ? "Indisponível" : brl(cash.profit)
+          }
           hint={`Pagamentos no período: ${brl(cash.fuelCost + cash.otherCost + cash.maintenanceCost)}`}
           tone={cash.profit >= 0 ? "success" : "destructive"}
         />
@@ -306,7 +362,7 @@ function Dashboard() {
         time={{ from: from, to, journeys: time.records, now: time.now }}
       />
 
-      <OperationTimeStats from={from} to={to} />
+      <OperationTimeStats from={from} to={to} time={time} />
       <div className="mt-4">
         <SmartAlerts alerts={smartAlerts} />
       </div>
