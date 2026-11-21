@@ -87,6 +87,12 @@ def handle(route):
         result = [{"id": "fuel-cost", "user_id": USER_ID, "liters": 15, "price_per_liter": 6.75, "total": 101.25, "occurred_at": iso(now), "odometer": 10000, "station": "Posto teste"}]
     elif path.endswith("/expenses") and os.environ.get("SMOKE_DASHBOARD_CARDS"):
         result = [{"id": "expense-cost", "user_id": USER_ID, "category": "Alimentação", "amount": 30.5, "occurred_at": iso(now), "description": "Despesa teste", "allocation_method": "immediate"}]
+    elif path.endswith("/work_journeys") and os.environ.get("SMOKE_FINANCE_PERFORMANCE"):
+        result = [{"id": f"journey-{index}", "user_id": USER_ID, "started_at": iso(now - timedelta(minutes=index + 2)), "ended_at": iso(now - timedelta(minutes=index + 1)), "distance_km": 1, "pauses": []} for index in range(25)]
+    elif path.endswith("/gps_route_sessions") and os.environ.get("SMOKE_FINANCE_PERFORMANCE"):
+        result = [{"id": "route-test", "user_id": USER_ID, "started_at": iso(now - timedelta(hours=1)), "ended_at": iso(now), "distance_km": 2, "point_count": 2}]
+    elif path.endswith("/gps_route_points") and os.environ.get("SMOKE_FINANCE_PERFORMANCE"):
+        result = [{"point_id": str(index), "route_id": "route-test", "latitude": -23.55 - index * .001, "longitude": -46.63, "accuracy_m": 5, "speed_kmh": 0, "trip_km": index, "total_km": index, "captured_at": iso(now - timedelta(minutes=1-index))} for index in range(2)]
     elif path.endswith("/profiles"):
         result = [{"id": USER_ID, "full_name": "Fixture", "vehicle": "moto", "fuel_efficiency": 12, "daily_goal": 200, "monthly_goal": 5000}]
     elif path.endswith("/app_challenges") and os.environ.get("SMOKE_GOALS_LAYOUT"):
@@ -172,6 +178,24 @@ with sync_playwright() as p:
             page.goto(BASE + "/" + route_name, wait_until="domcontentloaded", timeout=30000)
             expect(page.locator("main")).to_be_visible(timeout=20000)
             expect(page.get_by_text("This page didn't load", exact=True)).to_have_count(0)
+            if route_name == "financeiro" and os.environ.get("SMOKE_FINANCE_PERFORMANCE"):
+                history = page.locator("section").filter(has=page.get_by_role("heading", name="Histórico de jornadas", exact=True))
+                expect(history.locator("li")).to_have_count(20)
+                history.get_by_role("button", name="Carregar mais jornadas", exact=True).click()
+                expect(history.locator("li")).to_have_count(25)
+                assert not any(path.endswith(("/gps_route_sessions", "/gps_route_points")) for method,path,query in requests), "GPS history must not load before expansion"
+                page.get_by_label("Litros", exact=True).fill("12,5")
+                page.locator("summary").filter(has_text="Rotas registradas pelo aplicativo").click()
+                expect(page.get_by_text("Finalizada", exact=True)).to_be_visible()
+                expect(page.locator(".leaflet-container")).to_be_visible()
+                initial_points_requests = sum(path.endswith("/gps_route_points") for method,path,query in requests)
+                assert initial_points_requests == 1
+                page.wait_for_timeout(11000)
+                assert sum(path.endswith("/gps_route_points") for method,path,query in requests) == initial_points_requests, "finished GPS routes must not poll"
+                page.locator("summary").filter(has_text="Rotas registradas pelo aplicativo").click()
+                expect(page.locator(".leaflet-container")).to_have_count(0)
+                expect(page.get_by_label("Litros", exact=True)).to_have_value("12,5")
+                print("Financeiro: deferred GPS queries, completed-route polling disabled, history pagination and form preservation passed", flush=True)
             if route_name == "dashboard" and os.environ.get("SMOKE_DASHBOARD_CARDS"):
                 cost_card = page.get_by_text("Custos registrados", exact=True).first.locator("..").locator("..")
                 expect(cost_card.get_by_text("Indisponível" if os.environ.get("SMOKE_COSTS_ERROR") else re.compile(r"R\$\s*151,75"), exact=True)).to_be_visible(timeout=20000)

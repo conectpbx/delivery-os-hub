@@ -525,3 +525,19 @@ revalidam ao retornar. Custos históricos usados por médias/reservas são prese
 valida R$ 151,75 de custos e 1h50 fora das entregas com jornada remota e pausa de
 10 minutos, sem rascunho local. `SMOKE_COSTS_ERROR=1` simula falha nos custos para
 verificar o aviso e a atualização. Os dados são simulados, sem alterações em produção.
+
+### Performance do Financeiro
+
+- Jornada, integração GPS e histórico ficam isolados dos formulários e resumos: as atualizações do rastreador não renderizam novamente todo o módulo.
+- O relógio visual da jornada atualiza a cada 15 segundos e ao voltar à aba; a captura e sincronização GPS mantêm seu funcionamento.
+- O histórico de jornadas renderiza 20 registros por vez, com **Carregar mais jornadas**. Os indicadores continuam usando todos os registros do período.
+- Expanda **Rotas registradas pelo aplicativo** para consultar as rotas e abrir o mapa. Fechar a seção desmonta o mapa e interrompe as consultas periódicas de seus pontos; rotas finalizadas não fazem polling. Requisições de pontos recebem o sinal de cancelamento da consulta.
+- A média histórica de preço do combustível é memorizada. O histórico necessário ao custo por km, às reservas de manutenção e às despesas diluídas é preservado.
+
+Validação isolada em navegador (dados simulados, sem acessar produção):
+
+```sh
+SMOKE_BASE_URL=http://127.0.0.1:3040 SMOKE_MODULES_ONLY=1 SMOKE_MODULE_NAMES=financeiro SMOKE_FINANCE_PERFORMANCE=1 python scripts/smoke-deliveries.py
+```
+
+O cenário verifica paginação de 25 jornadas, ausência de consultas de rotas antes da expansão, mapa sob demanda, ausência de polling em rota finalizada, preservação do formulário e layout em 320/768/1440 px.

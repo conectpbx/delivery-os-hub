@@ -99,7 +99,6 @@ export function useRevokeGpsDevice() {
   });
 }
 
-
 export type GpsRouteSession = {
   id: string;
   token_id: string;
@@ -144,21 +143,24 @@ export function useGpsRouteSessions() {
   });
 }
 
-export function useGpsRoutePoints(routeId?: string | null) {
+export function useGpsRoutePoints(routeId?: string | null, tracking = true) {
   return useQuery({
     queryKey: ["gps-route-points", routeId ?? null],
     enabled: Boolean(routeId),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const { data, error } = await db
         .from("gps_route_points")
-        .select("point_id,route_id,latitude,longitude,accuracy_m,speed_kmh,trip_km,total_km,captured_at")
+        .select(
+          "point_id,route_id,latitude,longitude,accuracy_m,speed_kmh,trip_km,total_km,captured_at",
+        )
         .eq("route_id", routeId as string)
         .order("captured_at", { ascending: true })
-        .limit(10_000);
+        .limit(10_000)
+        .abortSignal(signal);
       if (error) throw error;
       return (data ?? []) as GpsRoutePoint[];
     },
     staleTime: 5_000,
-    refetchInterval: 10_000,
+    refetchInterval: tracking ? 10_000 : false,
   });
 }
