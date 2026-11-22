@@ -178,13 +178,39 @@ with sync_playwright() as p:
             page.goto(BASE + "/" + route_name, wait_until="domcontentloaded", timeout=30000)
             expect(page.locator("main")).to_be_visible(timeout=20000)
             expect(page.get_by_text("This page didn't load", exact=True)).to_have_count(0)
+            if route_name == "financeiro" and os.environ.get("SMOKE_FINANCE_LAYOUT"):
+                expect(page.get_by_role("tab", name="Lançamentos", exact=True)).to_have_attribute("aria-selected", "true")
+                expect(page.get_by_role("button", name="Iniciar jornada", exact=True)).to_be_hidden()
+                page.get_by_label("Litros", exact=True).fill("10")
+                page.get_by_label("R$/litro", exact=True).fill("6,50")
+                expect(page.get_by_label("Total do abastecimento", exact=True)).to_have_text(re.compile(r"R\$\s*65,00"))
+                page.get_by_label("Valor (R$)", exact=True).fill("25,50")
+                for width in [320, 390, 768, 1440]:
+                    page.set_viewport_size({"width": width, "height": 900})
+                    for tab_name in ["Lançamentos", "Jornada e GPS", "Veículo"]:
+                        page.get_by_role("tab", name=tab_name, exact=True).click()
+                        expect(page.get_by_role("tab", name=tab_name, exact=True)).to_have_attribute("aria-selected", "true")
+                        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), f"Financeiro/{tab_name}: overflow at {width}px"
+                        page.get_by_role("tab", name=tab_name, exact=True).scroll_into_view_if_needed()
+                        page.screenshot(path=f"/tmp/finance-layout-{width}-{tab_name.split()[0]}.png", animations="disabled")
+                page.get_by_role("tab", name="Lançamentos", exact=True).click()
+                expect(page.get_by_label("Litros", exact=True)).to_have_value("10")
+                expect(page.get_by_label("Valor (R$)", exact=True)).to_have_value("25,50")
+                page.get_by_role("tab", name="Lançamentos", exact=True).focus()
+                page.keyboard.press("ArrowRight")
+                expect(page.get_by_role("tab", name="Jornada e GPS", exact=True)).to_have_attribute("aria-selected", "true")
+                page.get_by_role("tab", name="Lançamentos", exact=True).click()
+                print("Financeiro: tabs, keyboard navigation, draft preservation, fuel preview and responsive layouts passed", flush=True)
             if route_name == "financeiro" and os.environ.get("SMOKE_FINANCE_PERFORMANCE"):
+                page.get_by_role("tab", name="Jornada e GPS", exact=True).click()
                 history = page.locator("section").filter(has=page.get_by_role("heading", name="Histórico de jornadas", exact=True))
                 expect(history.locator("li")).to_have_count(20)
                 history.get_by_role("button", name="Carregar mais jornadas", exact=True).click()
                 expect(history.locator("li")).to_have_count(25)
                 assert not any(path.endswith(("/gps_route_sessions", "/gps_route_points")) for method,path,query in requests), "GPS history must not load before expansion"
+                page.get_by_role("tab", name="Lançamentos", exact=True).click()
                 page.get_by_label("Litros", exact=True).fill("12,5")
+                page.get_by_role("tab", name="Jornada e GPS", exact=True).click()
                 page.locator("summary").filter(has_text="Rotas registradas pelo aplicativo").click()
                 expect(page.get_by_text("Finalizada", exact=True)).to_be_visible()
                 expect(page.locator(".leaflet-container")).to_be_visible()
@@ -194,6 +220,7 @@ with sync_playwright() as p:
                 assert sum(path.endswith("/gps_route_points") for method,path,query in requests) == initial_points_requests, "finished GPS routes must not poll"
                 page.locator("summary").filter(has_text="Rotas registradas pelo aplicativo").click()
                 expect(page.locator(".leaflet-container")).to_have_count(0)
+                page.get_by_role("tab", name="Lançamentos", exact=True).click()
                 expect(page.get_by_label("Litros", exact=True)).to_have_value("12,5")
                 print("Financeiro: deferred GPS queries, completed-route polling disabled, history pagination and form preservation passed", flush=True)
             if route_name == "dashboard" and os.environ.get("SMOKE_DASHBOARD_CARDS"):

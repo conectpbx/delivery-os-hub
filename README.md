@@ -541,3 +541,15 @@ SMOKE_BASE_URL=http://127.0.0.1:3040 SMOKE_MODULES_ONLY=1 SMOKE_MODULE_NAMES=fin
 ```
 
 O cenário verifica paginação de 25 jornadas, ausência de consultas de rotas antes da expansão, mapa sob demanda, ausência de polling em rota finalizada, preservação do formulário e layout em 320/768/1440 px.
+
+### Layout do Financeiro
+
+O resumo financeiro permanece no topo. As abas **Lançamentos**, **Jornada e GPS** e **Veículo** separam as tarefas do dia a dia das configurações. Os painéis permanecem montados ao trocar de aba para preservar rascunhos e o rastreador da jornada. Usar um odômetro sugerido abre Lançamentos e posiciona o foco no campo preenchido.
+
+O formulário de abastecimento mostra uma prévia do total, e os botões indicam o salvamento. Composição da receita e conexão do aplicativo de odômetro ficam em seções expansíveis. Campos têm rótulos associados, seletores e ações principais têm área de toque de pelo menos 44 px e as abas permitem navegação pelas setas do teclado.
+
+Para validar layout, navegação e rascunhos em 320/390/768/1440 px com dados simulados:
+
+```sh
+SMOKE_BASE_URL=http://127.0.0.1:3050 SMOKE_MODULES_ONLY=1 SMOKE_MODULE_NAMES=financeiro SMOKE_FINANCE_LAYOUT=1 SMOKE_FINANCE_PERFORMANCE=1 python scripts/smoke-deliveries.py
+```
