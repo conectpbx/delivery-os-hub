@@ -553,3 +553,15 @@ Para validar layout, navegação e rascunhos em 320/390/768/1440 px com dados si
 ```sh
 SMOKE_BASE_URL=http://127.0.0.1:3050 SMOKE_MODULES_ONLY=1 SMOKE_MODULE_NAMES=financeiro SMOKE_FINANCE_LAYOUT=1 SMOKE_FINANCE_PERFORMANCE=1 python scripts/smoke-deliveries.py
 ```
+
+### Edição independente de entregas em rota
+
+Cada card do histórico mantém seus próprios estados de GPS, salvamento e pontos em edição. Abrir pontos adicionais ou concluir uma entrega não bloqueia as outras. Os rascunhos continuam separados por conta e agora também por entrega; o rascunho do formato anterior é restaurado no card correspondente.
+
+Teste isolado com duas entregas em rota, sem serviços de produção:
+
+```sh
+SMOKE_BASE_URL=http://127.0.0.1:3060 SMOKE_INDEPENDENT_ROUTES=1 python scripts/smoke-deliveries.py
+```
+
+O cenário verifica edição simultânea, botões independentes durante a captura GPS, conclusão apenas da entrega selecionada e preservação do rascunho da outra após recarregar a página.

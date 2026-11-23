@@ -5,7 +5,7 @@ import { resolveDeliveryLocation } from "@/lib/delivery-location";
 import { deliveryFinishingDraft } from "@/lib/delivery-draft";
 import { MapsNavigationLink } from "@/components/MapsNavigationLink";
 
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 
 import { MapPin, Navigation, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -54,12 +54,108 @@ export const DeliveryHistory = memo(function DeliveryHistory() {
   const fromTime = range.from?.getTime(),
     toTime = range.to?.getTime();
   useEffect(() => setVisible(20), [histRange, fromTime, toTime]);
-  const updateDelivery = useUpdate<Record<string, unknown>>("deliveries", "deliveries");
-  const remove = useRemove("deliveries", "deliveries");
-  const [finishing, setFinishing] = usePersistentState<{
+  const [legacyDraft, setLegacyDraft] = usePersistentState<{
     id: string;
     stops: Stop[];
   } | null>("entregas.finishing", null, (value) => deliveryFinishingDraft.parse(value));
+  const clearLegacyDraft = useCallback(() => setLegacyDraft(null), [setLegacyDraft]);
+
+  return (
+    <SectionCard
+      title="Histórico de entregas"
+      description={`${history.data?.pages[0]?.total ?? data.length} corridas no período · ${Math.min(visible, data.length)} exibidas`}
+    >
+      <div className="mb-3 flex flex-wrap gap-1">
+        {(
+          [
+            ["hoje", "Hoje"],
+            ["7d", "Semanal"],
+            ["mes", "Mês atual"],
+            ["tudo", "Tudo"],
+          ] as const
+        ).map(([k, label]) => (
+          <Button
+            key={k}
+            type="button"
+            size="sm"
+            className="min-h-11"
+            variant={histRange === k ? "default" : "outline"}
+            onClick={() => setHistRange(k)}
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
+      {history.isPending ? (
+        <p role="status">
+          {history.fetchStatus === "paused"
+            ? "Aguardando conexão para carregar este período."
+            : "Carregando entregas…"}
+        </p>
+      ) : history.isError && !data.length ? null : data.length ? (
+        <ul className="divide-y divide-border">
+          {data.slice(0, visible).map((delivery) => (
+            <DeliveryHistoryItem
+              key={delivery.id}
+              delivery={delivery}
+              legacyDraft={legacyDraft}
+              clearLegacyDraft={clearLegacyDraft}
+            />
+          ))}
+        </ul>
+      ) : (
+        <EmptyState>Nenhuma entrega registrada neste período.</EmptyState>
+      )}
+      {history.isError && (
+        <p role="alert" className="mt-3 text-sm text-destructive">
+          Não foi possível carregar o histórico.{" "}
+          <Button variant="outline" size="sm" onClick={() => void history.refetch()}>
+            Tentar novamente
+          </Button>
+        </p>
+      )}
+      {(data.length > visible || history.hasNextPage) && (
+        <Button
+          className="mt-3 w-full min-h-11"
+          variant="outline"
+          disabled={history.isFetchingNextPage || history.fetchStatus === "paused"}
+          onClick={async () => {
+            if (visible >= data.length) {
+              const result = await history.fetchNextPage();
+              if (result.isError) return;
+            }
+            setVisible((value) => value + 20);
+          }}
+        >
+          {history.isFetchingNextPage ? "Carregando…" : "Carregar mais 20"}
+        </Button>
+      )}
+    </SectionCard>
+  );
+});
+
+const DeliveryHistoryItem = memo(function DeliveryHistoryItem({
+  delivery: d,
+  legacyDraft,
+  clearLegacyDraft,
+}: {
+  delivery: Delivery;
+  legacyDraft: { id: string; stops: Stop[] } | null;
+  clearLegacyDraft: () => void;
+}) {
+  const updateDelivery = useUpdate<Record<string, unknown>>("deliveries", "deliveries");
+  const remove = useRemove("deliveries", "deliveries");
+  const [finishing, setFinishing, , draftRestored] = usePersistentState<{
+    id: string;
+    stops: Stop[];
+  } | null>(`entregas.finishing:${d.id}`, null, (value) => deliveryFinishingDraft.parse(value));
+
+  // Restore the earlier shared draft once, without discarding unsaved route points.
+  useEffect(() => {
+    if (!draftRestored || legacyDraft?.id !== d.id) return;
+    setFinishing((current) => current ?? legacyDraft);
+    clearLegacyDraft();
+  }, [draftRestored, legacyDraft, d.id, setFinishing, clearLegacyDraft]);
   const [finishGeo, setFinishGeo] = useState<string | null>(null);
   const patchFinishStop = (stopId: string, values: Partial<Stop>) =>
     setFinishing((f) =>
@@ -167,398 +263,309 @@ export const DeliveryHistory = memo(function DeliveryHistory() {
       setFinishGeo(null);
     }
   }
-
+  const raw = historyStops(d);
+  const status = d.status ?? "concluida";
+  const nav = navigationUrl(
+    raw.length
+      ? raw
+      : [
+          {
+            address: d.dropoff_address ?? "",
+            lat: d.lat != null ? Number(d.lat) : null,
+            lng: d.lng != null ? Number(d.lng) : null,
+          },
+        ],
+  );
   return (
-    <SectionCard
-      title="Histórico de entregas"
-      description={`${history.data?.pages[0]?.total ?? data.length} corridas no período · ${Math.min(visible, data.length)} exibidas`}
+    <li
+      key={d.id}
+      data-delivery-id={d.id}
+      className={
+        status === "em_rota" ? "my-3 rounded-xl border border-primary/20 bg-primary/5 p-3" : "py-4"
+      }
     >
-      <div className="mb-3 flex flex-wrap gap-1">
-        {(
-          [
-            ["hoje", "Hoje"],
-            ["7d", "Semanal"],
-            ["mes", "Mês atual"],
-            ["tudo", "Tudo"],
-          ] as const
-        ).map(([k, label]) => (
-          <Button
-            key={k}
-            type="button"
-            size="sm"
-            className="min-h-11"
-            variant={histRange === k ? "default" : "outline"}
-            onClick={() => setHistRange(k)}
-          >
-            {label}
-          </Button>
-        ))}
-      </div>
-      {history.isPending ? (
-        <p role="status">
-          {history.fetchStatus === "paused"
-            ? "Aguardando conexão para carregar este período."
-            : "Carregando entregas…"}
-        </p>
-      ) : history.isError && !data.length ? null : data.length ? (
-        <ul className="divide-y divide-border">
-          {data.slice(0, visible).map((d) => {
-            const raw = historyStops(d);
-            const status = d.status ?? "concluida";
-            const nav = navigationUrl(
-              raw.length
-                ? raw
-                : [
-                    {
-                      address: d.dropoff_address ?? "",
-                      lat: d.lat != null ? Number(d.lat) : null,
-                      lng: d.lng != null ? Number(d.lng) : null,
-                    },
-                  ],
-            );
-            return (
-              <li
-                key={d.id}
-                data-delivery-id={d.id}
-                className={
-                  status === "em_rota"
-                    ? "my-3 rounded-xl border border-primary/20 bg-primary/5 p-3"
-                    : "py-4"
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium">
+            {d.app_name} · {brl(Number(d.earnings) + Number(d.tip))}
+            {status === "em_rota" ? (
+              <span className="ml-2 rounded bg-warning/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-warning-foreground">
+                Em rota
+              </span>
+            ) : null}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {dateTimeLabel(d.occurred_at)} · {paymentMethodLabel(d.payment_method)} ·{" "}
+            {num(Number(d.distance_km))} km · {minutesLabel(deliveryMinutes(d))} em entrega ·{" "}
+            {minutesLabel(Number(d.idle_min))} parado
+          </p>
+          {status === "em_rota" && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                className="min-h-11"
+                disabled={
+                  finishGeo !== null ||
+                  updateDelivery.isPending ||
+                  Boolean(finishing && finishing.id !== d.id)
                 }
+                onClick={() => void deliverWithGps(d)}
               >
-                <div className="flex items-start gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">
-                      {d.app_name} · {brl(Number(d.earnings) + Number(d.tip))}
-                      {status === "em_rota" ? (
-                        <span className="ml-2 rounded bg-warning/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-warning-foreground">
-                          Em rota
-                        </span>
-                      ) : null}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {dateTimeLabel(d.occurred_at)} · {paymentMethodLabel(d.payment_method)} ·{" "}
-                      {num(Number(d.distance_km))} km · {minutesLabel(deliveryMinutes(d))} em
-                      entrega · {minutesLabel(Number(d.idle_min))} parado
-                    </p>
-                    {status === "em_rota" && (
-                      <div className="mt-3 flex flex-wrap items-center gap-2">
-                        <Button
-                          type="button"
-                          className="min-h-11"
-                          disabled={
-                            finishGeo !== null ||
-                            updateDelivery.isPending ||
-                            Boolean(finishing && finishing.id !== d.id)
-                          }
-                          onClick={() => void deliverWithGps(d)}
-                        >
-                          Entrega concluída (GPS)
-                        </Button>
-                        <span className="text-xs text-muted-foreground">
-                          Preserva km informados; estima pelos pontos quando não há km.
-                        </span>
-                      </div>
-                    )}
+                Entrega concluída (GPS)
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                Preserva km informados; estima pelos pontos quando não há km.
+              </span>
+            </div>
+          )}
 
-                    {d.started_at ? (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Início: {dateTimeLabel(d.started_at)} · Término:{" "}
-                        {d.ended_at ? dateTimeLabel(d.ended_at) : "Em andamento"}
-                      </p>
-                    ) : null}
-                  </div>
-                  {nav ? (
-                    <Button asChild variant="ghost" size="icon" aria-label="Abrir no Google Maps">
-                      <MapsNavigationLink href={nav}>
-                        <Navigation className="size-4" />
-                      </MapsNavigationLink>
-                    </Button>
-                  ) : null}
-                  <DeliveryDistanceEditor delivery={d} />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="min-h-11 min-w-11"
-                    aria-label="Excluir"
-                    onClick={() => remove.mutate(d.id)}
+          {d.started_at ? (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Início: {dateTimeLabel(d.started_at)} · Término:{" "}
+              {d.ended_at ? dateTimeLabel(d.ended_at) : "Em andamento"}
+            </p>
+          ) : null}
+        </div>
+        {nav ? (
+          <Button asChild variant="ghost" size="icon" aria-label="Abrir no Google Maps">
+            <MapsNavigationLink href={nav}>
+              <Navigation className="size-4" />
+            </MapsNavigationLink>
+          </Button>
+        ) : null}
+        <DeliveryDistanceEditor delivery={d} />
+        <Button
+          variant="ghost"
+          size="icon"
+          className="min-h-11 min-w-11"
+          aria-label="Excluir"
+          onClick={() => remove.mutate(d.id)}
+        >
+          <Trash2 className="size-4 text-destructive" />
+        </Button>
+      </div>
+
+      {raw.length > 0 && <DeliveryRouteDetails stops={raw} />}
+
+      {status === "em_rota" && (
+        <div className="mt-3 flex flex-wrap gap-2" aria-label="Pontos da entrega em rota">
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-11"
+            disabled={updateDelivery.isPending || Boolean(finishing && finishing.id !== d.id)}
+            onClick={() =>
+              setFinishing((current) => {
+                if (current?.id !== d.id)
+                  return { id: d.id, stops: [newStop("entrega"), newStop("entrega")] };
+                const stops = [...current.stops];
+                stops.splice(Math.max(0, stops.length - 1), 0, newStop("entrega"));
+                return { ...current, stops };
+              })
+            }
+          >
+            <Plus className="mr-1 size-4" />
+            Adicionar ponto adicional
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-11"
+            disabled={updateDelivery.isPending || Boolean(finishing && finishing.id !== d.id)}
+            onClick={() =>
+              setFinishing((current) =>
+                current?.id === d.id ? current : { id: d.id, stops: [newStop("entrega")] },
+              )
+            }
+          >
+            <MapPin className="mr-1 size-4" />
+            Editar paradas
+          </Button>
+        </div>
+      )}
+      {status === "em_rota" ? (
+        finishing?.id === d.id ? (
+          <div className="mt-2 space-y-2 rounded-md border border-border p-2">
+            <p className="text-xs font-medium text-muted-foreground">Pontos restantes da rota</p>
+            {finishing.stops.map((s, i) => (
+              <div key={s.id} className="space-y-1">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">
+                    {raw.length + i + 1}.{" "}
+                    {i === finishing.stops.length - 1
+                      ? "Ponto final da entrega"
+                      : "Ponto adicional"}
+                  </span>
+                  <select
+                    value={s.kind}
+                    onChange={(e) =>
+                      patchFinishStop(s.id, {
+                        kind: e.target.value as Stop["kind"],
+                      })
+                    }
+                    className="min-h-11 rounded border border-input bg-background px-2 text-xs"
+                    aria-label={`Tipo do ponto ${i + 1}`}
                   >
-                    <Trash2 className="size-4 text-destructive" />
-                  </Button>
-                </div>
-
-                {raw.length > 0 && <DeliveryRouteDetails stops={raw} />}
-
-                {status === "em_rota" && (
-                  <div className="mt-3 flex flex-wrap gap-2" aria-label="Pontos da entrega em rota">
+                    <option value="coleta">Coleta</option>
+                    <option value="entrega">Entrega</option>
+                  </select>
+                  {finishing.stops.length > 1 ? (
                     <Button
                       type="button"
-                      variant="outline"
-                      className="min-h-11"
-                      disabled={
-                        updateDelivery.isPending || Boolean(finishing && finishing.id !== d.id)
-                      }
+                      variant="ghost"
+                      size="icon"
+                      className="ml-auto size-11 shrink-0"
+                      aria-label={`Remover ponto ${i + 1}`}
                       onClick={() =>
-                        setFinishing((current) => {
-                          if (current?.id !== d.id)
-                            return { id: d.id, stops: [newStop("entrega"), newStop("entrega")] };
-                          const stops = [...current.stops];
-                          stops.splice(Math.max(0, stops.length - 1), 0, newStop("entrega"));
-                          return { ...current, stops };
-                        })
-                      }
-                    >
-                      <Plus className="mr-1 size-4" />
-                      Adicionar ponto adicional
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="min-h-11"
-                      disabled={
-                        updateDelivery.isPending || Boolean(finishing && finishing.id !== d.id)
-                      }
-                      onClick={() =>
-                        setFinishing((current) =>
-                          current?.id === d.id
-                            ? current
-                            : { id: d.id, stops: [newStop("entrega")] },
+                        setFinishing((f) =>
+                          f ? { ...f, stops: f.stops.filter((x) => x.id !== s.id) } : f,
                         )
                       }
                     >
-                      <MapPin className="mr-1 size-4" />
-                      Editar paradas
+                      <X className="size-3.5" />
                     </Button>
-                  </div>
-                )}
-                {status === "em_rota" ? (
-                  finishing?.id === d.id ? (
-                    <div className="mt-2 space-y-2 rounded-md border border-border p-2">
-                      <p className="text-xs font-medium text-muted-foreground">
-                        Pontos restantes da rota
-                      </p>
-                      {finishing.stops.map((s, i) => (
-                        <div key={s.id} className="space-y-1">
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <span className="font-medium text-foreground">
-                              {raw.length + i + 1}.{" "}
-                              {i === finishing.stops.length - 1
-                                ? "Ponto final da entrega"
-                                : "Ponto adicional"}
-                            </span>
-                            <select
-                              value={s.kind}
-                              onChange={(e) =>
-                                patchFinishStop(s.id, {
-                                  kind: e.target.value as Stop["kind"],
-                                })
-                              }
-                              className="min-h-11 rounded border border-input bg-background px-2 text-xs"
-                              aria-label={`Tipo do ponto ${i + 1}`}
-                            >
-                              <option value="coleta">Coleta</option>
-                              <option value="entrega">Entrega</option>
-                            </select>
-                            {finishing.stops.length > 1 ? (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="ml-auto size-11 shrink-0"
-                                aria-label={`Remover ponto ${i + 1}`}
-                                onClick={() =>
-                                  setFinishing((f) =>
-                                    f ? { ...f, stops: f.stops.filter((x) => x.id !== s.id) } : f,
-                                  )
-                                }
-                              >
-                                <X className="size-3.5" />
-                              </Button>
-                            ) : null}
-                          </div>
-                          <div className="flex min-w-0 gap-2">
-                            <Input
-                              aria-label={
-                                i === finishing.stops.length - 1
-                                  ? "Endereço final da entrega em rota"
-                                  : `Endereço adicional ${i + 1}`
-                              }
-                              value={s.address}
-                              onChange={(e) =>
-                                patchFinishStop(s.id, {
-                                  address: e.target.value,
-                                  lat: null,
-                                  lng: null,
-                                  recorded_at: undefined,
-                                })
-                              }
-                              placeholder={
-                                s.kind === "coleta" ? "Nova coleta" : "Endereço de entrega"
-                              }
-                              className="min-w-0 flex-1"
-                            />
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant="outline"
-                              aria-label={`Usar GPS no ponto ${i + 1}`}
-                              disabled={finishGeo !== null}
-                              onClick={() => captureFinishGps(s.id)}
-                            >
-                              <MapPin className="size-4" />
-                            </Button>
-                          </div>
-                          {finishGeo === s.id ? (
-                            <p className="text-xs text-muted-foreground">Buscando localização…</p>
-                          ) : s.lat != null && s.lng != null ? (
-                            <p className="text-xs text-muted-foreground">
-                              {s.lat.toFixed(4)}, {s.lng.toFixed(4)}
-                            </p>
-                          ) : null}
-                        </div>
-                      ))}
-
-                      <div className="flex gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          disabled={
-                            !(
-                              finishing.stops.at(-1)?.kind === "entrega" &&
-                              (finishing.stops.at(-1)?.address.trim() ||
-                                finishing.stops.at(-1)?.lat != null)
-                            ) || updateDelivery.isPending
-                          }
-                          onClick={async () => {
-                            const filled = recordedStops(
-                              finishing.stops
-                                .filter((s) => s.address.trim() || (s.lat != null && s.lng != null))
-                                .map((s) => ({
-                                  kind: s.kind,
-                                  address: s.address.trim(),
-                                  lat: s.lat,
-                                  lng: s.lng,
-                                  ...(s.recorded_at ? { recorded_at: s.recorded_at } : {}),
-                                })),
-                            );
-                            const last = filled[filled.length - 1];
-                            try {
-                              const allPts = [...raw, ...filled];
-                              let routed: typeof allPts = allPts;
-                              const extra: {
-                                distance_km?: number;
-                                duration_min?: number;
-                              } = {};
-                              const totals = await routeTotals(allPts);
-                              if (totals) {
-                                routed = totals.pts as typeof allPts;
-                                extra.distance_km = completionDistanceKm(
-                                  d.distance_km,
-                                  totals.distanceKm,
-                                );
-                                extra.duration_min = d.started_at
-                                  ? Math.round((Date.now() - Date.parse(d.started_at)) / 60000)
-                                  : totals.durationMin;
-                              } else {
-                                toast.error(
-                                  "Não foi possível calcular a distância desta entrega — verifique se os pontos têm endereço ou GPS preenchido e tente novamente.",
-                                );
-                              }
-                              await updateDelivery.mutateAsync({
-                                id: d.id,
-                                values: {
-                                  dropoff_address: last?.address ?? "",
-                                  status: "concluida",
-                                  started_at: d.started_at ?? d.occurred_at,
-                                  ended_at: new Date().toISOString(),
-                                  estimated_duration_min:
-                                    totals?.durationMin ?? d.estimated_duration_min ?? null,
-                                  stops: routed,
-                                  ...extra,
-                                },
-                              });
-
-                              setFinishing(null);
-                              if (totals?.approximate && !(Number(d.distance_km) > 0)) {
-                                toast.message(
-                                  `Rota concluída — distância aproximada (linha reta), o serviço de rota por ruas estava indisponível. ${num(totals.distanceKm)} km`,
-                                );
-                              } else {
-                                toast.success("Rota concluída");
-                              }
-                            } catch {
-                              toast.error("Erro ao salvar a rota");
-                            }
-                          }}
-                        >
-                          Entrega concluída
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="secondary"
-                          disabled={
-                            !finishing.stops.some((s) => s.address.trim()) ||
-                            updateDelivery.isPending
-                          }
-                          onClick={async () => {
-                            try {
-                              const saved = await persistFinishStops(d.id, raw, finishing.stops);
-                              if (saved) {
-                                setFinishing({ id: d.id, stops: [newStop("entrega")] });
-                                toast.success("Pontos salvos — entrega segue em rota");
-                              }
-                            } catch {
-                              toast.error("Erro ao salvar os pontos");
-                            }
-                          }}
-                        >
-                          Salvar pontos
-                        </Button>
-
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setFinishing(null)}
-                        >
-                          Cancelar
-                        </Button>
-                      </div>
-                    </div>
-                  ) : null
+                  ) : null}
+                </div>
+                <div className="flex min-w-0 gap-2">
+                  <Input
+                    aria-label={
+                      i === finishing.stops.length - 1
+                        ? "Endereço final da entrega em rota"
+                        : `Endereço adicional ${i + 1}`
+                    }
+                    value={s.address}
+                    onChange={(e) =>
+                      patchFinishStop(s.id, {
+                        address: e.target.value,
+                        lat: null,
+                        lng: null,
+                        recorded_at: undefined,
+                      })
+                    }
+                    placeholder={s.kind === "coleta" ? "Nova coleta" : "Endereço de entrega"}
+                    className="min-w-0 flex-1"
+                  />
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    aria-label={`Usar GPS no ponto ${i + 1}`}
+                    disabled={finishGeo !== null}
+                    onClick={() => captureFinishGps(s.id)}
+                  >
+                    <MapPin className="size-4" />
+                  </Button>
+                </div>
+                {finishGeo === s.id ? (
+                  <p className="text-xs text-muted-foreground">Buscando localização…</p>
+                ) : s.lat != null && s.lng != null ? (
+                  <p className="text-xs text-muted-foreground">
+                    {s.lat.toFixed(4)}, {s.lng.toFixed(4)}
+                  </p>
                 ) : null}
-              </li>
-            );
-          })}
-        </ul>
-      ) : (
-        <EmptyState>Nenhuma entrega registrada neste período.</EmptyState>
-      )}
-      {history.isError && (
-        <p role="alert" className="mt-3 text-sm text-destructive">
-          Não foi possível carregar o histórico.{" "}
-          <Button variant="outline" size="sm" onClick={() => void history.refetch()}>
-            Tentar novamente
-          </Button>
-        </p>
-      )}
-      {(data.length > visible || history.hasNextPage) && (
-        <Button
-          className="mt-3 w-full min-h-11"
-          variant="outline"
-          disabled={history.isFetchingNextPage || history.fetchStatus === "paused"}
-          onClick={async () => {
-            if (visible >= data.length) {
-              const result = await history.fetchNextPage();
-              if (result.isError) return;
-            }
-            setVisible((value) => value + 20);
-          }}
-        >
-          {history.isFetchingNextPage ? "Carregando…" : "Carregar mais 20"}
-        </Button>
-      )}
-    </SectionCard>
+              </div>
+            ))}
+
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                disabled={
+                  !(
+                    finishing.stops.at(-1)?.kind === "entrega" &&
+                    (finishing.stops.at(-1)?.address.trim() || finishing.stops.at(-1)?.lat != null)
+                  ) || updateDelivery.isPending
+                }
+                onClick={async () => {
+                  const filled = recordedStops(
+                    finishing.stops
+                      .filter((s) => s.address.trim() || (s.lat != null && s.lng != null))
+                      .map((s) => ({
+                        kind: s.kind,
+                        address: s.address.trim(),
+                        lat: s.lat,
+                        lng: s.lng,
+                        ...(s.recorded_at ? { recorded_at: s.recorded_at } : {}),
+                      })),
+                  );
+                  const last = filled[filled.length - 1];
+                  try {
+                    const allPts = [...raw, ...filled];
+                    let routed: typeof allPts = allPts;
+                    const extra: {
+                      distance_km?: number;
+                      duration_min?: number;
+                    } = {};
+                    const totals = await routeTotals(allPts);
+                    if (totals) {
+                      routed = totals.pts as typeof allPts;
+                      extra.distance_km = completionDistanceKm(d.distance_km, totals.distanceKm);
+                      extra.duration_min = d.started_at
+                        ? Math.round((Date.now() - Date.parse(d.started_at)) / 60000)
+                        : totals.durationMin;
+                    } else {
+                      toast.error(
+                        "Não foi possível calcular a distância desta entrega — verifique se os pontos têm endereço ou GPS preenchido e tente novamente.",
+                      );
+                    }
+                    await updateDelivery.mutateAsync({
+                      id: d.id,
+                      values: {
+                        dropoff_address: last?.address ?? "",
+                        status: "concluida",
+                        started_at: d.started_at ?? d.occurred_at,
+                        ended_at: new Date().toISOString(),
+                        estimated_duration_min:
+                          totals?.durationMin ?? d.estimated_duration_min ?? null,
+                        stops: routed,
+                        ...extra,
+                      },
+                    });
+
+                    setFinishing(null);
+                    if (totals?.approximate && !(Number(d.distance_km) > 0)) {
+                      toast.message(
+                        `Rota concluída — distância aproximada (linha reta), o serviço de rota por ruas estava indisponível. ${num(totals.distanceKm)} km`,
+                      );
+                    } else {
+                      toast.success("Rota concluída");
+                    }
+                  } catch {
+                    toast.error("Erro ao salvar a rota");
+                  }
+                }}
+              >
+                Entrega concluída
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={
+                  !finishing.stops.some((s) => s.address.trim()) || updateDelivery.isPending
+                }
+                onClick={async () => {
+                  try {
+                    const saved = await persistFinishStops(d.id, raw, finishing.stops);
+                    if (saved) {
+                      setFinishing({ id: d.id, stops: [newStop("entrega")] });
+                      toast.success("Pontos salvos — entrega segue em rota");
+                    }
+                  } catch {
+                    toast.error("Erro ao salvar os pontos");
+                  }
+                }}
+              >
+                Salvar pontos
+              </Button>
+
+              <Button type="button" size="sm" variant="outline" onClick={() => setFinishing(null)}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        ) : null
+      ) : null}
+    </li>
   );
 });

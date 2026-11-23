@@ -33,6 +33,9 @@ for index in range(45 + 800):
     at = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(minutes=index + 1) if index < 45 else now - timedelta(days=400, minutes=index)
     rows.append({"id": str(uuid.uuid4()), "user_id": USER_ID, "app_name": "iFood", "gross_earnings": 20, "fee_percent": 10, "earnings": 18, "tip": 0, "payment_method": "credito", "distance_km": 1, "duration_min": 10, "idle_min": 0, "occurred_at": iso(at), "status": "concluida", "started_at": None, "ended_at": None, "pickup_address": None, "dropoff_address": None, "lat": None, "lng": None, "stops": []})
 rows[44]["status"] = "em_rota"
+if os.environ.get("SMOKE_INDEPENDENT_ROUTES"):
+    rows[43]["status"] = "em_rota"
+
 if os.environ.get("SMOKE_CHAIN_METRICS"):
     rows[0]["lat"], rows[0]["lng"] = -23.55, -46.63
     rows[0]["stops"] = [
@@ -170,6 +173,9 @@ with sync_playwright() as p:
         context.add_init_script("localStorage.setItem(" + json.dumps("delivery-os-draft:" + USER_ID + ":entregas.stops") + ", 'null');")
     if os.environ.get("SMOKE_INITIAL_MODE") == "full":
         context.add_init_script("localStorage.setItem(" + json.dumps("delivery-os-draft:" + USER_ID + ":entregas.entry-mode") + ", '\"full\"');")
+    if os.environ.get("SMOKE_INDEPENDENT_ROUTES"):
+        legacy = {"id": rows[44]["id"], "stops": [{"id": "legacy-stop", "kind": "entrega", "address": "Destino antigo preservado", "lat": None, "lng": None}]}
+        context.add_init_script("if (!sessionStorage.getItem('seeded-route-draft')) { localStorage.setItem(" + json.dumps("delivery-os-draft:" + USER_ID + ":entregas.finishing") + "," + json.dumps(json.dumps(legacy)) + "); sessionStorage.setItem('seeded-route-draft', '1'); }")
     page = context.new_page()
     failures = []
     page.on("pageerror", lambda error: failures.append(str(error)))
@@ -339,6 +345,33 @@ with sync_playwright() as p:
     assert not any(path.endswith("/goals") or (path.endswith("/deliveries") and query.get("limit") == ["500"]) for method, path, query in requests), "delivery screen does not fetch dashboard goals or learning history"
     expect(page.get_by_text("Total recebido", exact=True)).to_have_count(0)
 
+    if os.environ.get("SMOKE_INDEPENDENT_ROUTES"):
+        first = page.locator('[data-delivery-id="' + rows[44]["id"] + '"]')
+        second = page.locator('[data-delivery-id="' + rows[43]["id"] + '"]')
+        expect(first.get_by_label("Endereço final da entrega em rota", exact=True)).to_have_value("Destino antigo preservado")
+        first.get_by_role("button", name="Adicionar ponto adicional", exact=True).click()
+        first.get_by_label("Endereço adicional 1", exact=True).fill("Parada da primeira rota")
+        expect(second.get_by_role("button", name="Entrega concluída (GPS)", exact=True)).to_be_enabled()
+        second.get_by_role("button", name="Adicionar ponto adicional", exact=True).click()
+        second.get_by_label("Endereço adicional 1", exact=True).fill("Parada da segunda rota")
+        expect(first.get_by_label("Endereço adicional 1", exact=True)).to_have_value("Parada da primeira rota")
+        expect(first.get_by_role("button", name="Entrega concluída (GPS)", exact=True)).to_be_enabled()
+        expect(second.get_by_role("button", name="Entrega concluída (GPS)", exact=True)).to_be_enabled()
+        page.evaluate("() => { const original = navigator.geolocation.getCurrentPosition.bind(navigator.geolocation); navigator.geolocation.getCurrentPosition = (success, error, options) => setTimeout(() => original(success, error, options), 1200); }")
+        second.get_by_role("button", name="Entrega concluída (GPS)", exact=True).click()
+        expect(second.get_by_role("button", name="Entrega concluída (GPS)", exact=True)).to_be_disabled()
+        expect(first.get_by_role("button", name="Entrega concluída (GPS)", exact=True)).to_be_enabled()
+        expect(second.get_by_role("button", name="Entrega concluída (GPS)", exact=True)).to_have_count(0, timeout=20000)
+        assert len(updated) == 1 and updated[0]["id"] == rows[43]["id"] and updated[0]["status"] == "concluida"
+        expect(first.get_by_label("Endereço adicional 1", exact=True)).to_have_value("Parada da primeira rota")
+        page.wait_for_timeout(500)
+        page.reload(wait_until="domcontentloaded")
+        expect(first.get_by_label("Endereço adicional 1", exact=True)).to_have_value("Parada da primeira rota", timeout=20000)
+        expect(first.get_by_label("Endereço final da entrega em rota", exact=True)).to_have_value("Destino antigo preservado")
+        assert not failures, failures
+        browser.close()
+        print("Independent routes: legacy draft restored, simultaneous editors, route-scoped pending state, completion isolation and reload preservation passed")
+        raise SystemExit(0)
     expect(page.get_by_text("45 corridas no período · 20 exibidas")).to_be_visible()
     page.get_by_role("button", name="Carregar mais 20").click()
     expect(page.get_by_text("45 corridas no período · 40 exibidas")).to_be_visible()
