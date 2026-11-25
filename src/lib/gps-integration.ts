@@ -58,8 +58,8 @@ export function useGpsDeviceState(tracking = false, tokenId?: string, activeToke
       if (error) throw error;
       return data as GpsDeviceState | null;
     },
-    refetchInterval: tracking ? 2_000 : 10_000,
-    refetchIntervalInBackground: tracking,
+    refetchInterval: tracking ? 4_000 : 30_000,
+    refetchIntervalInBackground: false,
     staleTime: 5_000,
     refetchOnMount: "always",
     refetchOnWindowFocus: "always",
@@ -161,6 +161,6 @@ export function useGpsRoutePoints(routeId?: string | null, tracking = true) {
       return (data ?? []) as GpsRoutePoint[];
     },
     staleTime: 5_000,
-    refetchInterval: tracking ? 10_000 : false,
+    refetchInterval: tracking ? 20_000 : false,
   });
 }
