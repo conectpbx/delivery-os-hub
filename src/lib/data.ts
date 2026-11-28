@@ -481,8 +481,9 @@ export function useActiveWorkJourney(enabled = true) {
       if (error) throw error;
       return (data?.state as import("./trip-tracker").TripState | null) ?? null;
     },
-    staleTime: 5000,
-    refetchInterval: 5000,
+    staleTime: 10_000,
+    // Realtime already invalidates on change; polling is only a safety net.
+    refetchInterval: 30_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
   });

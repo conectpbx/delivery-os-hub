@@ -13,7 +13,9 @@ import { OperationTimeStats } from "@/components/OperationTimeStats";
 import { useOperationTime } from "@/lib/use-operation-time";
 import { EmptyState, SectionCard, StatCard } from "@/components/ui-kit";
 import { AppPerformance } from "@/components/AppPerformance";
-import { AppComparison } from "@/components/AppComparison";
+const AppComparison = lazy(() =>
+  import("@/components/AppComparison").then((m) => ({ default: m.AppComparison })),
+);
 import { SmartAlerts } from "@/components/SmartAlerts";
 import { Button } from "@/components/ui/button";
 import {
@@ -391,12 +393,14 @@ function Dashboard() {
           )}
         </SectionCard>
 
+        <Suspense fallback={null}>
         <AppComparison
           deliveries={periodDeliveries}
           costPerKm={operationalCpk}
           periodLabel={range.label}
           time={{ from, to, journeys: time.records, now: time.now }}
         />
+        </Suspense>
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">

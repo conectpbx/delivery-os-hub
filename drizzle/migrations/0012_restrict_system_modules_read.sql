@@ -1,0 +1,2 @@
+DROP POLICY IF EXISTS "Authenticated users read modules" ON public.system_modules;
+CREATE POLICY "Admins read modules" ON public.system_modules FOR SELECT TO authenticated USING (public.is_admin(auth.uid()));
