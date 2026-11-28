@@ -54,6 +54,9 @@ if os.environ.get("SMOKE_DASHBOARD_CARDS"):
         record["occurred_at"] = iso(now - timedelta(hours=4, minutes=index))
     maintenance_created.append({"id": "maintenance-cost", "user_id": USER_ID, "service_type": "Óleo", "cost": 20, "odometer": 10000, "next_due_km": 12000, "performed_at": now.strftime("%Y-%m-%d"), "next_due_date": None, "description": None})
 
+if os.environ.get("SMOKE_OPERATION_REFRESH"):
+    rows[0].update(status="em_rota", occurred_at=iso(now - timedelta(hours=2)), started_at=iso(now - timedelta(hours=2)), ended_at=None)
+
 
 def timestamp(value):
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
@@ -176,7 +179,11 @@ with sync_playwright() as p:
     if os.environ.get("SMOKE_INDEPENDENT_ROUTES"):
         legacy = {"id": rows[44]["id"], "stops": [{"id": "legacy-stop", "kind": "entrega", "address": "Destino antigo preservado", "lat": None, "lng": None}]}
         context.add_init_script("if (!sessionStorage.getItem('seeded-route-draft')) { localStorage.setItem(" + json.dumps("delivery-os-draft:" + USER_ID + ":entregas.finishing") + "," + json.dumps(json.dumps(legacy)) + "); sessionStorage.setItem('seeded-route-draft', '1'); }")
+    if os.environ.get("SMOKE_PWA_NAVIGATION"):
+        context.add_init_script("sessionStorage.setItem('fixture-document-boots', String(Number(sessionStorage.getItem('fixture-document-boots') || 0) + 1));")
     page = context.new_page()
+    if os.environ.get("SMOKE_OPERATION_REFRESH"):
+        page.clock.install()
     failures = []
     page.on("pageerror", lambda error: failures.append(str(error)))
     if os.environ.get("SMOKE_MODULES_ONLY"):
@@ -233,7 +240,15 @@ with sync_playwright() as p:
                 cost_card = page.get_by_text("Custos registrados", exact=True).first.locator("..").locator("..")
                 expect(cost_card.get_by_text("Indisponível" if os.environ.get("SMOKE_COSTS_ERROR") else re.compile(r"R\$\s*151,75"), exact=True)).to_be_visible(timeout=20000)
                 time_card = page.get_by_text("Tempo fora das entregas", exact=True).first.locator("..").locator("..")
-                expect(time_card.get_by_text("1h 50min", exact=True)).to_be_visible(timeout=20000)
+                if os.environ.get("SMOKE_OPERATION_REFRESH"):
+                    expect(time_card.get_by_text("0min", exact=True)).to_be_visible(timeout=20000)
+                    rows[0].update(status="concluida", ended_at=iso(now - timedelta(hours=1)))
+                    # No websocket notification: the visible live query must recover the status.
+                    page.clock.fast_forward(31000)
+                    expect(time_card.get_by_text(re.compile(r"5[01]min"), exact=True)).to_be_visible(timeout=20000)
+                    print("Operation time: a missed completion notification recovers via live refresh and restores waiting time", flush=True)
+                else:
+                    expect(time_card.get_by_text("1h 50min", exact=True)).to_be_visible(timeout=20000)
                 if os.environ.get("SMOKE_COSTS_ERROR"):
                     expect(page.get_by_role("button", name="Atualizar dados", exact=True)).to_be_visible()
                 assert any(path.endswith("/active_work_journeys") for method,path,query in requests), "reads the active journey without requiring a local tracker"
@@ -371,6 +386,23 @@ with sync_playwright() as p:
         assert not failures, failures
         browser.close()
         print("Independent routes: legacy draft restored, simultaneous editors, route-scoped pending state, completion isolation and reload preservation passed")
+        raise SystemExit(0)
+    if os.environ.get("SMOKE_PWA_NAVIGATION"):
+        page.wait_for_function("navigator.serviceWorker.controller !== null", timeout=30000)
+        assert page.evaluate("sessionStorage.getItem('fixture-document-boots')") == "1", "first worker control must not reload the document"
+        page.set_viewport_size({"width": 1440, "height": 1000})
+        context.set_offline(True)
+        page.wait_for_function("!navigator.onLine")
+        for label, title in [("Manutenção", "Manutenção"), ("Financeiro", "Financeiro"), ("Metas", "Metas")]:
+            page.locator("aside").get_by_role("link", name=label, exact=True).click()
+            expect(page.get_by_role("heading", level=1, name=title, exact=True)).to_be_visible(timeout=20000)
+            assert page.evaluate("sessionStorage.getItem('fixture-document-boots')") == "1", "internal navigation must keep the same document"
+            expect(page.get_by_text("Página não encontrada", exact=True)).to_have_count(0)
+            expect(page.get_by_text("Não foi possível abrir este módulo", exact=True)).to_have_count(0)
+        context.set_offline(False)
+        assert not failures, failures
+        browser.close()
+        print("Production PWA: first activation without reload and offline navigation to three unseen modules without document reload passed")
         raise SystemExit(0)
     expect(page.get_by_text("45 corridas no período · 20 exibidas")).to_be_visible()
     page.get_by_role("button", name="Carregar mais 20").click()

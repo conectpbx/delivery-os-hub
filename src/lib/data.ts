@@ -171,7 +171,14 @@ export type Profile = {
   monthly_goal: number | null;
 };
 
-function useList<T>(key: string, table: string, orderCol: string, range?: ListRange, select = "*") {
+function useList<T>(
+  key: string,
+  table: string,
+  orderCol: string,
+  range?: ListRange,
+  select = "*",
+  live = false,
+) {
   const scope = range ? listScope(range, orderCol) : undefined;
   const { user } = useAuth();
   const userId = user?.id;
@@ -205,13 +212,16 @@ function useList<T>(key: string, table: string, orderCol: string, range?: ListRa
       }, signal);
     },
     staleTime: table === "apps" || table === "goals" ? 1000 * 60 * 5 : 1000 * 60,
-    refetchOnMount: true,
-    refetchOnWindowFocus: true,
+    // Live time counters must recover missed realtime delivery completions.
+    refetchInterval: live ? 30_000 : false,
+    refetchIntervalInBackground: false,
+    refetchOnMount: live ? "always" : true,
+    refetchOnWindowFocus: live ? "always" : true,
   });
 }
 
-export const useDeliveries = (range?: ListRange) =>
-  useList<Delivery>("deliveries", "deliveries", "occurred_at", range);
+export const useDeliveries = (range?: ListRange, live = false) =>
+  useList<Delivery>("deliveries", "deliveries", "occurred_at", range, "*", live);
 export type DeliveryMetric = Pick<
   Delivery,
   "id" | "app_name" | "earnings" | "tip" | "distance_km" | "occurred_at" | "status"
@@ -233,8 +243,8 @@ export const useAppChallenges = () =>
 
 export const useGoals = () => useList<Goal>("goals", "goals", "month");
 export const useApps = () => useList<App>("apps", "apps", "name");
-export const useJourneys = (range?: ListRange) =>
-  useList<WorkJourney>("work_journeys", "work_journeys", "started_at", range);
+export const useJourneys = (range?: ListRange, live = false) =>
+  useList<WorkJourney>("work_journeys", "work_journeys", "started_at", range, "*", live);
 
 export const useInsertApp = () => useInsert<{ name: string; fee_percent: number }>("apps", "apps");
 

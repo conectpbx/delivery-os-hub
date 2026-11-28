@@ -17,6 +17,9 @@ export function operationRecords(
     } else snapshot = remote;
   }
   if (!snapshot?.startedAt) return rows;
+  // Persisted completion is final: an offline/stale active snapshot must not reopen it.
+  if (snapshot.active && rows.some((row) => row.id === snapshot.journeyId && row.ended_at))
+    return rows;
   const current: WorkJourney = {
     id: snapshot.journeyId ?? "active",
     started_at: snapshot.startedAt,

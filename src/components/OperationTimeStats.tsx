@@ -33,7 +33,9 @@ function TimeStats({ time }: { time: TimeResult }) {
         value={status ?? minutesLabel(time.unassignedMin)}
         hint={
           time.hasJourney
-            ? "Espera e deslocamentos, sem as pausas registradas"
+            ? time.openDeliveryCount
+              ? `${time.openDeliveryCount} entrega(s) ainda em rota; esse tempo conta como entrega, sem as pausas.`
+              : "Espera e deslocamentos, sem as pausas registradas"
             : "Espera informada nos registros"
         }
       />

@@ -1,6 +1,13 @@
 import type { Delivery } from "./data";
 
-export const PAUSE_REASONS = ["Almoço", "Descanso", "Manutenção", "Abastecimento", "Pessoal", "Outros"] as const;
+export const PAUSE_REASONS = [
+  "Almoço",
+  "Descanso",
+  "Manutenção",
+  "Abastecimento",
+  "Pessoal",
+  "Outros",
+] as const;
 export type JourneyPause = {
   id: string;
   reason: string;
@@ -10,11 +17,21 @@ export type JourneyPause = {
 
 export function beginPause(pauses: JourneyPause[], reason: string, at: string): JourneyPause[] {
   if (!reason.trim() || pauses.some((p) => !p.ended_at)) return pauses;
-  return [...pauses, { id: crypto.randomUUID(), reason: reason.trim(), started_at: at, ended_at: null }];
+  return [
+    ...pauses,
+    { id: crypto.randomUUID(), reason: reason.trim(), started_at: at, ended_at: null },
+  ];
 }
 
 export function endPause(pauses: JourneyPause[], at: string): JourneyPause[] {
-  return pauses.map((p) => p.ended_at ? p : { ...p, ended_at: new Date(Math.max(Date.parse(p.started_at), Date.parse(at))).toISOString() });
+  return pauses.map((p) =>
+    p.ended_at
+      ? p
+      : {
+          ...p,
+          ended_at: new Date(Math.max(Date.parse(p.started_at), Date.parse(at))).toISOString(),
+        },
+  );
 }
 
 export type WorkJourney = {
@@ -68,16 +85,30 @@ export function operationTime(
   const journeyIntervals = journeys.map((j) =>
     clip(Date.parse(j.started_at), j.ended_at ? Date.parse(j.ended_at) : now.getTime()),
   );
-  const pauseIntervals = journeys.flatMap((j) => (j.pauses ?? []).map((p) =>
-    clip(Math.max(Date.parse(j.started_at), Date.parse(p.started_at)),
-      Math.min(j.ended_at ? Date.parse(j.ended_at) : now.getTime(), p.ended_at ? Date.parse(p.ended_at) : now.getTime())),
-  )).filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b) && b > a);
+  const pauseIntervals = journeys
+    .flatMap((j) =>
+      (j.pauses ?? []).map((p) =>
+        clip(
+          Math.max(Date.parse(j.started_at), Date.parse(p.started_at)),
+          Math.min(
+            j.ended_at ? Date.parse(j.ended_at) : now.getTime(),
+            p.ended_at ? Date.parse(p.ended_at) : now.getTime(),
+          ),
+        ),
+      ),
+    )
+    .filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b) && b > a);
   const withoutPauses = (interval: Interval): Interval[] => {
     let fragments = [interval];
     for (const [start, end] of pauseIntervals) {
-      fragments = fragments.flatMap(([a, b]) => end <= a || start >= b
-        ? [[a, b] as Interval]
-        : [[a, Math.min(b, start)], [Math.max(a, end), b]] as Interval[]);
+      fragments = fragments.flatMap(([a, b]) =>
+        end <= a || start >= b
+          ? [[a, b] as Interval]
+          : ([
+              [a, Math.min(b, start)],
+              [Math.max(a, end), b],
+            ] as Interval[]),
+      );
     }
     return fragments.filter(([a, b]) => b > a);
   };
@@ -108,6 +139,11 @@ export function operationTime(
       if (!covered) outsideLegacyMin += deliveryMinutes(delivery, now);
     }
   }
+  const openDeliveryCount = deliveries.filter((delivery) => {
+    if (delivery.status !== "em_rota" || delivery.ended_at) return false;
+    const interval = deliveryInterval(delivery, now);
+    return interval && interval[0] <= upper && interval[1] >= lower;
+  }).length;
   const measuredDeliveryMin = unionMinutes(routeIntervals);
   const journeyMin = unionMinutes(journeyIntervals);
   const pauseMin = unionMinutes(pauseIntervals);
@@ -136,6 +172,7 @@ export function operationTime(
     : measuredDeliveryMin + legacyDeliveryMin;
   return {
     journeyMin,
+    openDeliveryCount,
     deliveryMin,
     totalMin,
     recordedIdleMin,

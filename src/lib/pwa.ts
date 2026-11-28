@@ -38,13 +38,8 @@ export async function registerServiceWorker() {
   }
 
   try {
-    let refreshing = false;
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (refreshing) return;
-      refreshing = true;
-      window.location.reload();
-    });
-
+    // A controller may be acquired on first install without a document reload.
+    // Updates wait for existing tabs to close; never interrupt a journey or draft.
     const registration = await navigator.serviceWorker.register(SW_URL, {
       scope: "/",
       updateViaCache: "none",

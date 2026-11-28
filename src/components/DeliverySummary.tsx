@@ -1,3 +1,4 @@
+import { recordedDistanceKm } from "@/lib/distance-values";
 import { memo, useMemo } from "react";
 
 import { Brain } from "lucide-react";
@@ -35,7 +36,7 @@ export const DeliverySummary = memo(function DeliverySummary() {
   const today = useMemo(() => list.data ?? [], [list.data]);
   const all = useMemo(() => learning.data ?? [], [learning.data]);
   const total = today.reduce((s, d) => s + Number(d.earnings) + Number(d.tip), 0);
-  const deliveryKmSum = today.reduce((s, d) => s + Number(d.distance_km), 0);
+  const deliveryKmSum = today.reduce((s, d) => s + recordedDistanceKm(d.distance_km), 0);
   const idle = today.reduce((s, d) => s + Number(d.idle_min), 0);
   const dailyGoal = useMemo(
     () =>
@@ -61,7 +62,7 @@ export const DeliverySummary = memo(function DeliverySummary() {
 
   // "Distância total" = trajeto encadeado do dia: primeira coleta confirmada/salva
   // até o último ponto informado, incluindo coletas, destinos finais e adicionais.
-  const { chainKm, km } = useChainedDistance(today);
+  const { chainKm, km, approximate, partial, isLoading: chaining } = useChainedDistance(today);
 
   return (
     <div>
@@ -81,7 +82,11 @@ export const DeliverySummary = memo(function DeliverySummary() {
           label="Pontos encadeados"
           value={`${num(km)} km`}
           hint={
-            (chainKm != null ? "Pontos do dia encadeados" : "Soma das entregas do dia") +
+            (chaining
+              ? "Calculando pontos encadeados…"
+              : chainKm != null
+                ? `Pontos do dia encadeados · ${approximate ? "aproximação" : "rota estimada"}${partial ? ", parcial" : ""}`
+                : "Soma das entregas do dia · sem pontos suficientes para encadear") +
             (today.length
               ? ` · ${num(deliveryKmSum)} km registrados em ${today.length} entrega${today.length === 1 ? "" : "s"}`
               : "") +
@@ -215,7 +220,7 @@ function rankByApp(deliveries: DeliveryMetric[]) {
   for (const d of deliveries) {
     const cur = map.get(d.app_name) ?? { app: d.app_name, revenue: 0, km: 0, count: 0 };
     cur.revenue += Number(d.earnings) + Number(d.tip);
-    cur.km += Number(d.distance_km);
+    cur.km += recordedDistanceKm(d.distance_km);
     cur.count += 1;
     map.set(d.app_name, cur);
   }

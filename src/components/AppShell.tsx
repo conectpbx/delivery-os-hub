@@ -198,6 +198,7 @@ export function AppShell({
           <Link
             key={to}
             to={to}
+            preload="intent"
             className={cn(
               "flex min-w-0 flex-col items-center gap-1 px-1 py-2 text-[10px] font-medium",
               pathname === to ? "text-primary" : "text-muted-foreground",
@@ -235,6 +236,7 @@ function NavItem({
   return (
     <Link
       to={to}
+      preload="intent"
       className={cn(
         "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
         active

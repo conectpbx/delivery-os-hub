@@ -98,7 +98,11 @@ function orderedEvents(deliveries: Delivery[]): RoutePoint[] {
     (a, b) => Date.parse(a.occurred_at) - Date.parse(b.occurred_at) || a.id.localeCompare(b.id),
   );
   const points = ordered.flatMap((delivery, deliveryIndex) =>
-    stopsOf(delivery).map((stop, stopIndex) => {
+    // A delivery with no location is a gap, not permission to connect A directly to C.
+    (stopsOf(delivery).length
+      ? stopsOf(delivery)
+      : [{ lat: null, lng: null, recorded_at: delivery.occurred_at }]
+    ).map((stop, stopIndex) => {
       const time = Date.parse(stop.recorded_at ?? ""),
         fallback = Date.parse(delivery.occurred_at);
       return {
@@ -225,7 +229,7 @@ export function useChainedDistance(deliveries: Delivery[]) {
     };
   }, [deliveries]);
   const chained = useQuery({
-    queryKey: ["chained-km", "v2", chainKey],
+    queryKey: ["chained-km", "v3", chainKey],
     enabled: potentialPoints >= 2,
     staleTime: 1000 * 60 * 60 * 24,
     gcTime: 1000 * 60 * 60 * 24 * 7,

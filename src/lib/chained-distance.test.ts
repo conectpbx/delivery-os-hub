@@ -199,3 +199,28 @@ test("a later same-address pickup does not erase the original recorded starting 
     [-24, -47],
   ]);
 });
+
+test("a delivery with no stops breaks the chain between neighboring deliveries", async () => {
+  const first = row("first", [
+    point(-23, -46, "2026-11-10T12:00:00Z"),
+    point(-23.1, -46.1, "2026-11-10T12:10:00Z"),
+  ]);
+  const gap = row("gap", [], { occurred_at: "2026-11-10T12:20:00Z" });
+  const last = row(
+    "last",
+    [point(-24, -47, "2026-11-10T12:30:00Z"), point(-24.1, -47.1, "2026-11-10T12:40:00Z")],
+    { occurred_at: "2026-11-10T12:30:00Z" },
+  );
+  const calls: [number, number][][] = [];
+  const result = await calculateChainedDistance([first, gap, last], async (points) => {
+    calls.push(points);
+    return { distanceKm: 2 };
+  });
+  assert.equal(calls.length, 2);
+  assert.deepEqual(
+    calls.map((points) => points.length),
+    [2, 2],
+  );
+  assert.equal(result.distanceKm, 4);
+  assert.equal(result.partial, true);
+});

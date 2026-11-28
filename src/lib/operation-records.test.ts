@@ -78,3 +78,27 @@ test("old completed deliveries do not consume the current shift, but an open rou
     0,
   );
 });
+
+test("completed persisted journeys stay finished when an offline active snapshot is stale", () => {
+  const rows = [
+    {
+      id: "j",
+      started_at: remote.startedAt!,
+      ended_at: "2026-11-20T12:00:00Z",
+      source: "external",
+      distance_km: 10,
+      pauses: remote.pauses ?? [],
+    },
+  ];
+  const records = operationRecords(rows, remote, null, false);
+  assert.equal(records, rows);
+  const result = operationTime(
+    [],
+    records,
+    new Date("2026-11-20T00:00:00Z"),
+    new Date("2026-11-20T23:59:59Z"),
+    new Date("2026-11-20T18:00:00Z"),
+  );
+  assert.equal(result.journeyMin, 120);
+  assert.equal(result.unassignedMin, 110);
+});

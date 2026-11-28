@@ -327,7 +327,7 @@ function Dashboard() {
               : time.isError
                 ? "Não foi possível consultar a jornada."
                 : time.hasJourney
-                  ? `Entregas/rotas ${minutesLabel(time.deliveryMin)} · Pausas ${minutesLabel(time.pauseMin)}`
+                  ? `Entregas/rotas ${minutesLabel(time.deliveryMin)} · Pausas ${minutesLabel(time.pauseMin)}${time.openDeliveryCount ? ` · ${time.openDeliveryCount} entrega(s) ainda em rota` : ""}`
                   : "Sem jornada registrada no período; considera somente esperas informadas."
           }
           tone="warning"

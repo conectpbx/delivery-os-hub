@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Delivery } from "./data";
-import { beginPause, endPause, deliveryMinutes, operationTime, type WorkJourney } from "./operation-time";
+import {
+  beginPause,
+  endPause,
+  deliveryMinutes,
+  operationTime,
+  type WorkJourney,
+} from "./operation-time";
 import { reportBreakdown } from "./metrics";
 
 const journey: WorkJourney = {
@@ -36,8 +42,18 @@ const now = new Date("2026-10-13T00:00:00Z");
 
 test("lunch and maintenance pauses are separated from unassigned and delivery time", () => {
   const pauses = [
-    { id: "lunch", reason: "Almoço", started_at: "2026-10-12T14:00:00Z", ended_at: "2026-10-12T15:00:00Z" },
-    { id: "maintenance", reason: "Manutenção", started_at: "2026-10-12T17:00:00Z", ended_at: "2026-10-12T17:30:00Z" },
+    {
+      id: "lunch",
+      reason: "Almoço",
+      started_at: "2026-10-12T14:00:00Z",
+      ended_at: "2026-10-12T15:00:00Z",
+    },
+    {
+      id: "maintenance",
+      reason: "Manutenção",
+      started_at: "2026-10-12T17:00:00Z",
+      ended_at: "2026-10-12T17:30:00Z",
+    },
   ];
   const time = operationTime([delivery()], [{ ...journey, pauses }], from, to, now);
   assert.equal(time.pauseMin, 90);
@@ -56,13 +72,36 @@ test("only one pause is open and resuming preserves its reason and start", () =>
   assert.equal(closed[0]?.ended_at, "2026-10-12T14:30:00.000Z");
 });
 test("active pauses stop at journey finish and overlapping pauses never double count", () => {
-  const pause = { id: "p", reason: "Manutenção", started_at: "2026-10-12T19:00:00Z", ended_at: null };
-  const result = operationTime([], [{ ...journey, pauses: [pause, { ...pause, id: "p2", reason: "Almoço" }] }], from, to, now);
+  const pause = {
+    id: "p",
+    reason: "Manutenção",
+    started_at: "2026-10-12T19:00:00Z",
+    ended_at: null,
+  };
+  const result = operationTime(
+    [],
+    [{ ...journey, pauses: [pause, { ...pause, id: "p2", reason: "Almoço" }] }],
+    from,
+    to,
+    now,
+  );
   assert.equal(result.pauseMin, 60);
   assert.equal(result.unassignedMin, 420);
 });
 test("pauses crossing a civil month boundary are clipped separately", () => {
-  const cross = { ...journey, started_at: "2026-10-01T02:00:00Z", ended_at: "2026-10-01T04:00:00Z", pauses: [{ id: "p", reason: "Almoço", started_at: "2026-10-01T02:30:00Z", ended_at: "2026-10-01T03:30:00Z" }] };
+  const cross = {
+    ...journey,
+    started_at: "2026-10-01T02:00:00Z",
+    ended_at: "2026-10-01T04:00:00Z",
+    pauses: [
+      {
+        id: "p",
+        reason: "Almoço",
+        started_at: "2026-10-01T02:30:00Z",
+        ended_at: "2026-10-01T03:30:00Z",
+      },
+    ],
+  };
   const rows = reportBreakdown([], [], [], [], "month", [cross], now);
   assert.equal(rows.find((r) => r.key === "2026-09-01")?.pauseMin, 30);
   assert.equal(rows.find((r) => r.key === "2026-10-01")?.pauseMin, 30);
@@ -185,7 +224,13 @@ test("open route without a started journey never advances operation time", () =>
 });
 test("open route starts counting only at journey start", () => {
   const open = delivery({ ended_at: null, status: "em_rota" });
-  const time = operationTime([open], [{ ...journey, started_at: "2026-10-12T14:00:00Z", ended_at: null }], from, to, new Date("2026-10-12T15:00:00Z"));
+  const time = operationTime(
+    [open],
+    [{ ...journey, started_at: "2026-10-12T14:00:00Z", ended_at: null }],
+    from,
+    to,
+    new Date("2026-10-12T15:00:00Z"),
+  );
   assert.equal(time.deliveryMin, 60);
   assert.equal(time.totalMin, 60);
 });
@@ -214,7 +259,13 @@ test("open legacy route crossing midnight only counts time covered by journeys i
     [],
     [],
     "day",
-    [{ ...journey, started_at: "2026-10-12T23:00:00-03:00", ended_at: "2026-10-13T00:30:00-03:00" }],
+    [
+      {
+        ...journey,
+        started_at: "2026-10-12T23:00:00-03:00",
+        ended_at: "2026-10-13T00:30:00-03:00",
+      },
+    ],
     new Date("2026-10-13T01:00:00-03:00"),
   );
   assert.equal(rows.find((r) => r.key === "2026-10-12")?.workedMin, 60);
@@ -289,4 +340,46 @@ test("October 13 records use the recorded finish instead of the 53-minute estima
   );
   assert.equal(row?.workedMin, time.deliveryMin);
   assert.equal(row?.unassignedMin, time.unassignedMin);
+});
+
+test("Dashboard waiting grows after completion and stops during the next route, excluding pauses", () => {
+  const shift = {
+    ...journey,
+    ended_at: null,
+    pauses: [
+      {
+        id: "break",
+        reason: "Descanso",
+        started_at: "2026-10-12T15:00:00Z",
+        ended_at: "2026-10-12T15:10:00Z",
+      },
+    ],
+  };
+  const completed = delivery(); // 13:00–15:00
+  const at16 = operationTime([completed], [shift], from, to, new Date("2026-10-12T16:00:00Z"));
+  assert.equal(at16.journeyMin, 240);
+  assert.equal(at16.deliveryMin, 120);
+  assert.equal(at16.pauseMin, 10);
+  assert.equal(at16.unassignedMin, 110); // 12–13 + 15:10–16
+  assert.equal(at16.openDeliveryCount, 0);
+  const at1630 = operationTime([completed], [shift], from, to, new Date("2026-10-12T16:30:00Z"));
+  assert.equal(at1630.unassignedMin, 140);
+  const open = delivery({
+    id: "next",
+    occurred_at: "2026-10-12T16:00:00Z",
+    started_at: "2026-10-12T16:00:00Z",
+    ended_at: null,
+    status: "em_rota",
+  });
+  const running = operationTime(
+    [completed, open, { ...open, id: "simultaneous" }],
+    [shift],
+    from,
+    to,
+    new Date("2026-10-12T16:30:00Z"),
+  );
+  assert.equal(running.unassignedMin, 110);
+  assert.equal(running.deliveryMin, 150);
+  assert.equal(running.openDeliveryCount, 2);
+  assert.equal(running.journeyMin, running.deliveryMin + running.pauseMin + running.unassignedMin);
 });

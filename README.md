@@ -565,3 +565,34 @@ SMOKE_BASE_URL=http://127.0.0.1:3060 SMOKE_INDEPENDENT_ROUTES=1 python scripts/s
 ```
 
 O cenário verifica edição simultânea, botões independentes durante a captura GPS, conclusão apenas da entrega selecionada e preservação do rascunho da outra após recarregar a página.
+
+### Navegação e atualizações do PWA
+
+O service worker é gerado pelo plugin de build depois da escrita dos arquivos do cliente e antes de o Nitro catalogar/comprimir os arquivos públicos. O precache inclui os chunks de todos os módulos, estilos, ícones e manifesto. Dessa forma, módulos ainda não visitados podem abrir offline após a instalação completa do cache; seus dados continuam sujeitos à disponibilidade do cache de consultas.
+
+Uma atualização do worker aguarda o fechamento das abas antigas para ativar. Adquirir o primeiro controlador não recarrega a página. A recuperação de um chunk removido consulta o documento atual, limita o recarregamento a uma tentativa por minuto e não recarrega quando o dispositivo está offline ou o servidor não responde. As telas de erro oferecem ações em português para tentar novamente ou atualizar o aplicativo.
+
+Validação de produção local (dados simulados, sem acessar produção):
+
+```sh
+npm run build
+PORT=3072 HOST=0.0.0.0 node .output/server/index.mjs
+# Em outro terminal:
+SMOKE_BASE_URL=http://127.0.0.1:3072 SMOKE_PWA_NAVIGATION=1 python scripts/smoke-deliveries.py
+```
+
+O cenário espera a instalação do worker real e abre Manutenção, Financeiro e Metas offline pelo menu. Um contador de inicializações verifica que a primeira ativação e a navegação mantêm o mesmo documento. Em instalações existentes, a nova política passa a valer depois que o novo worker puder ativar, ao fechar todas as abas/janelas do PWA e abrir novamente.
+
+### Validação de espera e quilômetros
+
+No Dashboard, **Tempo fora das entregas** corresponde à espera/deslocamento dentro da jornada sem uma entrega iniciada, descontando as pausas. Rotas simultâneas são unidas para não duplicar minutos. Uma entrega ainda em rota continua consumindo tempo de entrega; os cards informam quantas permanecem abertas. Sem jornada registrada, permanecem somente os tempos de espera históricos explicitamente informados.
+
+Para recuperar uma conclusão cuja notificação realtime não chegou, as consultas usadas pelos contadores do período atual atualizam ao abrir/retornar à tela e a cada 30 segundos em primeiro plano. Períodos passados não recebem esse polling. Uma jornada finalizada no histórico não é reaberta por um snapshot local ativo e desatualizado.
+
+Uma entrega sem qualquer localização interrompe o encadeamento entre os registros vizinhos: não se inventa o trajeto direto sobre essa lacuna. O resumo de Entregas identifica estimativas parciais/aproximadas e mantém a soma dos quilômetros registrados separada. Registros históricos não são reescritos por essa validação.
+
+Teste do Dashboard com conclusão sem notificação realtime (dados simulados, relógio controlado):
+
+```sh
+SMOKE_BASE_URL=http://127.0.0.1:3080 SMOKE_MODULES_ONLY=1 SMOKE_MODULE_NAMES=dashboard SMOKE_DASHBOARD_CARDS=1 SMOKE_OPERATION_REFRESH=1 python scripts/smoke-deliveries.py
+```

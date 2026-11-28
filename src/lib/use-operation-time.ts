@@ -10,15 +10,15 @@ import { operationTime } from "./operation-time";
 
 export function useOperationTime(from: Date, to: Date) {
   const { user } = useAuth();
-  const deliveries = useDeliveries({ from, to, overlap: true });
-  const journeys = useJourneys({ from, to, overlap: true });
+  const includeRemote = to.getTime() >= Date.now();
+  const deliveries = useDeliveries({ from, to, overlap: true }, includeRemote);
+  const journeys = useJourneys({ from, to, overlap: true }, includeRemote);
   const [now, setNow] = useState<Date | null>(null);
   const [local, setLocal] = useState<{ owner: string | null; snapshot: TripState | null }>({
     owner: null,
     snapshot: null,
   });
   const active = local.owner === user?.id ? local.snapshot : null;
-  const includeRemote = to.getTime() >= Date.now();
   const remote = useActiveWorkJourney(includeRemote);
   useEffect(() => {
     const setActive = (snapshot: TripState | null) =>
